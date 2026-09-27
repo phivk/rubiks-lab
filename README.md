@@ -1,19 +1,23 @@
 # Cube Solver
 
-A 3D Rubik's Cube playground and solver. Turn the cube by dragging it, paint in a real cube's state, and step through the solution.
+A 3D twisty-puzzle playground and solver for the **3×3 cube** and the **Pyraminx**. Turn the puzzle by dragging it, paint in a real puzzle's state, and step through the solution.
 
 ```sh
 npm install
 npm run dev      # http://localhost:5173
-npm run verify   # checks the solver against random scrambles
+npm run verify   # checks both solvers against random scrambles
 npm run build
 ```
 
 ## How it fits together
 
-- `src/cube/model.ts`: a 54-facelet model. Every move (faces, slices, wide turns, rotations) is derived geometrically from sticker positions.
-- `src/cube/validate.ts`: checks that a painted state is reachable (sticker counts, real pieces, twist, flip, parity) and explains what's wrong.
-- `src/cube/solver.ts`: a Kociemba two-phase solver with no dependencies. It finds a solution in milliseconds, then keeps shortening it. When its search finishes it has proven the solution optimal (typical for short scrambles). Otherwise it reports the best solution found within the time budget.
-- `src/cube/solver.worker.ts`: runs the solver off the main thread and double-checks every solution before returning it.
-- `src/view/CubeView.ts`: the Three.js scene. Drag-to-turn follows the pointer and snaps to the nearest quarter turn.
-- `src/main.ts`: UI state, move queue, playback, keyboard shortcuts, share links (the state lives in the URL hash).
+Each puzzle implements the `Puzzle` interface (`src/puzzles/types.ts`): sticker geometry, pieces, moves, validation, a solver and UI hints. The 3D view and UI are shared by both puzzles.
+
+- `src/puzzles/cube.ts` wraps the 3×3 engine in `src/cube/`:
+  - a 54-facelet model with moves derived geometrically
+  - a reachability validator
+  - a Kociemba two-phase solver in a web worker, which finds a solution in milliseconds, keeps shortening it, and proves it optimal when its search finishes
+- `src/puzzles/pyraminx.ts` is the whole Pyraminx. Pieces and stickers come from barycentric cuts of a tetrahedron. The solver fixes the tips directly, then finds the optimal core solution with a meet-in-the-middle search (depth 6 + 5 ≥ God's number of 11), so every solution is optimal.
+- `src/view/PuzzleView.ts` is the Three.js scene. Drag-to-turn follows the pointer and snaps to the nearest quarter turn (cube) or third of a turn (Pyraminx).
+- `src/view/net.ts` draws the unfolded 2D map as SVG.
+- `src/main.ts` handles UI state, a per-puzzle session, the move queue, playback, keyboard shortcuts, and share links (`#pyra:…` / `#3x3:…` in the URL hash).

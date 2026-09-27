@@ -95,6 +95,23 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .logo i:nth-child(4) { background: #2166e6; }
 .logo i:nth-child(5) { background: #ff7b1c; }
 .top-actions { display: flex; align-items: center; gap: 4px; }
+.topbar { gap: 12px; }
+.puzzle-switch {
+  display: flex; padding: 3px; gap: 2px; border-radius: 12px;
+  background: rgba(20, 23, 31, 0.72); border: 1px solid var(--line);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  position: absolute; left: 50%; transform: translateX(-50%);
+}
+.puzzle-switch button {
+  display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px;
+  border: 0; border-radius: 9px; background: transparent; color: var(--text-2);
+  font-weight: 600; font-size: 13px; cursor: pointer; transition: background 0.2s, color 0.2s;
+}
+.puzzle-switch button svg { width: 16px; height: 16px; }
+.puzzle-switch button:hover { color: var(--text); }
+.puzzle-switch button.active { background: rgba(255, 255, 255, 0.1); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.puzzle-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.help-sub { display: contents; }
 .divider { width: 1px; height: 20px; background: var(--line-2); margin: 0 6px; }
 
 /* ---------- buttons ---------- */
@@ -149,6 +166,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 
 /* ---------- move pad ---------- */
 .movepad { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.movepad:empty { display: none; }
 .move {
   height: 34px; border-radius: 8px; border: 1px solid var(--line); background: var(--chip);
   font-family: var(--mono); font-weight: 600; font-size: 13px; cursor: pointer;
@@ -180,7 +198,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .history .h:last-child { color: var(--text); background: rgba(255, 255, 255, 0.1); }
 
 /* ---------- palette ---------- */
-.palette { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.palette { display: grid; gap: 6px; justify-content: space-between; }
 .swatch {
   aspect-ratio: 1; border-radius: 10px; border: 2px solid transparent; cursor: pointer; position: relative;
   background: var(--c); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4) inset, 0 2px 6px rgba(0, 0, 0, 0.3);
@@ -199,31 +217,23 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 
 /* ---------- net ---------- */
 .net {
-  --s: clamp(14px, 1.55vw, 21px);
-  display: grid;
-  grid-template-columns: repeat(12, var(--s));
-  grid-template-rows: repeat(9, var(--s));
-  gap: 2px;
-  justify-content: center;
-  padding: 12px 6px;
+  display: flex; justify-content: center;
+  padding: 12px;
   background: rgba(0, 0, 0, 0.22);
   border-radius: 12px;
   border: 1px solid var(--line);
 }
+.net svg { width: 100%; max-width: 290px; height: auto; display: block; overflow: visible; }
 .net .cell {
-  border-radius: 4px; background: var(--c); border: 0; padding: 0;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
-  transition: transform 0.1s, background 0.2s;
+  stroke: rgba(0, 0, 0, 0.35); stroke-width: 0.04; stroke-linejoin: round;
+  transition: fill 0.2s, stroke 0.12s;
+  transform-box: fill-box; transform-origin: center;
 }
 .net.editable .cell { cursor: pointer; }
-.net.editable .cell:hover { transform: scale(1.12); z-index: 1; }
-.net .cell.center { position: relative; }
-.net .cell.center::after {
-  content: attr(data-face); position: absolute; inset: 0; display: grid; place-items: center;
-  font-size: 9.5px; font-weight: 700; color: rgba(0, 0, 0, 0.45);
-}
+.net.editable .cell:hover { stroke: #fff; stroke-width: 0.1; }
+.net .label { font-size: 0.42px; font-weight: 700; fill: rgba(0, 0, 0, 0.45); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .net .cell.bad { animation: pulse 1.2s ease-in-out 2; }
-@keyframes pulse { 50% { box-shadow: 0 0 0 2px var(--bad); transform: scale(1.1); } }
+@keyframes pulse { 50% { stroke: var(--bad); stroke-width: 0.16; } }
 
 .status {
   display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; padding: 10px 12px; border-radius: 10px;
@@ -374,7 +384,10 @@ kbd {
   .panel { margin: 0 16px 16px; max-height: none; overflow: visible; }
   .panel.right { order: 3; }
   .panel.left { order: 4; }
-  .net { --s: 20px; }
+  .puzzle-switch { position: static; transform: none; }
+  .puzzle-switch button { padding: 0 10px; }
+  .puzzle-switch button svg, #btn-camera, #btn-help, .divider { display: none; }
+  .brand-name { display: none; }
   .toasts { top: 60px; }
 }
 @media (prefers-reduced-motion: reduce) {

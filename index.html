@@ -17,6 +17,14 @@
           <span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
           <span class="brand-name">Cube Solver</span>
         </div>
+        <div class="puzzle-switch" role="tablist" aria-label="Puzzle">
+          <button role="tab" data-puzzle="3x3" class="active" aria-selected="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></svg>3×3
+          </button>
+          <button role="tab" data-puzzle="pyra" aria-selected="false">
+            <svg viewBox="0 0 24 24"><path d="M12 3 21 19H3z"/><path d="M12 3 9.5 19M12 3l2.5 16"/></svg>Pyraminx
+          </button>
+        </div>
         <div class="top-actions">
           <button class="btn ghost" id="btn-undo" title="Undo (⌘Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
           <button class="btn ghost" id="btn-redo" title="Redo (⇧⌘Z)" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
@@ -43,12 +51,12 @@
             <button class="btn grow" id="btn-reset"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>
           </div>
 
-          <div class="label-row"><span class="eyebrow">Moves</span><button class="link" id="btn-more-moves">Slices &amp; rotations</button></div>
+          <div class="label-row"><span class="eyebrow">Moves</span><button class="link" id="btn-more-moves"></button></div>
           <div class="movepad" id="movepad"></div>
           <div class="movepad extra hidden" id="movepad-extra"></div>
 
           <form class="alg" id="alg-form" autocomplete="off">
-            <input id="alg-input" type="text" spellcheck="false" placeholder="Type an algorithm… R U R' U'" aria-label="Algorithm" />
+            <input id="alg-input" type="text" spellcheck="false" aria-label="Algorithm" />
             <button class="btn icon" type="submit" aria-label="Apply"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           </form>
           <div class="alg-error" id="alg-error"></div>
@@ -58,7 +66,7 @@
         </section>
 
         <section class="mode-paint hidden">
-          <p class="muted small intro">Pick a color, then tap stickers on the cube or the map below. Hold your cube with the <b>white</b> center up and <b>green</b> facing you.</p>
+          <p class="muted small intro"></p>
           <div class="palette" id="palette"></div>
           <div class="row">
             <button class="btn grow" id="btn-clear"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Clear all</button>
@@ -85,7 +93,7 @@
         <div class="solution empty" id="solution">
           <div class="sol-empty">
             <div class="sol-empty-art" aria-hidden="true"><i></i><i></i><i></i></div>
-            <p>Scramble the cube, paint your own, or turn it by hand — then hit <b>Solve</b>.</p>
+            <p>Scramble the puzzle, paint your own, or turn it by hand — then hit <b>Solve</b>.</p>
           </div>
           <div class="sol-body">
             <div class="sol-head">
@@ -125,19 +133,16 @@
     <dialog id="help">
       <h2>Shortcuts</h2>
       <div class="help-grid">
-        <div><kbd>U</kbd><kbd>R</kbd><kbd>F</kbd><kbd>D</kbd><kbd>L</kbd><kbd>B</kbd></div><span>Turn a face clockwise</span>
-        <div><kbd>M</kbd><kbd>E</kbd><kbd>S</kbd></div><span>Turn a middle slice</span>
-        <div><kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd></div><span>Rotate the whole cube</span>
-        <div><kbd>⇧</kbd> + key</div><span>Counter-clockwise (prime)</span>
+        <div class="help-sub" id="puzzle-shortcuts"></div>
         <div><kbd>Space</kbd></div><span>Play / pause solution</span>
         <div><kbd>←</kbd><kbd>→</kbd></div><span>Step through solution</span>
         <div><kbd>Enter</kbd></div><span>Solve</span>
         <div><kbd>⌘</kbd><kbd>Z</kbd></div><span>Undo (add ⇧ to redo)</span>
         <div><kbd>P</kbd></div><span>Toggle paint mode</span>
-        <div><kbd>1</kbd>–<kbd>7</kbd></div><span>Pick paint color</span>
+        <div><kbd>1</kbd>–<kbd>7</kbd></div><span>Pick a paint color</span>
         <div><kbd>V</kbd></div><span>Reset camera</span>
       </div>
-      <p class="muted small">Drag any sticker to turn its layer — grab the middle row to turn a slice. Drag empty space to look around; scroll or pinch to zoom.</p>
+      <p class="muted small">Drag any sticker to turn its layer. On the cube, grab the middle row to turn a slice; on the Pyraminx, grab a tip to turn just the tip. Drag empty space to look around; scroll or pinch to zoom.</p>
       <form method="dialog"><button class="btn grow">Got it</button></form>
     </dialog>
 

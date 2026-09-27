@@ -235,3 +235,18 @@ export function simplify(moves: string[]): string[] {
   }
   return out;
 }
+
+/** Random face-turn scramble without redundant sequences like R R or R L R. */
+export function randomScramble(n = 22): string[] {
+  const out: string[] = [];
+  let last = -1, prev = -1;
+  while (out.length < n) {
+    const f = Math.floor(Math.random() * 6);
+    if (f === last) continue;
+    if (f % 3 === last % 3 && f % 3 === prev % 3) continue;
+    prev = last;
+    last = f;
+    out.push('URFDLB'[f] + ['', "'", '2'][Math.floor(Math.random() * 3)]);
+  }
+  return out;
+}

@@ -1,21 +1,28 @@
 import './style.css';
-import {
-  State, UNSET, applyMove, fromFaceletString, invertMove, isSolved, parseAlg, parseMove,
-  solvedState, toFaceletString, turnToMove,
-} from './cube/model';
-import { COLOR_NAMES, validate } from './cube/validate';
-import { SolverClient } from './cube/solverClient';
-import { CubeView, Mode, STICKER_COLORS } from './view/CubeView';
+import type { Puzzle, State } from './puzzles/types';
+import { cube } from './puzzles/cube';
+import { pyraminx } from './puzzles/pyraminx';
+import { Mode, PuzzleView } from './view/PuzzleView';
+import { NetView } from './view/net';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
+const PUZZLES: Puzzle[] = [cube, pyraminx];
+
 // ---------- state ----------
 
-let state: State = solvedState();
+/** Each puzzle keeps its own state and history, so switching back and forth loses nothing. */
+interface Session {
+  state: State;
+  moveHistory: string[];
+  redoStack: string[];
+}
+const sessions = new Map<string, Session>(PUZZLES.map((p) => [p.id, { state: p.solved(), moveHistory: [], redoStack: [] }]));
+
+let puzzle: Puzzle = cube;
+let session = sessions.get(cube.id)!;
 let mode: Mode = 'play';
 let paintColor = 0;
-const moveHistory: string[] = [];
-const redoStack: string[] = [];
 
 interface Solution {
   start: State;
@@ -33,18 +40,17 @@ const SPEEDS = [0.35, 0.6, 1, 1.7, 3];
 let speed = 1;
 const BASE_MS = 340;
 
-const solver = new SolverClient();
-const stageEl = $('#stage');
-const view = new CubeView(stageEl, {
-  onDragTurn: (axis, layer, quarters) => {
-    const move = turnToMove(axis, layer, quarters);
-    if (!move) return;
-    // the view already showed the animation — just commit
-    commitUserMove(move, false);
-  },
+const view = new PuzzleView($('#stage'), {
+  onDragTurn: (move) => commitUserMove(move, false),
   onStickerClick: (i) => paintSticker(i),
   canDragTurn: () => queue.length === 0 && !running,
 });
+const net = new NetView($('#net'), (i) => {
+  if (mode === 'paint') paintSticker(i);
+  else setMode('paint');
+});
+
+const applyMove = (s: State, move: string) => puzzle.parseMove(move)!.perm.map((src) => s[src]);
 
 // ---------- move queue ----------
 
@@ -61,18 +67,18 @@ async function runQueue() {
   running = true;
   while (queue.length) {
     const job = queue.shift()!;
-    const next = applyMove(state, job.move);
+    const next = applyMove(session.state, job.move);
     // speed up when the queue backs up so input never feels laggy
     const hurry = queue.length > 2 ? 0.45 : queue.length > 0 ? 0.75 : 1;
-    await view.animateTurn(parseMove(job.move)!, next, job.duration * hurry);
-    const wasSolved = isSolved(state);
-    state = next;
+    await view.animateTurn(puzzle.parseMove(job.move)!, next, job.duration * hurry);
+    const wasSolved = puzzle.isSolved(session.state);
+    session.state = next;
     onStateChanged();
-    if (!wasSolved && isSolved(state) && queue.length === 0 && job.kind === 'user') celebrate();
+    if (!wasSolved && puzzle.isSolved(session.state) && queue.length === 0 && job.kind === 'user') celebrate();
   }
   running = false;
   if (solution && playing) scheduleNextPlayback();
-  if (pendingSolve) { pendingSolve = false; startSolve(); }
+  if (pendingSolve) { pendingSolve = false; void startSolve(); }
 }
 
 const idle = () => new Promise<void>((resolve) => {
@@ -82,15 +88,15 @@ const idle = () => new Promise<void>((resolve) => {
 
 function commitUserMove(move: string, animate = true) {
   invalidateSolution();
-  moveHistory.push(move);
-  redoStack.length = 0;
+  session.moveHistory.push(move);
+  session.redoStack.length = 0;
   if (animate) enqueue({ move, duration: BASE_MS / speed, kind: 'user' });
   else {
-    const wasSolved = isSolved(state);
-    state = applyMove(state, move);
-    view.setState(state);
+    const wasSolved = puzzle.isSolved(session.state);
+    session.state = applyMove(session.state, move);
+    view.setState(session.state);
     onStateChanged();
-    if (!wasSolved && isSolved(state)) celebrate();
+    if (!wasSolved && puzzle.isSolved(session.state)) celebrate();
   }
   flashMoveButton(move);
   renderHistory();
@@ -98,69 +104,51 @@ function commitUserMove(move: string, animate = true) {
 }
 
 function doMoves(moves: string[], duration = BASE_MS / speed) {
+  invalidateSolution();
   for (const m of moves) {
-    invalidateSolution();
-    moveHistory.push(m);
+    session.moveHistory.push(m);
     enqueue({ move: m, duration, kind: 'user' });
   }
-  redoStack.length = 0;
+  session.redoStack.length = 0;
   renderHistory();
 }
 
 function undo() {
-  const m = moveHistory.pop();
+  const m = session.moveHistory.pop();
   if (!m) return;
   invalidateSolution();
-  redoStack.push(m);
-  enqueue({ move: invertMove(m), duration: BASE_MS / speed, kind: 'user' });
+  session.redoStack.push(m);
+  enqueue({ move: puzzle.invertMove(m), duration: BASE_MS / speed, kind: 'user' });
   renderHistory();
 }
 function redo() {
-  const m = redoStack.pop();
+  const m = session.redoStack.pop();
   if (!m) return;
   invalidateSolution();
-  moveHistory.push(m);
+  session.moveHistory.push(m);
   enqueue({ move: m, duration: BASE_MS / speed, kind: 'user' });
   renderHistory();
 }
 
 function setStateDirect(s: State) {
   queue.length = 0;
-  state = s.slice();
-  view.setState(state);
-  moveHistory.length = 0;
-  redoStack.length = 0;
+  session.state = s.slice();
+  view.setState(session.state);
+  session.moveHistory.length = 0;
+  session.redoStack.length = 0;
   invalidateSolution(true);
   renderHistory();
   onStateChanged();
 }
 
-// ---------- scramble ----------
-
-function randomScramble(n = 22): string[] {
-  const faces = 'URFDLB';
-  const out: string[] = [];
-  let last = -1, prev = -1;
-  while (out.length < n) {
-    const f = Math.floor(Math.random() * 6);
-    if (f === last) continue;
-    // avoid e.g. R L R (same axis three times)
-    if (f % 3 === last % 3 && f % 3 === prev % 3) continue;
-    prev = last;
-    last = f;
-    out.push(faces[f] + ['', "'", '2'][Math.floor(Math.random() * 3)]);
-  }
-  return out;
-}
-
 function scramble() {
   if (mode === 'paint') setMode('play');
-  const moves = randomScramble();
-  moveHistory.length = 0;
-  redoStack.length = 0;
+  const moves = puzzle.scramble();
+  session.moveHistory.length = 0;
+  session.redoStack.length = 0;
   invalidateSolution(true);
   for (const m of moves) {
-    moveHistory.push(m);
+    session.moveHistory.push(m);
     enqueue({ move: m, duration: 110, kind: 'user' });
   }
   renderHistory();
@@ -168,26 +156,57 @@ function scramble() {
   fadeHint();
 }
 
+// ---------- switching puzzles ----------
+
+async function switchPuzzle(p: Puzzle) {
+  if (p === puzzle) return;
+  queue.length = 0;
+  await idle();
+  invalidateSolution(true);
+  puzzle.cancelSolve();
+  puzzle = p;
+  session = sessions.get(p.id)!;
+  document.querySelectorAll<HTMLButtonElement>('.puzzle-switch button').forEach((b) => {
+    const on = b.dataset.puzzle === p.id;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  document.body.dataset.puzzle = p.id;
+  view.setPuzzle(p, session.state);
+  net.setPuzzle(p);
+  buildMovepad();
+  ($('#alg-input') as HTMLInputElement).placeholder = p.algPlaceholder;
+  $('#alg-error').textContent = '';
+  $('.mode-paint .intro').innerHTML = p.paintIntroHtml;
+  $('#puzzle-shortcuts').innerHTML = p.shortcutsHtml;
+  paintColor = p.paletteOrder[0];
+  setMode(mode);
+  renderHistory();
+  onStateChanged();
+  try { localStorage.setItem('puzzle', p.id); } catch { /* storage unavailable */ }
+}
+
 // ---------- painting ----------
 
 function paintSticker(i: number) {
-  if (i % 9 === 4) {
-    toast('Centers are fixed — they define which face is which', 'bad');
+  const locked = puzzle.lockedSticker?.(i);
+  if (locked) {
+    toast(locked, 'bad');
     return;
   }
-  if (state[i] === paintColor) return;
-  state = state.slice();
-  state[i] = paintColor;
-  moveHistory.length = 0;
-  redoStack.length = 0;
+  if (session.state[i] === paintColor) return;
+  session.state = session.state.slice();
+  session.state[i] = paintColor;
+  session.moveHistory.length = 0;
+  session.redoStack.length = 0;
   invalidateSolution(true);
-  view.setState(state);
+  view.setState(session.state);
   onStateChanged();
   renderHistory();
   // advance to the next color once this one is complete
-  const count = state.filter((c) => c === paintColor).length;
-  if (paintColor !== UNSET && count === 9) {
-    const next = [0, 1, 2, 3, 4, 5].find((c) => state.filter((x) => x === c).length < 9);
+  const count = (c: number) => session.state.filter((x) => x === c).length;
+  if (paintColor !== puzzle.unset && count(paintColor) === 9) {
+    const next = puzzle.paletteOrder.find((c) => c !== puzzle.unset && count(c) < 9);
     if (next !== undefined) {
       paintColor = next;
       renderPalette();
@@ -209,9 +228,8 @@ function setMode(m: Mode) {
   $('#stage-hint').classList.remove('fade');
   if (m === 'paint') {
     playing = false;
-    if (state.every((c) => c !== UNSET)) {
-      // start with the first color that isn't done, else white
-      paintColor = [0, 1, 2, 3, 4, 5].find((c) => state.filter((x) => x === c).length !== 9) ?? 0;
+    if (!session.state.includes(puzzle.unset)) {
+      paintColor = puzzle.paletteOrder.find((c) => c !== puzzle.unset && session.state.filter((x) => x === c).length !== 9) ?? puzzle.paletteOrder[0];
     }
     renderPalette();
   }
@@ -227,18 +245,18 @@ async function startSolve() {
     pendingSolve = true;
     return;
   }
-  const v = validate(state);
+  const v = puzzle.validate(session.state);
   if (!v.ok) {
     if (v.stickers) {
       view.setHighlight(v.stickers);
       view.flashHighlight();
-      flashNet(v.stickers);
+      net.flash(v.stickers);
     }
     toast(v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message, 'bad');
     if (mode !== 'paint') setMode('paint');
     return;
   }
-  if (isSolved(state)) {
+  if (puzzle.isSolved(session.state)) {
     toast('Already solved — scramble it first', 'good');
     return;
   }
@@ -246,30 +264,33 @@ async function startSolve() {
 }
 
 function runSolver(budgetMs: number) {
-  const start = state.slice();
+  const start = session.state.slice();
+  const forPuzzle = puzzle;
   playing = false;
   solution = { start, moves: [], index: 0, optimal: false, searching: true, elapsed: 0, stale: false };
   renderSolution();
   $('#btn-solve').classList.add('busy');
-  void solver.solve(start, budgetMs, {
+  const current = () => solution && solution.start === start && puzzle === forPuzzle;
+  puzzle.solve(start, budgetMs, {
     onSolution: (moves, elapsed) => {
-      if (!solution || solution.start !== start) return;
-      const first = solution.moves.length === 0;
-      solution.moves = moves;
-      solution.elapsed = elapsed;
-      solution.index = 0;
+      if (!current()) return;
+      const first = solution!.moves.length === 0;
+      solution!.moves = moves;
+      solution!.elapsed = elapsed;
+      solution!.index = 0;
       renderSolution(first);
     },
     onDone: (optimal, elapsed) => {
       $('#btn-solve').classList.remove('busy');
-      if (!solution || solution.start !== start) return;
-      solution.searching = false;
-      solution.optimal = optimal;
-      solution.elapsed = elapsed;
+      if (!current()) return;
+      solution!.searching = false;
+      solution!.optimal = optimal;
+      solution!.elapsed = elapsed;
       renderSolution();
     },
     onError: (message) => {
       $('#btn-solve').classList.remove('busy');
+      if (!current()) return;
       solution = null;
       renderSolution();
       toast(message, 'bad');
@@ -280,7 +301,7 @@ function runSolver(budgetMs: number) {
 function invalidateSolution(clear = false) {
   if (!solution) return;
   if (solution.searching) {
-    solver.cancel();
+    puzzle.cancelSolve();
     $('#btn-solve').classList.remove('busy');
     solution = null;
   } else if (clear) solution = null;
@@ -300,7 +321,7 @@ function stepBack() {
   if (!solution || solution.stale || solution.index <= 0) return;
   playing = false;
   solution.index--;
-  enqueue({ move: invertMove(solution.moves[solution.index]), duration: BASE_MS / speed, kind: 'playback' });
+  enqueue({ move: puzzle.invertMove(solution.moves[solution.index]), duration: BASE_MS / speed, kind: 'playback' });
   renderPlayback();
 }
 function jumpTo(k: number) {
@@ -308,7 +329,7 @@ function jumpTo(k: number) {
   playing = false;
   const fast = Math.max(70, 160 / speed);
   while (solution.index < k) enqueue({ move: solution.moves[solution.index++], duration: fast, kind: 'playback' });
-  while (solution.index > k) enqueue({ move: invertMove(solution.moves[--solution.index]), duration: fast, kind: 'playback' });
+  while (solution.index > k) enqueue({ move: puzzle.invertMove(solution.moves[--solution.index]), duration: fast, kind: 'playback' });
   renderPlayback();
 }
 
@@ -325,9 +346,8 @@ function scheduleNextPlayback() {
 }
 function togglePlay() {
   if (!solution || solution.stale || solution.moves.length === 0) return;
-  if (playing) {
-    playing = false;
-  } else {
+  if (playing) playing = false;
+  else {
     if (solution.index >= solution.moves.length) jumpTo(0);
     playing = true;
     if (!running) scheduleNextPlayback();
@@ -338,28 +358,27 @@ function togglePlay() {
 // ---------- rendering ----------
 
 function onStateChanged() {
-  renderNet();
+  net.update(session.state);
   renderStatus();
-  $('#solved-badge').classList.toggle('hidden', !isSolved(state));
+  $('#solved-badge').classList.toggle('hidden', !puzzle.isSolved(session.state));
   if (mode === 'paint') renderPalette();
   if (solution && !solution.stale) renderPlayback();
   view.setHighlight([]);
-  ($('#btn-undo') as HTMLButtonElement).disabled = moveHistory.length === 0;
-  ($('#btn-redo') as HTMLButtonElement).disabled = redoStack.length === 0;
+  renderUndo();
   saveToUrl();
 }
 
-const FACE_COLOR_VARS = ['U', 'R', 'F', 'D', 'L', 'B'].map((_, i) => STICKER_COLORS[i]);
-
 function buildMovepad() {
-  const pad = $('#movepad');
-  const faces = ['U', 'D', 'R', 'L', 'F', 'B'];
-  const colorOf: Record<string, string> = { U: FACE_COLOR_VARS[0], R: FACE_COLOR_VARS[1], F: FACE_COLOR_VARS[2], D: FACE_COLOR_VARS[3], L: FACE_COLOR_VARS[4], B: FACE_COLOR_VARS[5] };
-  for (const suffix of ['', "'", '2'])
-    for (const f of faces) pad.append(moveButton(f + suffix, colorOf[f]));
-  const extra = $('#movepad-extra');
-  for (const suffix of ['', "'", '2'])
-    for (const f of ['M', 'E', 'S', 'x', 'y', 'z']) extra.append(moveButton(f + suffix));
+  const fill = (el: HTMLElement, rows: { move: string; color?: string }[][]) => {
+    el.replaceChildren();
+    el.style.gridTemplateColumns = `repeat(${rows[0]?.length ?? 1}, 1fr)`;
+    for (const row of rows) for (const b of row) el.append(moveButton(b.move, b.color));
+  };
+  fill($('#movepad'), puzzle.movePad);
+  fill($('#movepad-extra'), puzzle.movePadExtra ?? []);
+  const more = $('#btn-more-moves');
+  more.classList.toggle('hidden', !puzzle.movePadExtra);
+  more.textContent = $('#movepad-extra').classList.contains('hidden') ? puzzle.movePadExtraLabel ?? '' : 'Hide extras';
 }
 
 function moveButton(move: string, color?: string) {
@@ -379,71 +398,37 @@ function flashMoveButton(move: string) {
   setTimeout(() => b.classList.remove('flash'), 160);
 }
 
+function renderUndo() {
+  ($('#btn-undo') as HTMLButtonElement).disabled = session.moveHistory.length === 0;
+  ($('#btn-redo') as HTMLButtonElement).disabled = session.redoStack.length === 0;
+}
+
 function renderHistory() {
   const el = $('#history');
-  $('#history-count').textContent = `${moveHistory.length} move${moveHistory.length === 1 ? '' : 's'}`;
-  if (!moveHistory.length) {
-    el.innerHTML = '<span class="muted small">Your turns will show up here.</span>';
-  } else {
-    el.innerHTML = moveHistory.map((m) => `<span class="h">${m}</span>`).join('');
+  const h = session.moveHistory;
+  $('#history-count').textContent = `${h.length} move${h.length === 1 ? '' : 's'}`;
+  if (!h.length) el.innerHTML = '<span class="muted small">Your turns will show up here.</span>';
+  else {
+    el.innerHTML = h.map((m) => `<span class="h">${m}</span>`).join('');
     el.scrollTop = el.scrollHeight;
   }
-  ($('#btn-undo') as HTMLButtonElement).disabled = moveHistory.length === 0;
-  ($('#btn-redo') as HTMLButtonElement).disabled = redoStack.length === 0;
-}
-
-// Net layout: U on top, then L F R B, then D.
-const NET_ORIGIN: Record<number, [number, number]> = { 0: [0, 3], 4: [3, 0], 2: [3, 3], 1: [3, 6], 5: [3, 9], 3: [6, 3] };
-const netCells: HTMLButtonElement[] = [];
-
-function buildNet() {
-  const net = $('#net');
-  for (let f = 0; f < 6; f++) {
-    for (let i = 0; i < 9; i++) {
-      const [r0, c0] = NET_ORIGIN[f];
-      const cell = document.createElement('button');
-      cell.className = 'cell' + (i === 4 ? ' center' : '');
-      cell.style.gridRow = String(r0 + Math.floor(i / 3) + 1);
-      cell.style.gridColumn = String(c0 + (i % 3) + 1);
-      const idx = f * 9 + i;
-      if (i === 4) cell.dataset.face = 'URFDLB'[f];
-      cell.setAttribute('aria-label', `${'URFDLB'[f]}${i + 1}`);
-      cell.addEventListener('click', () => {
-        if (mode === 'paint') paintSticker(idx);
-        else setMode('paint');
-      });
-      netCells[idx] = cell;
-      net.append(cell);
-    }
-  }
-}
-
-function renderNet() {
-  state.forEach((c, i) => netCells[i].style.setProperty('--c', STICKER_COLORS[c]));
-}
-
-function flashNet(indices: number[]) {
-  for (const i of indices) {
-    const c = netCells[i];
-    c.classList.remove('bad');
-    void c.offsetWidth;
-    c.classList.add('bad');
-  }
-  setTimeout(() => indices.forEach((i) => netCells[i].classList.remove('bad')), 2600);
+  renderUndo();
 }
 
 function renderPalette() {
   const el = $('#palette');
-  const counts = new Array(7).fill(0);
-  state.forEach((c) => counts[c]++);
-  el.innerHTML = '';
-  [0, 2, 1, 5, 4, 3, UNSET].forEach((c, k) => {
+  const counts = new Array(puzzle.colors.length).fill(0);
+  session.state.forEach((c) => counts[c]++);
+  el.replaceChildren();
+  el.style.gridTemplateColumns = `repeat(${puzzle.paletteOrder.length}, minmax(0, 40px))`;
+  puzzle.paletteOrder.forEach((c, k) => {
     const b = document.createElement('button');
-    b.className = 'swatch' + (c === paintColor ? ' active' : '') + (c === UNSET ? ' eraser' : '');
-    b.style.setProperty('--c', STICKER_COLORS[c]);
-    b.title = c === UNSET ? `Eraser (${k + 1})` : `${COLOR_NAMES[c]} (${k + 1})`;
+    const eraser = c === puzzle.unset;
+    b.className = 'swatch' + (c === paintColor ? ' active' : '') + (eraser ? ' eraser' : '');
+    b.style.setProperty('--c', puzzle.colors[c]);
+    b.title = `${puzzle.colorNames[c]} (${k + 1})`;
     b.setAttribute('aria-label', b.title);
-    if (c !== UNSET) {
+    if (!eraser) {
       const left = 9 - counts[c];
       const n = document.createElement('span');
       n.className = 'n' + (left === 0 ? ' done' : left < 0 ? ' over' : '');
@@ -457,16 +442,15 @@ function renderPalette() {
     el.append(b);
   });
 }
-const PALETTE_ORDER = [0, 2, 1, 5, 4, 3, UNSET];
 
 function renderStatus() {
   const el = $('#status');
-  const v = validate(state);
+  const v = puzzle.validate(session.state);
   el.className = 'status';
   if (v.ok) {
     if (mode === 'paint') {
       el.classList.add('ok');
-      el.innerHTML = '<span class="dot"></span><span>Valid cube — ready to solve</span>';
+      el.innerHTML = '<span class="dot"></span><span>Valid puzzle — ready to solve</span>';
     } else el.innerHTML = '';
   } else {
     el.classList.add(v.kind === 'incomplete' ? 'warn' : 'bad');
@@ -487,7 +471,7 @@ function renderSolution(fresh = false) {
   $('#sol-count').textContent = s.moves.length ? String(s.moves.length) : '…';
   const secs = (s.elapsed / 1000).toFixed(s.elapsed < 1000 ? 2 : 1);
   let meta = '';
-  if (s.stale) meta = `<span class="badge stale">Cube changed</span><span>Solve again for a new route</span>`;
+  if (s.stale) meta = `<span class="badge stale">Puzzle changed</span><span>Solve again for a new route</span>`;
   else if (s.searching) meta = `<span class="badge searching">Searching for shorter</span>`;
   else if (s.optimal) meta = `<span class="badge optimal">✓ Optimal</span><span>proven in ${secs}s</span>`;
   else meta = `<span>Best found in ${secs}s ·</span><button class="link" id="btn-deeper">Search deeper</button>`;
@@ -495,24 +479,24 @@ function renderSolution(fresh = false) {
   $('#btn-deeper')?.addEventListener('click', () => {
     if (!solution) return;
     // restart from the original position, searching for longer
-    const target = solution.start;
-    const back = solution.index;
+    const target = puzzle.encode(solution.start);
+    const rewound = solution.index > 0;
     jumpTo(0);
     void idle().then(() => {
-      if (toFaceletString(state) !== toFaceletString(target)) return;
+      if (puzzle.encode(session.state) !== target) return;
       runSolver(12000);
-      if (back) toast('Rewound to the start to search deeper');
+      if (rewound) toast('Rewound to the start to search deeper');
     });
   });
   sub.textContent = s.searching ? 'Searching…' : 'Solve again';
   const chips = $('#chips');
-  chips.innerHTML = '';
+  chips.replaceChildren();
   s.moves.forEach((m, i) => {
     const c = document.createElement('button');
     c.className = 'chip';
     c.innerHTML = `${m}<sub>${i + 1}</sub>`;
-    c.style.animationDelay = fresh ? `${i * 18}ms` : '0ms';
-    if (!fresh) c.style.animation = 'none';
+    if (fresh) c.style.animationDelay = `${i * 18}ms`;
+    else c.style.animation = 'none';
     c.title = `Jump to after move ${i + 1}`;
     c.addEventListener('click', () => jumpTo(i + 1));
     chips.append(c);
@@ -569,30 +553,36 @@ let urlTimer = 0;
 function saveToUrl() {
   clearTimeout(urlTimer);
   urlTimer = window.setTimeout(() => {
-    const s = toFaceletString(state);
-    const hash = isSolved(state) && s === toFaceletString(solvedState()) ? '' : `#${s}`;
+    const solvedHome = puzzle.encode(session.state) === puzzle.encode(puzzle.solved());
+    const hash = solvedHome ? (puzzle === cube ? '' : `#${puzzle.id}`) : `#${puzzle.id}:${puzzle.encode(session.state)}`;
     window.history.replaceState(null, '', location.pathname + location.search + hash);
   }, 200);
 }
 
-function loadFromUrl() {
-  const s = fromFaceletString(decodeURIComponent(location.hash.slice(1)));
-  if (s) {
-    state = s;
-    return true;
-  }
-  return false;
+/** `#pyra:GGG…`, `#3x3:UUU…`, `#pyra`, or a bare 54-letter cube (older links). */
+function loadFromUrl(): { puzzle: Puzzle; loaded: boolean } | null {
+  const raw = decodeURIComponent(location.hash.slice(1));
+  if (!raw) return null;
+  const [id, data] = raw.includes(':') ? raw.split(':') : PUZZLES.some((p) => p.id === raw) ? [raw, ''] : ['3x3', raw];
+  const p = PUZZLES.find((x) => x.id === id);
+  if (!p) return null;
+  const s = data ? p.decode(data) : null;
+  if (s) sessions.get(p.id)!.state = s;
+  return { puzzle: p, loaded: !!s };
 }
 
 // ---------- wiring ----------
 
 function bind() {
+  document.querySelectorAll<HTMLButtonElement>('.puzzle-switch button').forEach((b) =>
+    b.addEventListener('click', () => void switchPuzzle(PUZZLES.find((p) => p.id === b.dataset.puzzle)!)),
+  );
   document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
   );
   $('#btn-scramble').addEventListener('click', scramble);
   $('#btn-reset').addEventListener('click', () => {
-    setStateDirect(solvedState());
+    setStateDirect(puzzle.solved());
     toast('Reset to solved');
   });
   $('#btn-undo').addEventListener('click', undo);
@@ -604,7 +594,7 @@ function bind() {
     await new Promise((r) => setTimeout(r, 220));
     try {
       await navigator.clipboard.writeText(location.href);
-      toast('Link copied — it opens this exact cube', 'good');
+      toast('Link copied — it opens this exact puzzle', 'good');
     } catch {
       toast('Copy the URL from the address bar to share');
     }
@@ -612,23 +602,20 @@ function bind() {
   $('#btn-more-moves').addEventListener('click', () => {
     const ex = $('#movepad-extra');
     ex.classList.toggle('hidden');
-    $('#btn-more-moves').textContent = ex.classList.contains('hidden') ? 'Slices & rotations' : 'Hide extras';
+    $('#btn-more-moves').textContent = ex.classList.contains('hidden') ? puzzle.movePadExtraLabel ?? '' : 'Hide extras';
   });
   $('#btn-clear').addEventListener('click', () => {
-    const s = state.map((c, i) => (i % 9 === 4 ? c : UNSET));
-    setStateDirect(s);
-    paintColor = 0;
+    setStateDirect(session.state.map((c, i) => (puzzle.lockedSticker?.(i) ? c : puzzle.unset)));
+    paintColor = puzzle.paletteOrder[0];
     renderPalette();
   });
-  $('#btn-solved').addEventListener('click', () => {
-    setStateDirect(solvedState());
-  });
+  $('#btn-solved').addEventListener('click', () => setStateDirect(puzzle.solved()));
 
   const algForm = $('#alg-form') as HTMLFormElement;
   const algInput = $('#alg-input') as HTMLInputElement;
   algForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const { moves, invalid } = parseAlg(algInput.value);
+    const { moves, invalid } = puzzle.parseAlg(algInput.value);
     if (invalid.length) {
       $('#alg-error').textContent = `Didn't understand: ${invalid.join(', ')}`;
       return;
@@ -642,7 +629,7 @@ function bind() {
   algInput.addEventListener('input', () => ($('#alg-error').textContent = ''));
 
   $('#btn-solve').addEventListener('click', () => {
-    if (mode === 'paint' && validate(state).ok) setMode('play');
+    if (mode === 'paint' && puzzle.validate(session.state).ok) setMode('play');
     void startSolve();
   });
   $('#btn-play').addEventListener('click', togglePlay);
@@ -672,12 +659,12 @@ function bind() {
     if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'text') return;
     if (($('#help') as HTMLDialogElement).open) return;
     const k = e.key;
-    if ((e.metaKey || e.ctrlKey) && k.toLowerCase() === 'z') {
+    if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ') {
       e.preventDefault();
       if (e.shiftKey) redo(); else undo();
       return;
     }
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.metaKey || e.ctrlKey) return;
     if (k === ' ') { e.preventDefault(); togglePlay(); return; }
     if (k === 'ArrowRight') { e.preventDefault(); playing = false; stepForward(); renderPlayback(); return; }
     if (k === 'ArrowLeft') { e.preventDefault(); stepBack(); return; }
@@ -685,33 +672,40 @@ function bind() {
     if (k === 'End') { if (solution) jumpTo(solution.moves.length); return; }
     if (k === 'Enter' && target.tagName !== 'BUTTON') { void startSolve(); return; }
     if (k === '?') { ($('#help') as HTMLDialogElement).showModal(); return; }
-    const lower = k.toLowerCase();
-    if (lower === 'p') { setMode(mode === 'paint' ? 'play' : 'paint'); return; }
-    if (lower === 'v') { view.resetCamera(); return; }
-    if (mode === 'paint' && /^[1-7]$/.test(k)) {
-      paintColor = PALETTE_ORDER[Number(k) - 1];
-      renderPalette();
+    if (e.code === 'KeyP' && !e.altKey) { setMode(mode === 'paint' ? 'play' : 'paint'); return; }
+    if (e.code === 'KeyV' && !e.altKey) { view.resetCamera(); return; }
+    if (mode === 'paint' && /^Digit[1-9]$/.test(e.code)) {
+      const c = puzzle.paletteOrder[Number(e.code.slice(5)) - 1];
+      if (c !== undefined) { paintColor = c; renderPalette(); }
       return;
     }
     if (mode === 'play') {
-      const letter = 'urfdlbmes'.includes(lower) ? lower.toUpperCase() : 'xyz'.includes(lower) ? lower : null;
-      if (letter && lower.length === 1) {
-        commitUserMove(letter + (e.shiftKey ? "'" : ''));
+      const move = puzzle.keyToMove(e.code, e.shiftKey, e.altKey);
+      if (move) {
+        e.preventDefault();
+        commitUserMove(move);
       }
     }
   });
 }
 
-buildMovepad();
-buildNet();
+// ---------- boot ----------
+
 const fromUrl = loadFromUrl();
-view.setState(state);
-bind();
-onStateChanged();
-renderHistory();
-renderSolution();
-if (fromUrl) {
-  const v = validate(state);
-  toast(v.ok ? 'Loaded cube from link' : 'Loaded cube from link — ' + v.message);
-  if (!v.ok) setMode('paint');
+let initial: Puzzle = cube;
+if (fromUrl) initial = fromUrl.puzzle;
+else {
+  try {
+    initial = PUZZLES.find((p) => p.id === localStorage.getItem('puzzle')) ?? cube;
+  } catch { /* storage unavailable */ }
 }
+bind();
+puzzle = initial === cube ? pyraminx : cube; // force switchPuzzle to run
+void switchPuzzle(initial).then(() => {
+  renderSolution();
+  if (fromUrl?.loaded) {
+    const v = puzzle.validate(session.state);
+    toast(v.ok ? 'Loaded puzzle from link' : 'Loaded puzzle from link — ' + v.message);
+    if (!v.ok) setMode('paint');
+  }
+});
