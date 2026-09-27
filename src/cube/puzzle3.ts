@@ -2,10 +2,11 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import {
   FACELETS, UNSET, Vec3, fromFaceletString, invertMove, isSolved, parseAlg, parseMove,
   randomScramble, solvedState, toFaceletString, turnPermutation, turnToMove,
-} from '../cube/model';
-import { COLORS, COLOR_NAMES, validate } from '../cube/validate';
-import { SolverClient } from '../cube/solverClient';
-import type { DragOption, Puzzle, StickerDef, Turn } from './types';
+} from './model3';
+import { validate } from './validate3';
+import { COLORS, COLOR_NAMES } from '../core/colors';
+import { SolverClient } from '../core/worker';
+import type { DragOption, Puzzle, StickerDef, Turn } from '../core/types';
 
 const cubieIndex = (p: Vec3) => (p[0] + 1) * 9 + (p[1] + 1) * 3 + (p[2] + 1);
 const cubiePos = (i: number): Vec3 => [Math.floor(i / 9) - 1, (Math.floor(i / 3) % 3) - 1, (i % 3) - 1];
@@ -44,7 +45,7 @@ function toTurn(move: string): Turn | null {
   return { axis: unit(t.axis), pieces: layerPieces(t.axis, t.layers), angle: (t.quarters * Math.PI) / 2, perm: turnPermutation(t) };
 }
 
-const solver = new SolverClient(() => new Worker(new URL('../cube/solver.worker.ts', import.meta.url), { type: 'module' }));
+const solver = new SolverClient(() => new Worker(new URL('./workers/3x3.worker.ts', import.meta.url), { type: 'module' }));
 
 const btn = (move: string): { move: string; color?: string } => {
   const face = 'URFDLB'.indexOf(move[0]);

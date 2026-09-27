@@ -1,8 +1,8 @@
 import './style.css';
-import type { Puzzle, State } from './puzzles/types';
-import { cube } from './puzzles/cube';
-import { cube2, cube4 } from './puzzles/nxn';
-import { pyraminx } from './puzzles/pyraminx';
+import type { Puzzle, State } from './core/types';
+import { cube } from './cube/puzzle3';
+import { cube2, cube4 } from './cube/puzzles';
+import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 

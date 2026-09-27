@@ -1,8 +1,8 @@
 // Sanity check: scramble many random states and confirm every solver answer really solves the cube.
 // Run with `npm run verify`.
-import { applyMove, applyMoves, isSolved, parseAlg, solvedState } from '../src/cube/model';
-import { initSolver, solve } from '../src/cube/solver';
-import { validate } from '../src/cube/validate';
+import { initSolver, solve } from '../src/cube/kociemba/solver';
+import { applyMove, applyMoves, isSolved, parseAlg, solvedState } from '../src/cube/model3';
+import { validate } from '../src/cube/validate3';
 
 const t = Date.now();
 initSolver((f) => applyMove(solvedState(), 'URFDLB'[f]));

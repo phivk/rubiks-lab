@@ -5,8 +5,8 @@
 // distance of each one, after which solving is just walking downhill, so every
 // solution is optimal (at most 11 moves).
 
-import { invertAlg } from '../cube/model';
-import { buildPruning, permRank, permUnrank } from '../cube/solver';
+import { buildPruning, permRank, permUnrank } from '../core/perm';
+import { invertAlg } from './model3';
 import type { CubeModel } from './model';
 
 const MOVES = ['U', 'U2', "U'", 'R', 'R2', "R'", 'F', 'F2', "F'"];

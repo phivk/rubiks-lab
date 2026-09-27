@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import type { DragOption, Puzzle, State, Turn, Vec3 } from '../puzzles/types';
+import type { DragOption, Puzzle, State, Turn, Vec3 } from '../core/types';
 
 export type Mode = 'play' | 'paint';
 

@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
-import { applyMove, applyMoves, isSolved, solvedState } from './model';
-import { serveSolver } from './serveSolver';
-import { initSolver, solve } from './solver';
+import { serveSolver } from '../../core/worker';
+import { initSolver, solve } from '../kociemba/solver';
+import { applyMove, applyMoves, isSolved, solvedState } from '../model3';
 
 initSolver((f) => applyMove(solvedState(), 'URFDLB'[f]));
 

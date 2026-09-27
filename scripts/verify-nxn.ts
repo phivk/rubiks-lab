@@ -1,9 +1,9 @@
 // Sanity checks for the 2×2 and 4×4 models and solvers. Run with `npm run verify`.
-import { CubeModel } from '../src/nxn/model';
-import { Solver2 } from '../src/nxn/solver2';
-import { Reducer4 } from '../src/nxn/reduction';
-import { applyMove, isSolved as isSolved3, solvedState } from '../src/cube/model';
-import { initSolver, solve } from '../src/cube/solver';
+import { initSolver, solve } from '../src/cube/kociemba/solver';
+import { CubeModel } from '../src/cube/model';
+import { applyMove, isSolved as isSolved3, solvedState } from '../src/cube/model3';
+import { Reducer4 } from '../src/cube/reduce';
+import { Solver2 } from '../src/cube/solve2';
 
 function fail(msg: string): never {
   console.error('✗ ' + msg);

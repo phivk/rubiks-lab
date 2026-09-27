@@ -1,4 +1,7 @@
-import { State, UNSET } from './model';
+import { COLOR_NAMES } from '../core/colors';
+import { parity } from '../core/perm';
+import type { Validation } from '../core/types';
+import { State, UNSET } from './model3';
 
 // Facelet indices of each corner / edge slot, in Kociemba order.
 const CORNERS = [
@@ -16,26 +19,6 @@ const CORNER_FACES = [
 const EDGE_FACES = [
   [0, 1], [0, 2], [0, 4], [0, 5], [3, 1], [3, 2], [3, 4], [3, 5], [2, 1], [2, 4], [5, 4], [5, 1],
 ];
-
-export const COLOR_NAMES = ['White', 'Red', 'Green', 'Yellow', 'Orange', 'Blue'];
-/** sticker colors, plus the "unset" color used while painting */
-export const COLORS = ['#f4f4ef', '#e02a3c', '#14a85a', '#ffd21f', '#ff7b1c', '#2166e6', '#2c313c'];
-
-export type Validation =
-  | { ok: true }
-  | { ok: false; kind: 'incomplete' | 'invalid'; message: string; stickers?: number[] };
-
-export function parity(perm: number[]): number {
-  let p = 0;
-  const seen = new Array(perm.length).fill(false);
-  for (let i = 0; i < perm.length; i++) {
-    if (seen[i]) continue;
-    let len = 0;
-    for (let j = i; !seen[j]; j = perm[j]) { seen[j] = true; len++; }
-    p += len - 1;
-  }
-  return p % 2;
-}
 
 const names = (cols: number[]) => cols.map((c) => COLOR_NAMES[c]).join('–');
 

@@ -1,11 +1,11 @@
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { invertMove } from '../cube/model';
-import { COLORS, COLOR_NAMES } from '../cube/validate';
-import { SolverClient } from '../cube/solverClient';
-import { CubeModel, FACES, UNSET, type LayerTurn } from '../nxn/model';
-import { Solver2 } from '../nxn/solver2';
-import { syncSolver } from './syncSolver';
-import type { DragOption, MoveButton, Puzzle, StickerDef, Turn, Vec3 } from './types';
+import { COLORS, COLOR_NAMES } from '../core/colors';
+import { syncSolver } from '../core/syncSolver';
+import type { DragOption, MoveButton, Puzzle, StickerDef, Turn, Vec3 } from '../core/types';
+import { SolverClient } from '../core/worker';
+import { CubeModel, FACES, UNSET, type LayerTurn } from './model';
+import { invertMove } from './model3';
+import { Solver2 } from './solve2';
 
 const unit = (axis: number): Vec3 => [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0];
 
@@ -169,7 +169,7 @@ export const cube4: Puzzle = {
   solveHint: 'Reduces to a 3×3, then solves that',
   scramble: () => scramble4(),
   solve: (state, budgetMs, h) => {
-    solver4 ??= new SolverClient(() => new Worker(new URL('../nxn/solver4.worker.ts', import.meta.url), { type: 'module' }));
+    solver4 ??= new SolverClient(() => new Worker(new URL('./workers/4x4.worker.ts', import.meta.url), { type: 'module' }));
     void solver4.solve(state, budgetMs, h);
   },
   cancelSolve: () => solver4?.cancel(),

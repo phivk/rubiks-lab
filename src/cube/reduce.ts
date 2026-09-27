@@ -9,9 +9,9 @@
 // those first. An inner slice quarter turn flips the wing parity, and a face quarter
 // turn flips the corner parity. With both even, the reduced cube solves like a 3×3.
 
-import { FACELETS } from '../cube/model';
-import { parity } from '../cube/validate';
-import type { Vec3 } from '../puzzles/types';
+import { parity } from '../core/perm';
+import type { Vec3 } from '../core/types';
+import { FACELETS } from './model3';
 import type { CubeModel, Slot } from './model';
 
 interface Orbit {

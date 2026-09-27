@@ -1,10 +1,10 @@
 /// <reference lib="webworker" />
 // 4×4 solver: reduce to a 3×3 with commutators, then finish with the Kociemba solver.
-import { applyMove, isSolved as isSolved3, solvedState } from '../cube/model';
-import { serveSolver } from '../cube/serveSolver';
-import { initSolver, solve } from '../cube/solver';
-import { CubeModel } from './model';
-import { Reducer4 } from './reduction';
+import { serveSolver } from '../../core/worker';
+import { initSolver, solve } from '../kociemba/solver';
+import { CubeModel } from '../model';
+import { applyMove, isSolved as isSolved3, solvedState } from '../model3';
+import { Reducer4 } from '../reduce';
 
 const model = new CubeModel(4);
 const reducer = new Reducer4(model);

@@ -45,6 +45,8 @@ export interface MoveButton {
 
 export interface SolveHandlers {
   onSolution: (moves: string[], elapsed: number) => void;
+  /** a worker solver reports each search depth it starts */
+  onDepth?: (depth: number) => void;
   onDone: (optimal: boolean, elapsed: number) => void;
   onError: (message: string) => void;
 }
