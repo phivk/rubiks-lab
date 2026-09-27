@@ -82,6 +82,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   display: flex; flex-direction: column; gap: 14px;
   scrollbar-width: thin;
 }
+/* when a panel is taller than the screen it scrolls, rather than squashing its contents */
+.panel > * { flex-shrink: 0; }
 .panel.left { grid-column: 1; }
 .panel.right { grid-column: 3; }
 
