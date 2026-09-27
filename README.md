@@ -1,4 +1,4 @@
-# Cube Solver
+# Rubik's Lab
 
 A 3D twisty-puzzle playground and solver for the **3×3 cube** and the **Pyraminx**. Turn the puzzle by dragging it, paint in a real puzzle's state, and step through the solution.
 
