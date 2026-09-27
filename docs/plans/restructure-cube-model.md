@@ -1,6 +1,13 @@
 # Plan: restructure around one cube model
 
-Status: proposed · 2026-09-27
+Status: done · 2026-09-28
+
+Two things turned out differently from the plan:
+
+- Step 4: on an odd cube the reducer can't send wings home. The 3×3 finish moves each
+  midge with its wings, so the wings are paired with whichever midge shares their edge.
+- Step 5: the size picker isn't built. Phones already overflowed with four tabs, so now
+  the tabs scroll sideways instead; with five, about three fit on a 390px screen.
 
 ## Why
 

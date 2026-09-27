@@ -384,8 +384,11 @@ kbd {
   .panel { margin: 0 16px 16px; max-height: none; overflow: visible; }
   .panel.right { order: 3; }
   .panel.left { order: 4; }
-  .puzzle-switch { position: static; transform: none; }
-  .puzzle-switch button { padding: 0 10px; }
+  /* the tabs shrink and scroll sideways rather than widening the page */
+  .puzzle-switch { position: static; transform: none; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .puzzle-switch::-webkit-scrollbar { display: none; }
+  .puzzle-switch button { padding: 0 10px; flex: none; }
+  .brand, .top-actions { flex: none; }
   .puzzle-switch button svg, #btn-camera, #btn-help, .divider { display: none; }
   .brand-name { display: none; }
   .toasts { top: 60px; }

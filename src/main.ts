@@ -1,13 +1,13 @@
 import './style.css';
 import type { Puzzle, State } from './core/types';
-import { cube2, cube3, cube4 } from './cube/puzzles';
+import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
-const PUZZLES: Puzzle[] = [cube2, cube3, cube4, pyraminx];
+const PUZZLES: Puzzle[] = [cube2, cube3, cube4, cube5, pyraminx];
 
 // ---------- state ----------
 
@@ -173,6 +173,8 @@ async function switchPuzzle(p: Puzzle) {
     const on = b.dataset.puzzle === p.id;
     b.classList.toggle('active', on);
     b.setAttribute('aria-selected', String(on));
+    // on a phone the tabs scroll sideways
+    if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
   document.body.dataset.puzzle = p.id;
   view.setPuzzle(p, session.state);
@@ -563,7 +565,7 @@ function saveToUrl() {
   }, 200);
 }
 
-/** `#pyra:GGG…`, `#3x3:UUU…`, `#4x4:UUU…`, `#pyra`, or a bare 54-letter cube (older links). */
+/** `#pyra:GGG…`, `#3x3:UUU…`, `#5x5:UUU…`, `#pyra`, or a bare 54-letter cube (older links). */
 function loadFromUrl(): { puzzle: Puzzle; loaded: boolean } | null {
   const raw = decodeURIComponent(location.hash.slice(1));
   if (!raw) return null;
@@ -578,9 +580,16 @@ function loadFromUrl(): { puzzle: Puzzle; loaded: boolean } | null {
 // ---------- wiring ----------
 
 function bind() {
-  document.querySelectorAll<HTMLButtonElement>('.puzzle-switch button').forEach((b) =>
-    b.addEventListener('click', () => void switchPuzzle(PUZZLES.find((p) => p.id === b.dataset.puzzle)!)),
-  );
+  for (const p of PUZZLES) {
+    const b = document.createElement('button');
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', 'false');
+    b.dataset.puzzle = p.id;
+    b.innerHTML = `<svg viewBox="0 0 24 24">${p.icon}</svg>`;
+    b.append(p.name);
+    b.addEventListener('click', () => void switchPuzzle(p));
+    $('.puzzle-switch').append(b);
+  }
   document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
   );

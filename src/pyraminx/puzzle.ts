@@ -74,6 +74,7 @@ function validate(s: State): Validation {
 export const pyraminx: Puzzle = {
   id: 'pyra',
   name: 'Pyraminx',
+  icon: '<path d="M12 3 21 19H3z"/><path d="M12 3 9.5 19M12 3l2.5 16"/>',
   colors: COLORS,
   colorNames: COLOR_NAMES,
   unset: UNSET,

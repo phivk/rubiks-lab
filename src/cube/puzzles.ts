@@ -17,7 +17,9 @@ const btn = (move: string): MoveButton => {
 };
 const rows = (letters: string[]) => ['', "'", '2'].map((suf) => letters.map((f) => btn(f + suf)));
 
-type Shared = Omit<Puzzle, 'id' | 'name' | 'scramble' | 'solve' | 'cancelSolve' | 'movePadExtra' | 'movePadExtraLabel' | 'algPlaceholder'>;
+type Shared = Omit<Puzzle, 'id' | 'name' | 'icon' | 'scramble' | 'solve' | 'cancelSolve' | 'movePadExtra' | 'movePadExtraLabel' | 'algPlaceholder'>;
+
+const CUBE_ICON = '<path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/>';
 
 /**
  * Everything N×N cubes have in common; each adds its name, scramble, solver and extra
@@ -171,6 +173,7 @@ export const cube2: Puzzle = {
   ...makeCube(model2, { wide: false }),
   id: '2x2',
   name: '2×2',
+  icon: CUBE_ICON,
   scramble: () => solver2.randomState(),
   ...syncSolver(
     (s) => solver2.solve(model2.toFaces(s)),
@@ -189,6 +192,7 @@ export const cube3: Puzzle = {
   ...makeCube(new CubeModel(3), { wide: false }),
   id: '3x3',
   name: '3×3',
+  icon: CUBE_ICON,
   scramble: () => faceScramble(22),
   solve: (state, budgetMs, h) => void solver3.solve(state, budgetMs, h),
   cancelSolve: () => solver3.cancel(),
@@ -214,10 +218,26 @@ export const cube4: Puzzle = {
   ...makeCube(new CubeModel(4), { wide: true }),
   id: '4x4',
   name: '4×4',
+  icon: CUBE_ICON,
   solveHint: 'Reduces to a 3×3, then solves that',
   scramble: () => wideScramble(40),
   ...solveBig,
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), rotations],
   movePadExtraLabel: 'Wide turns & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 2R' F",
+};
+
+// ---------- 5×5 ----------
+
+export const cube5: Puzzle = {
+  ...makeCube(new CubeModel(5), { wide: true }),
+  id: '5x5',
+  name: '5×5',
+  icon: CUBE_ICON,
+  solveHint: 'Reduces to a 3×3, then solves that',
+  scramble: () => wideScramble(60),
+  ...solveBig,
+  movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), ['M', "M'", 'E', "E'", 'S', "S'"].map(btn), rotations],
+  movePadExtraLabel: 'Wide turns, slices & rotations',
+  algPlaceholder: "Type an algorithm… Rw U2 3R' M",
 };

@@ -54,6 +54,8 @@ export interface SolveHandlers {
 export interface Puzzle {
   id: string;
   name: string;
+  /** the switcher tab's icon: SVG content for a 24×24 viewBox */
+  icon: string;
   /** colors by id; the last entry is the "unset" color used while painting */
   colors: string[];
   colorNames: string[];
