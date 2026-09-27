@@ -91,6 +91,8 @@ export interface Puzzle {
   encode: (s: State) => string;
   decode: (text: string) => State | null;
 
+  /** subtitle of the solve button, if not "Finds the shortest route home" */
+  solveHint?: string;
   solve: (state: State, budgetMs: number, handlers: SolveHandlers) => void;
   cancelSolve: () => void;
 }

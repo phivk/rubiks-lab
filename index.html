@@ -18,8 +18,14 @@
           <span class="brand-name">Rubik's Lab</span>
         </div>
         <div class="puzzle-switch" role="tablist" aria-label="Puzzle">
+          <button role="tab" data-puzzle="2x2" aria-selected="false">
+            <svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></svg>2×2
+          </button>
           <button role="tab" data-puzzle="3x3" class="active" aria-selected="true">
             <svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></svg>3×3
+          </button>
+          <button role="tab" data-puzzle="4x4" aria-selected="false">
+            <svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></svg>4×4
           </button>
           <button role="tab" data-puzzle="pyra" aria-selected="false">
             <svg viewBox="0 0 24 24"><path d="M12 3 21 19H3z"/><path d="M12 3 9.5 19M12 3l2.5 16"/></svg>Pyraminx
@@ -142,7 +148,7 @@
         <div><kbd>1</kbd>–<kbd>7</kbd></div><span>Pick a paint color</span>
         <div><kbd>V</kbd></div><span>Reset camera</span>
       </div>
-      <p class="muted small">Drag any sticker to turn its layer. On the cube, grab the middle row to turn a slice; on the Pyraminx, grab a tip to turn just the tip. Drag empty space to look around; scroll or pinch to zoom.</p>
+      <p class="muted small">Drag any sticker to turn its layer. On the 3×3 and 4×4, grab an inner row to turn a slice; on the Pyraminx, grab a tip to turn just the tip. Drag empty space to look around; scroll or pinch to zoom.</p>
       <form method="dialog"><button class="btn grow">Got it</button></form>
     </dialog>
 

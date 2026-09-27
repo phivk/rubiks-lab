@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
+import { syncSolver } from './syncSolver';
 import type { DragOption, Puzzle, State, StickerDef, Turn, Validation, Vec3 } from './types';
 
 const COLORS = ['#14a85a', '#2166e6', '#e02a3c', '#ffd21f', '#2c313c'];
@@ -402,8 +403,6 @@ function validate(s: State): Validation {
 
 // ---------- puzzle ----------
 
-let solveTimer = 0;
-
 export const pyraminx: Puzzle = {
   id: 'pyra',
   name: 'Pyraminx',
@@ -478,18 +477,7 @@ export const pyraminx: Puzzle = {
     return out;
   },
 
-  solve: (state, _budget, h) => {
-    clearTimeout(solveTimer);
-    solveTimer = window.setTimeout(() => {
-      const t0 = performance.now();
-      const moves = solveOptimal(state);
-      const elapsed = performance.now() - t0;
-      if (!moves || !isSolved(applyAll(state, moves))) return h.onError('Could not solve this state');
-      h.onSolution(moves, elapsed);
-      h.onDone(true, elapsed);
-    }, 30);
-  },
-  cancelSolve: () => clearTimeout(solveTimer),
+  ...syncSolver(solveOptimal, (s, moves) => isSolved(applyAll(s, moves))),
 };
 
 // exported for tests

@@ -3,11 +3,9 @@ import {
   FACELETS, UNSET, Vec3, fromFaceletString, invertMove, isSolved, parseAlg, parseMove,
   randomScramble, solvedState, toFaceletString, turnPermutation, turnToMove,
 } from '../cube/model';
-import { COLOR_NAMES, validate } from '../cube/validate';
+import { COLORS, COLOR_NAMES, validate } from '../cube/validate';
 import { SolverClient } from '../cube/solverClient';
 import type { DragOption, Puzzle, StickerDef, Turn } from './types';
-
-const COLORS = ['#f4f4ef', '#e02a3c', '#14a85a', '#ffd21f', '#ff7b1c', '#2166e6', '#2c313c'];
 
 const cubieIndex = (p: Vec3) => (p[0] + 1) * 9 + (p[1] + 1) * 3 + (p[2] + 1);
 const cubiePos = (i: number): Vec3 => [Math.floor(i / 9) - 1, (Math.floor(i / 3) % 3) - 1, (i % 3) - 1];
@@ -46,7 +44,7 @@ function toTurn(move: string): Turn | null {
   return { axis: unit(t.axis), pieces: layerPieces(t.axis, t.layers), angle: (t.quarters * Math.PI) / 2, perm: turnPermutation(t) };
 }
 
-const solver = new SolverClient();
+const solver = new SolverClient(() => new Worker(new URL('../cube/solver.worker.ts', import.meta.url), { type: 'module' }));
 
 const btn = (move: string): { move: string; color?: string } => {
   const face = 'URFDLB'.indexOf(move[0]);

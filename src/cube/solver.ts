@@ -79,7 +79,7 @@ function binom(n: number, k: number): number {
   return r;
 }
 
-function permRank(p: number[]): number {
+export function permRank(p: number[]): number {
   let r = 0;
   const n = p.length;
   for (let i = 0; i < n; i++) {
@@ -89,7 +89,7 @@ function permRank(p: number[]): number {
   }
   return r;
 }
-function permUnrank(r: number, n: number): number[] {
+export function permUnrank(r: number, n: number): number[] {
   const avail = Array.from({ length: n }, (_, i) => i);
   const p: number[] = [];
   for (let i = 0; i < n; i++) {
@@ -167,7 +167,7 @@ function buildMoveTable(n: number, moves: number[], nMoves: number, set: (c: Cub
   return t;
 }
 
-function buildPruning(n1: number, n2: number, move1: ArrayLike<number>, move2: ArrayLike<number>, nMoves: number, start: number): Uint8Array {
+export function buildPruning(n1: number, n2: number, move1: ArrayLike<number>, move2: ArrayLike<number>, nMoves: number, start: number): Uint8Array {
   const size = n1 * n2;
   const table = new Uint8Array(size).fill(255);
   const queue = new Int32Array(size);

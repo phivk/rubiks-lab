@@ -1,13 +1,14 @@
 import './style.css';
 import type { Puzzle, State } from './puzzles/types';
 import { cube } from './puzzles/cube';
+import { cube2, cube4 } from './puzzles/nxn';
 import { pyraminx } from './puzzles/pyraminx';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
-const PUZZLES: Puzzle[] = [cube, pyraminx];
+const PUZZLES: Puzzle[] = [cube2, cube, cube4, pyraminx];
 
 // ---------- state ----------
 
@@ -49,6 +50,9 @@ const net = new NetView($('#net'), (i) => {
   if (mode === 'paint') paintSticker(i);
   else setMode('paint');
 });
+
+/** how many stickers of each color a complete puzzle has */
+const perColor = () => puzzle.stickers.filter((s) => s.color === 0).length;
 
 const applyMove = (s: State, move: string) => puzzle.parseMove(move)!.perm.map((src) => s[src]);
 
@@ -182,6 +186,7 @@ async function switchPuzzle(p: Puzzle) {
   paintColor = p.paletteOrder[0];
   setMode(mode);
   renderHistory();
+  renderSolution();
   onStateChanged();
   try { localStorage.setItem('puzzle', p.id); } catch { /* storage unavailable */ }
 }
@@ -205,8 +210,8 @@ function paintSticker(i: number) {
   renderHistory();
   // advance to the next color once this one is complete
   const count = (c: number) => session.state.filter((x) => x === c).length;
-  if (paintColor !== puzzle.unset && count(paintColor) === 9) {
-    const next = puzzle.paletteOrder.find((c) => c !== puzzle.unset && count(c) < 9);
+  if (paintColor !== puzzle.unset && count(paintColor) === perColor()) {
+    const next = puzzle.paletteOrder.find((c) => c !== puzzle.unset && count(c) < perColor());
     if (next !== undefined) {
       paintColor = next;
       renderPalette();
@@ -229,7 +234,7 @@ function setMode(m: Mode) {
   if (m === 'paint') {
     playing = false;
     if (!session.state.includes(puzzle.unset)) {
-      paintColor = puzzle.paletteOrder.find((c) => c !== puzzle.unset && session.state.filter((x) => x === c).length !== 9) ?? puzzle.paletteOrder[0];
+      paintColor = puzzle.paletteOrder.find((c) => c !== puzzle.unset && session.state.filter((x) => x === c).length !== perColor()) ?? puzzle.paletteOrder[0];
     }
     renderPalette();
   }
@@ -429,7 +434,7 @@ function renderPalette() {
     b.title = `${puzzle.colorNames[c]} (${k + 1})`;
     b.setAttribute('aria-label', b.title);
     if (!eraser) {
-      const left = 9 - counts[c];
+      const left = perColor() - counts[c];
       const n = document.createElement('span');
       n.className = 'n' + (left === 0 ? ' done' : left < 0 ? ' over' : '');
       n.textContent = left === 0 ? '✓' : String(left);
@@ -464,7 +469,7 @@ function renderSolution(fresh = false) {
   el.classList.toggle('stale', !!solution?.stale);
   const sub = $('#solve-sub');
   if (!solution) {
-    sub.textContent = 'Finds the shortest route home';
+    sub.textContent = puzzle.solveHint ?? 'Finds the shortest route home';
     return;
   }
   const s = solution;
@@ -559,7 +564,7 @@ function saveToUrl() {
   }, 200);
 }
 
-/** `#pyra:GGG…`, `#3x3:UUU…`, `#pyra`, or a bare 54-letter cube (older links). */
+/** `#pyra:GGG…`, `#3x3:UUU…`, `#4x4:UUU…`, `#pyra`, or a bare 54-letter cube (older links). */
 function loadFromUrl(): { puzzle: Puzzle; loaded: boolean } | null {
   const raw = decodeURIComponent(location.hash.slice(1));
   if (!raw) return null;
@@ -702,7 +707,6 @@ else {
 bind();
 puzzle = initial === cube ? pyraminx : cube; // force switchPuzzle to run
 void switchPuzzle(initial).then(() => {
-  renderSolution();
   if (fromUrl?.loaded) {
     const v = puzzle.validate(session.state);
     toast(v.ok ? 'Loaded puzzle from link' : 'Loaded puzzle from link — ' + v.message);

@@ -1,4 +1,4 @@
-import type { SolverRequest, SolverResponse } from './solver.worker';
+import type { SolverRequest, SolverResponse } from './serveSolver';
 import type { State } from './model';
 
 export interface SolveHandlers {
@@ -15,12 +15,12 @@ export class SolverClient {
   private current: { id: number; handlers: SolveHandlers } | null = null;
   ready!: Promise<void>;
 
-  constructor() {
+  constructor(private createWorker: () => Worker) {
     this.spawn();
   }
 
   private spawn() {
-    this.worker = new Worker(new URL('./solver.worker.ts', import.meta.url), { type: 'module' });
+    this.worker = this.createWorker();
     this.ready = new Promise((resolve) => {
       this.worker.addEventListener('message', (e: MessageEvent<SolverResponse>) => {
         if (e.data.type === 'ready') resolve();

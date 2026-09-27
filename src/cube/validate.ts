@@ -18,12 +18,14 @@ const EDGE_FACES = [
 ];
 
 export const COLOR_NAMES = ['White', 'Red', 'Green', 'Yellow', 'Orange', 'Blue'];
+/** sticker colors, plus the "unset" color used while painting */
+export const COLORS = ['#f4f4ef', '#e02a3c', '#14a85a', '#ffd21f', '#ff7b1c', '#2166e6', '#2c313c'];
 
 export type Validation =
   | { ok: true }
   | { ok: false; kind: 'incomplete' | 'invalid'; message: string; stickers?: number[] };
 
-function parity(perm: number[]): number {
+export function parity(perm: number[]): number {
   let p = 0;
   const seen = new Array(perm.length).fill(false);
   for (let i = 0; i < perm.length; i++) {
