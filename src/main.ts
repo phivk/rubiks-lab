@@ -1,14 +1,13 @@
 import './style.css';
 import type { Puzzle, State } from './core/types';
-import { cube } from './cube/puzzle3';
-import { cube2, cube4 } from './cube/puzzles';
+import { cube2, cube3, cube4 } from './cube/puzzles';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
-const PUZZLES: Puzzle[] = [cube2, cube, cube4, pyraminx];
+const PUZZLES: Puzzle[] = [cube2, cube3, cube4, pyraminx];
 
 // ---------- state ----------
 
@@ -20,8 +19,8 @@ interface Session {
 }
 const sessions = new Map<string, Session>(PUZZLES.map((p) => [p.id, { state: p.solved(), moveHistory: [], redoStack: [] }]));
 
-let puzzle: Puzzle = cube;
-let session = sessions.get(cube.id)!;
+let puzzle: Puzzle = cube3;
+let session = sessions.get(cube3.id)!;
 let mode: Mode = 'play';
 let paintColor = 0;
 
@@ -559,7 +558,7 @@ function saveToUrl() {
   clearTimeout(urlTimer);
   urlTimer = window.setTimeout(() => {
     const solvedHome = puzzle.encode(session.state) === puzzle.encode(puzzle.solved());
-    const hash = solvedHome ? (puzzle === cube ? '' : `#${puzzle.id}`) : `#${puzzle.id}:${puzzle.encode(session.state)}`;
+    const hash = solvedHome ? (puzzle === cube3 ? '' : `#${puzzle.id}`) : `#${puzzle.id}:${puzzle.encode(session.state)}`;
     window.history.replaceState(null, '', location.pathname + location.search + hash);
   }, 200);
 }
@@ -697,15 +696,15 @@ function bind() {
 // ---------- boot ----------
 
 const fromUrl = loadFromUrl();
-let initial: Puzzle = cube;
+let initial: Puzzle = cube3;
 if (fromUrl) initial = fromUrl.puzzle;
 else {
   try {
-    initial = PUZZLES.find((p) => p.id === localStorage.getItem('puzzle')) ?? cube;
+    initial = PUZZLES.find((p) => p.id === localStorage.getItem('puzzle')) ?? cube3;
   } catch { /* storage unavailable */ }
 }
 bind();
-puzzle = initial === cube ? pyraminx : cube; // force switchPuzzle to run
+puzzle = initial === cube3 ? pyraminx : cube3; // force switchPuzzle to run
 void switchPuzzle(initial).then(() => {
   if (fromUrl?.loaded) {
     const v = puzzle.validate(session.state);

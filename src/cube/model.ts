@@ -1,7 +1,8 @@
 // Facelet model of an N×N×N cube.
 //
-// Same conventions as the 3x3 model (src/cube/model3.ts): a state is 6·N² color ids,
-// faces in U R F D L B order, each face row by row in the usual net orientation.
+// A state is 6·N² color ids, faces in U R F D L B order (Kociemba order), each face row
+// by row in the usual net orientation. Color ids 0..5 are the colors of the solved faces
+// in that same order; UNSET marks a sticker the user hasn't painted yet.
 // Coordinates are doubled so every layer sits on an integer: an N-cube spans
 // -(N-1)..N-1 in steps of 2 (the 3×3 uses -2, 0, 2; the 4×4 -3, -1, 1, 3). Move
 // permutations are derived geometrically from sticker positions.
@@ -82,6 +83,16 @@ export function rotateVec(v: Vec3, axis: number, quarterTurns: number): Vec3 {
     else [x, y] = [-y, x];
   }
   return [x, y, z];
+}
+
+export function invertMove(move: string): string {
+  if (move.endsWith('2')) return move;
+  if (move.endsWith("'")) return move.slice(0, -1);
+  return move + "'";
+}
+
+export function invertAlg(moves: string[]): string[] {
+  return moves.slice().reverse().map(invertMove);
 }
 
 /** How far `cols` is rotated from `home` (cols[(j + r) % k] === home[j]), or -1 if it isn't a rotation of it. */

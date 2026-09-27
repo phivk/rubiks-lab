@@ -3,8 +3,7 @@ import { COLORS, COLOR_NAMES } from '../core/colors';
 import { syncSolver } from '../core/syncSolver';
 import type { DragOption, MoveButton, Puzzle, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
-import { CubeModel, FACES, UNSET, type LayerTurn } from './model';
-import { invertMove } from './model3';
+import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
 import { Solver2 } from './solve2';
 
 const unit = (axis: number): Vec3 => [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0];
@@ -13,16 +12,20 @@ const unit = (axis: number): Vec3 => [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, ax
 const NET_ORIGIN = [[0, 1], [1, 2], [1, 1], [2, 1], [1, 0], [1, 3]];
 
 const btn = (move: string): MoveButton => {
-  const face = FACES.indexOf(move.replace(/^2/, '')[0]);
+  const face = FACES.indexOf(move.replace(/^\d+/, '')[0]);
   return { move, color: face >= 0 ? COLORS[face] : undefined };
 };
 const rows = (letters: string[]) => ['', "'", '2'].map((suf) => letters.map((f) => btn(f + suf)));
 
-type Shared = Omit<Puzzle, 'id' | 'name' | 'scramble' | 'solve' | 'cancelSolve' | 'keyToMove' | 'shortcutsHtml' | 'algPlaceholder'>;
+type Shared = Omit<Puzzle, 'id' | 'name' | 'scramble' | 'solve' | 'cancelSolve' | 'movePadExtra' | 'movePadExtraLabel' | 'algPlaceholder'>;
 
-/** Everything the 2×2 and 4×4 have in common; each adds its name, scramble, solver and keys. */
-function makeCube(M: CubeModel): Shared {
+/**
+ * Everything N×N cubes have in common; each adds its name, scramble, solver and extra
+ * moves. An odd cube has fixed centers, which can't be painted and get M, E and S.
+ */
+function makeCube(M: CubeModel, { wide }: { wide: boolean }): Shared {
   const n = M.n;
+  const fixed = new Set(M.fixedCenters);
   // world units: one cubie per unit, so doubled coordinates halve
   const stickers: StickerDef[] = M.facelets.map((f) => {
     const a = f.normal.findIndex((x) => x !== 0);
@@ -41,6 +44,7 @@ function makeCube(M: CubeModel): Shared {
       normal: f.normal,
       outline: [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)],
       net: [[x, y], [x + s, y], [x + s, y + s], [x, y + s]],
+      netLabel: fixed.has(f.index) ? FACES[f.face] : undefined,
     };
   });
 
@@ -61,6 +65,7 @@ function makeCube(M: CubeModel): Shared {
     perm: M.permutation(t),
   });
   const zoom = (n + 1) / 4;
+  const slices = n % 2 === 1;
 
   return {
     colors: COLORS,
@@ -99,57 +104,50 @@ function makeCube(M: CubeModel): Shared {
       }
       return opts;
     },
+    lockedSticker: slices ? (i) => (fixed.has(i) ? 'Centers are fixed — they define which face is which' : null) : undefined,
 
     movePad: rows(['U', 'D', 'R', 'L', 'F', 'B']),
-    paintIntroHtml: `Pick a color, then tap stickers on the cube or the map below. There are no fixed centers, so any way up is fine — the solver works out the orientation from the corners.`,
+    keyToMove: (code, shift, alt) => {
+      const m = /^Key([A-Z])$/.exec(code);
+      if (!m) return null;
+      const k = m[1];
+      const letter = FACES.includes(k) ? (alt && wide ? k + 'w' : k) : slices && 'MES'.includes(k) ? k : 'XYZ'.includes(k) ? k.toLowerCase() : null;
+      return letter ? letter + (shift ? "'" : '') : null;
+    },
+    shortcutsHtml: `
+    <div><kbd>U</kbd><kbd>R</kbd><kbd>F</kbd><kbd>D</kbd><kbd>L</kbd><kbd>B</kbd></div><span>Turn a face clockwise</span>` +
+      (wide ? `
+    <div><kbd>⌥</kbd> + key</div><span>Wide turn (two layers)</span>` : '') +
+      (slices ? `
+    <div><kbd>M</kbd><kbd>E</kbd><kbd>S</kbd></div><span>Turn a middle slice</span>` : '') + `
+    <div><kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd></div><span>Rotate the whole cube</span>
+    <div><kbd>⇧</kbd> + key</div><span>Counter-clockwise (prime)</span>`,
+    paintIntroHtml: slices
+      ? 'Pick a color, then tap stickers on the cube or the map below. Hold your cube with the <b>white</b> center up and <b>green</b> facing you.'
+      : 'Pick a color, then tap stickers on the cube or the map below. There are no fixed centers, so any way up is fine — the solver works out the orientation from the corners.',
 
     encode: (s) => M.encode(s),
     decode: (text) => M.decode(text),
   };
 }
 
-const keyToMove = (wide: boolean): Puzzle['keyToMove'] => (code, shift, alt) => {
-  const m = /^Key([A-Z])$/.exec(code);
-  if (!m) return null;
-  const k = m[1];
-  const letter = FACES.includes(k) ? (alt && wide ? k + 'w' : k) : 'XYZ'.includes(k) ? k.toLowerCase() : null;
-  return letter ? letter + (shift ? "'" : '') : null;
-};
-
-const faceShortcuts = `<div><kbd>U</kbd><kbd>R</kbd><kbd>F</kbd><kbd>D</kbd><kbd>L</kbd><kbd>B</kbd></div><span>Turn a face clockwise</span>`;
-const rotationShortcuts = `
-    <div><kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd></div><span>Rotate the whole cube</span>
-    <div><kbd>⇧</kbd> + key</div><span>Counter-clockwise (prime)</span>`;
-
-// ---------- 2×2 ----------
-
-const model2 = new CubeModel(2);
-const solver2 = new Solver2(model2);
-
-export const cube2: Puzzle = {
-  ...makeCube(model2),
-  id: '2x2',
-  name: '2×2',
-  scramble: () => solver2.randomState(),
-  ...syncSolver(
-    (s) => solver2.solve(model2.toFaces(s)),
-    (s, moves) => model2.isSolved(model2.applyAll(s, moves)),
-  ),
-  movePadExtra: rows(['x', 'y', 'z']),
-  movePadExtraLabel: 'Rotations',
-  keyToMove: keyToMove(false),
-  shortcutsHtml: faceShortcuts + rotationShortcuts,
-  algPlaceholder: "Type an algorithm… R U R' U'",
-};
-
-// ---------- 4×4 ----------
-
-const model4 = new CubeModel(4);
-// started on first use, so the 4×4's tables are only built if someone solves one
-let solver4: SolverClient | null = null;
+/** Random face turns without redundant sequences like R R or R L R. */
+function faceScramble(length: number): string[] {
+  const out: string[] = [];
+  let last = -1, prev = -1;
+  while (out.length < length) {
+    const f = Math.floor(Math.random() * 6);
+    if (f === last) continue;
+    if (f % 3 === last % 3 && f % 3 === prev % 3) continue;
+    prev = last;
+    last = f;
+    out.push(FACES[f] + ['', "'", '2'][Math.floor(Math.random() * 3)]);
+  }
+  return out;
+}
 
 /** Random turns of outer and wide layers, never repeating an axis twice in a row. */
-function scramble4(length = 40): string[] {
+function wideScramble(length: number): string[] {
   const out: string[] = [];
   let lastAxis = -1;
   while (out.length < length) {
@@ -162,21 +160,60 @@ function scramble4(length = 40): string[] {
   return out;
 }
 
+const rotations = ['x', "x'", 'y', "y'", 'z', "z'"].map(btn);
+
+// ---------- 2×2 ----------
+
+const model2 = new CubeModel(2);
+const solver2 = new Solver2(model2);
+
+export const cube2: Puzzle = {
+  ...makeCube(model2, { wide: false }),
+  id: '2x2',
+  name: '2×2',
+  scramble: () => solver2.randomState(),
+  ...syncSolver(
+    (s) => solver2.solve(model2.toFaces(s)),
+    (s, moves) => model2.isSolved(model2.applyAll(s, moves)),
+  ),
+  movePadExtra: rows(['x', 'y', 'z']),
+  movePadExtraLabel: 'Rotations',
+  algPlaceholder: "Type an algorithm… R U R' U'",
+};
+
+// ---------- 3×3 ----------
+
+const solver3 = new SolverClient(() => new Worker(new URL('./workers/3x3.worker.ts', import.meta.url), { type: 'module' }));
+
+export const cube3: Puzzle = {
+  ...makeCube(new CubeModel(3), { wide: false }),
+  id: '3x3',
+  name: '3×3',
+  scramble: () => faceScramble(22),
+  solve: (state, budgetMs, h) => void solver3.solve(state, budgetMs, h),
+  cancelSolve: () => solver3.cancel(),
+  movePadExtra: rows(['M', 'E', 'S', 'x', 'y', 'z']),
+  movePadExtraLabel: 'Slices & rotations',
+  algPlaceholder: "Type an algorithm… R U R' U'",
+};
+
+// ---------- 4×4 ----------
+
+// started on first use, so the 4×4's tables are only built if someone solves one
+let solver4: SolverClient | null = null;
+
 export const cube4: Puzzle = {
-  ...makeCube(model4),
+  ...makeCube(new CubeModel(4), { wide: true }),
   id: '4x4',
   name: '4×4',
   solveHint: 'Reduces to a 3×3, then solves that',
-  scramble: () => scramble4(),
+  scramble: () => wideScramble(40),
   solve: (state, budgetMs, h) => {
     solver4 ??= new SolverClient(() => new Worker(new URL('./workers/4x4.worker.ts', import.meta.url), { type: 'module' }));
     void solver4.solve(state, budgetMs, h);
   },
   cancelSolve: () => solver4?.cancel(),
-  movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), ['x', "x'", 'y', "y'", 'z', "z'"].map(btn)],
+  movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), rotations],
   movePadExtraLabel: 'Wide turns & rotations',
-  keyToMove: keyToMove(true),
-  shortcutsHtml: faceShortcuts + `
-    <div><kbd>⌥</kbd> + key</div><span>Wide turn (two layers)</span>` + rotationShortcuts,
   algPlaceholder: "Type an algorithm… Rw U2 2R' F",
 };

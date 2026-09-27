@@ -1,11 +1,6 @@
 // Sanity checks for the N×N model and the 2×2 and 4×4 solvers. Run with `npm run verify`.
-import { initSolver, solve } from '../src/cube/kociemba/solver';
-import { CubeModel } from '../src/cube/model';
-import {
-  FACELETS, UNSET as UNSET3, applyMove, applyMoves, fromFaceletString, isSolved as isSolved3, parseMove as parseMove3,
-  solvedState, toFaceletString, turnPermutation, turnToMove,
-} from '../src/cube/model3';
-import { validate as validate3 } from '../src/cube/validate3';
+import { CORNER_FACELETS, EDGE_FACELETS, initSolver, solve } from '../src/cube/kociemba/solver';
+import { CubeModel, FACES } from '../src/cube/model';
 import { Reducer4 } from '../src/cube/reduce';
 import { Solver2 } from '../src/cube/solve2';
 
@@ -110,75 +105,18 @@ for (const n of [2, 3, 4, 5]) {
   }
 }
 
-// ---------- CubeModel(3) matches the 3×3 model ----------
+// ---------- 3×3 ----------
 {
+  // Kociemba reads corners and edges through fixed facelet tables: they must be the
+  // model's corner and midge slots, with the same first sticker (it defines orientation).
   const M = new CubeModel(3);
-  if (M.size !== 54 || FACELETS.some((f, i) => {
-    const g = M.facelets[i];
-    return g.face !== f.face || !same(g.pos, f.pos.map((x) => 2 * x)) || !same(g.normal, f.normal);
-  })) fail('3×3: sticker order differs');
-
-  const tokens: string[] = [];
-  for (const l of 'URFDLBMESxyzurfdlb') {
-    for (const w of 'URFDLB'.includes(l) ? ['', 'w'] : ['']) for (const suf of ['', "'", '2', "2'"]) tokens.push(l + w + suf);
-  }
-  for (const tok of tokens) {
-    const a = parseMove3(tok), b = M.parseMove(tok);
-    if (!a || !b) fail(`3×3: ${tok} parsed as ${a && 'turn'} / ${b && 'turn'}`);
-    if (!same(turnPermutation(a), M.permutation(b))) fail(`3×3: ${tok} permutes differently`);
-  }
-  for (const axis of [0, 1, 2] as const) {
-    for (const layer of [-1, 0, 1]) {
-      for (let q = -3; q <= 4; q++) {
-        const a = turnToMove(axis, layer, q), b = M.moveName({ axis, layers: [2 * layer], quarters: q });
-        if (a !== b) fail(`3×3: layer ${axis}/${layer}/${q} named ${a} vs ${b}`);
-      }
-    }
-  }
-  console.log(`✓ 3×3: same sticker order, same permutation for ${tokens.length} moves, same names for every dragged layer`);
-
-  const random3 = (length: number) => randomAlg(M, ['U', 'R', 'F', 'D', 'L', 'B', 'M', 'E', 'S', 'x', 'y', 'z', 'r', 'u', 'Fw'], length);
-  const letters = 'URFDLBurfdlb?-X';
-  for (let i = 0; i < 300; i++) {
-    const s = applyMoves(solvedState(), random3(30));
-    if (toFaceletString(s) !== M.encode(s)) fail('3×3: encodings differ');
-    const garbage = Array.from({ length: 50 + (i % 8) }, () => letters[(Math.random() * letters.length) | 0]).join('');
-    for (const text of [toFaceletString(s), toFaceletString(s).toLowerCase(), garbage]) {
-      const a = fromFaceletString(text), b = M.decode(text);
-      if (String(a) !== String(b)) fail(`3×3: ${text} decodes differently`);
-    }
-  }
-  console.log('✓ 3×3: same encoding and decoding');
-
-  // Validators agree on scrambled and broken states. `swap` exchanges stickers; the
-  // rest reshuffle whole pieces.
-  const swap = (s: number[], a: number, b: number) => ([s[a], s[b]] = [s[b], s[a]]);
-  const pick = <T>(xs: T[]) => xs[(Math.random() * xs.length) | 0];
-  const midges = M.orbits[1].slots.map((x) => x.facelets);
-  const corners = M.corners.slots.map((x) => x.facelets);
-  const breakers: ((s: number[]) => void)[] = [
-    () => {},
-    (s) => swap(s, (Math.random() * 54) | 0, (Math.random() * 54) | 0),
-    (s) => { const c = pick(corners); [s[c[0]], s[c[1]], s[c[2]]] = [s[c[1]], s[c[2]], s[c[0]]]; },
-    (s) => { const e = pick(midges); swap(s, e[0], e[1]); },
-    (s) => { const a = pick(midges), b = pick(midges); a.forEach((f, j) => swap(s, f, b[j])); },
-    (s) => { const a = pick(corners), b = pick(corners); a.forEach((f, j) => swap(s, f, b[j])); },
-    (s) => swap(s, pick(M.fixedCenters), pick(M.fixedCenters)),
-    (s) => (s[(Math.random() * 54) | 0] = (Math.random() * 7) | 0),
-    (s) => (s[(Math.random() * 54) | 0] = UNSET3),
-  ];
-  const tally = new Map<string, number>();
-  let messagesDiffer = 0;
-  for (let i = 0; i < 3000; i++) {
-    const s = applyMoves(solvedState(), random3(25));
-    breakers[i % breakers.length](s);
-    const a = validate3(s), b = M.validate(s);
-    const verdict = (v: typeof a) => (v.ok ? 'ok' : v.kind);
-    if (verdict(a) !== verdict(b)) fail(`3×3: validators disagree on ${toFaceletString(s)}: ${a.ok || a.message} / ${b.ok || b.message}`);
-    tally.set(verdict(a), (tally.get(verdict(a)) ?? 0) + 1);
-    if (!a.ok && !b.ok && a.message !== b.message) messagesDiffer++;
-  }
-  console.log(`✓ 3×3: validators agree on 3000 states (${[...tally].map(([k, v]) => `${v} ${k}`).join(', ')}; ${messagesDiffer} with differently worded messages)`);
+  const key = (fs: number[]) => fs.join();
+  const slots = (o: number) => new Set(M.orbits[o].slots.map((x) => key(x.facelets)));
+  const rotations = (fs: number[]) => fs.map((_, r) => key(fs.map((_, j) => fs[(j + r) % fs.length])));
+  if (!CORNER_FACELETS.every((fs) => slots(0).has(key(fs)))) fail('3×3: Kociemba corners are not the model\'s corner slots');
+  if (!EDGE_FACELETS.every((fs) => slots(1).has(key(fs)))) fail('3×3: Kociemba edges are not the model\'s midge slots');
+  if (CORNER_FACELETS.some((fs) => rotations(fs).slice(1).some((k) => slots(0).has(k)))) fail('3×3: corner slot ambiguous');
+  console.log('✓ 3×3: Kociemba corner and edge facelets match the model');
 }
 
 // ---------- 2×2 ----------
@@ -232,14 +170,15 @@ for (const n of [2, 3, 4, 5]) {
   console.log(`✓ 50 random 4×4 states reduced (${((Date.now() - t) / 50).toFixed(1)} ms avg, ${(total / 50).toFixed(0)} moves avg, longest ${worst})`);
 
   // full pipeline, as in the worker: reduce, then solve the 3×3 that's left
-  initSolver((f) => applyMove(solvedState(), 'URFDLB'[f]));
+  const M3 = new CubeModel(3);
+  initSolver((f) => M3.apply(M3.solved(), FACES[f]));
   total = 0;
   for (let i = 0; i < 20; i++) {
     const scr = randomAlg(M, all, 40);
     const st = M.applyAll(M.solved(), scr);
     const { moves, cube3 } = R.reduce(M.toFaces(st));
     let finish: string[] = [];
-    if (!isSolved3(cube3)) {
+    if (!M3.isSolved(cube3)) {
       const t0 = Date.now();
       solve(cube3, { onSolution: (m) => (finish = m), shouldStop: () => finish.length > 0 && Date.now() - t0 > 200 });
     }

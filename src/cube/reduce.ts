@@ -11,8 +11,7 @@
 
 import { parity } from '../core/perm';
 import type { Vec3 } from '../core/types';
-import { FACELETS } from './model3';
-import type { CubeModel, Orbit, Slot } from './model';
+import { CubeModel, type Orbit, type Slot } from './model';
 
 interface Cycles {
   orbit: Orbit;
@@ -29,6 +28,8 @@ const cycleKey = (a: number, b: number, c: number) => {
   else if (c < a && c < b) [a, b, c] = [c, a, b];
   return (a * 64 + b) * 64 + c;
 };
+
+const cube3Model = new CubeModel(3);
 
 export class Reducer4 {
   private centers: Cycles;
@@ -179,10 +180,11 @@ export class Reducer4 {
     faces = wings.faces;
     moves.push(...centers.moves, ...wings.moves);
 
+    // the 3×3's corners are the big cube's corners; its centers and edges are solved
     const m = model.n - 1;
-    const cube3 = FACELETS.map((f) => {
+    const cube3 = cube3Model.facelets.map((f) => {
       if (f.pos.some((x) => x === 0)) return f.face;
-      return faces[model.faceletAt(f.pos.map((x) => x * m) as Vec3, f.normal)!];
+      return faces[model.faceletAt(f.pos.map((x) => (x / 2) * m) as Vec3, f.normal)!];
     });
     return { moves: model.simplify(moves), cube3 };
   }

@@ -6,8 +6,7 @@
 // solution is optimal (at most 11 moves).
 
 import { buildPruning, permRank, permUnrank } from '../core/perm';
-import { invertAlg } from './model3';
-import type { CubeModel } from './model';
+import { invertAlg, type CubeModel } from './model';
 
 const MOVES = ['U', 'U2', "U'", 'R', 'R2', "R'", 'F', 'F2', "F'"];
 const N_PERM = 5040;
