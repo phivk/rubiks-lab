@@ -1,7 +1,8 @@
-// Sanity checks for the N×N model and the 2×2 and 4×4 solvers. Run with `npm run verify`.
+// Sanity checks for the N×N model and the 2×2, 4×4 and 5×5 solvers. Run with `npm run verify`.
 import { CORNER_FACELETS, EDGE_FACELETS, initSolver, solve } from '../src/cube/kociemba/solver';
+import type { Vec3 } from '../src/core/types';
 import { CubeModel, FACES } from '../src/cube/model';
-import { Reducer4 } from '../src/cube/reduce';
+import { Reducer } from '../src/cube/reduce';
 import { Solver2 } from '../src/cube/solve2';
 
 function fail(msg: string): never {
@@ -145,36 +146,48 @@ for (const n of [2, 3, 4, 5]) {
   console.log(`✓ 300 random 2×2 states solved (${((Date.now() - t) / 300).toFixed(2)} ms avg, longest ${worst})`);
 }
 
-// ---------- 4×4 ----------
-{
-  const M = new CubeModel(4);
+// ---------- big cubes ----------
+const M3 = new CubeModel(3);
+initSolver((f) => M3.apply(M3.solved(), FACES[f]));
+const BIG_MOVES: Record<number, string[]> = {
+  4: ['U', 'R', 'F', 'D', 'L', 'B', 'Uw', 'Rw', 'Fw', '2U', '2R', '2F', 'x', 'y'],
+  5: ['U', 'R', 'F', 'D', 'L', 'B', 'Uw', 'Rw', 'Fw', '3Rw', '2U', '2R', '2F', 'M', 'E', 'S', 'x', 'y'],
+};
+for (const n of [4, 5]) {
+  const M = new CubeModel(n);
+  const N = `${n}×${n}`;
   let t = Date.now();
-  const R = new Reducer4(M);
-  console.log(`✓ 4×4 macros built in ${Date.now() - t} ms (${R.macroCount} 3-cycles)`);
-  const all = ['U', 'R', 'F', 'D', 'L', 'B', 'Uw', 'Rw', 'Fw', '2U', '2R', '2F', 'x', 'y'];
+  const R = new Reducer(M);
+  console.log(`✓ ${N} macros built in ${Date.now() - t} ms (${R.macroCount} 3-cycles)`);
+  const reducible = M.orbits.filter((o) => !o.twists && o.slots.length > 6);
   let total = 0, worst = 0;
   t = Date.now();
   for (let i = 0; i < 50; i++) {
-    const scr = randomAlg(M, all, 50);
+    const scr = randomAlg(M, BIG_MOVES[n], 60);
     const st = M.applyAll(M.solved(), scr);
     const v = M.validate(st);
-    if (!v.ok) fail(`4×4 scramble invalid: ${v.message}`);
+    if (!v.ok) fail(`${N} scramble invalid: ${v.message}`);
     const { moves, cube3 } = R.reduce(M.toFaces(st));
     const reduced = M.toFaces(M.applyAll(st, moves));
-    // centers and wings solved?
-    for (const o of M.orbits.slice(1)) for (const f of o.slots.flatMap((x) => x.facelets)) if (reduced[f] !== M.facelets[f].face) fail(`4×4 not reduced: ${scr.join(' ')}`);
-    if (cube3.length !== 54) fail('bad cube3');
+    // centers solved; wings solved on an even cube, matching their edge's midge on an odd one
+    const midgeSticker = (f: number) => M.faceletAt(M.facelets[f].pos.map((x) => (Math.abs(x) === n - 1 ? x : 0)) as Vec3, M.facelets[f].normal)!;
+    for (const o of reducible) {
+      for (const f of o.slots.flatMap((x) => x.facelets)) {
+        const want = o.size === 2 && n % 2 ? reduced[midgeSticker(f)] : M.facelets[f].face;
+        if (reduced[f] !== want) fail(`${N} not reduced: ${scr.join(' ')}`);
+      }
+    }
+    if (!M3.validate(cube3).ok) fail(`${N} reduced to an invalid 3×3: ${M3.validate(cube3).ok || M3.validate(cube3).message}`);
     total += moves.length;
     worst = Math.max(worst, moves.length);
   }
-  console.log(`✓ 50 random 4×4 states reduced (${((Date.now() - t) / 50).toFixed(1)} ms avg, ${(total / 50).toFixed(0)} moves avg, longest ${worst})`);
+  console.log(`✓ 50 random ${N} states reduced to valid 3×3s (${((Date.now() - t) / 50).toFixed(1)} ms avg, ${(total / 50).toFixed(0)} moves avg, longest ${worst})`);
 
   // full pipeline, as in the worker: reduce, then solve the 3×3 that's left
-  const M3 = new CubeModel(3);
-  initSolver((f) => M3.apply(M3.solved(), FACES[f]));
   total = 0;
+  worst = 0;
   for (let i = 0; i < 20; i++) {
-    const scr = randomAlg(M, all, 40);
+    const scr = randomAlg(M, BIG_MOVES[n], 60);
     const st = M.applyAll(M.solved(), scr);
     const { moves, cube3 } = R.reduce(M.toFaces(st));
     let finish: string[] = [];
@@ -183,8 +196,15 @@ for (const n of [2, 3, 4, 5]) {
       solve(cube3, { onSolution: (m) => (finish = m), shouldStop: () => finish.length > 0 && Date.now() - t0 > 200 });
     }
     const sol = M.simplify([...moves, ...finish]);
-    if (!M.isSolved(M.applyAll(st, sol))) fail(`4×4 wrong solution for ${scr.join(' ')}`);
+    if (!M.isSolved(M.applyAll(st, sol))) fail(`${N} wrong solution for ${scr.join(' ')}`);
     total += sol.length;
+    worst = Math.max(worst, sol.length);
   }
-  console.log(`✓ 20 random 4×4 states fully solved and verified (${(total / 20).toFixed(0)} moves avg)`);
+  console.log(`✓ 20 random ${N} states fully solved and verified (${(total / 20).toFixed(0)} moves avg, longest ${worst})`);
+}
+try {
+  new Reducer(new CubeModel(6));
+  fail('6×6 reducer built without telling oblique orbits apart');
+} catch (e) {
+  console.log(`✓ 6×6 reducer refused: "${(e as Error).message}"`);
 }

@@ -199,8 +199,16 @@ export const cube3: Puzzle = {
 
 // ---------- 4×4 ----------
 
-// started on first use, so the 4×4's tables are only built if someone solves one
-let solver4: SolverClient | null = null;
+// One worker for every big cube, started on first use so its tables are only built if
+// someone solves one.
+let bigSolver: SolverClient | null = null;
+const solveBig: Pick<Puzzle, 'solve' | 'cancelSolve'> = {
+  solve: (state, budgetMs, h) => {
+    bigSolver ??= new SolverClient(() => new Worker(new URL('./workers/bigcube.worker.ts', import.meta.url), { type: 'module' }));
+    void bigSolver.solve(state, budgetMs, h);
+  },
+  cancelSolve: () => bigSolver?.cancel(),
+};
 
 export const cube4: Puzzle = {
   ...makeCube(new CubeModel(4), { wide: true }),
@@ -208,11 +216,7 @@ export const cube4: Puzzle = {
   name: '4×4',
   solveHint: 'Reduces to a 3×3, then solves that',
   scramble: () => wideScramble(40),
-  solve: (state, budgetMs, h) => {
-    solver4 ??= new SolverClient(() => new Worker(new URL('./workers/4x4.worker.ts', import.meta.url), { type: 'module' }));
-    void solver4.solve(state, budgetMs, h);
-  },
-  cancelSolve: () => solver4?.cancel(),
+  ...solveBig,
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), rotations],
   movePadExtraLabel: 'Wide turns & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 2R' F",
