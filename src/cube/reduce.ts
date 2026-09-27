@@ -12,9 +12,10 @@
 import { parity } from '../core/perm';
 import type { Vec3 } from '../core/types';
 import { FACELETS } from './model3';
-import type { CubeModel, Slot } from './model';
+import type { CubeModel, Orbit, Slot } from './model';
 
-interface Orbit {
+interface Cycles {
+  orbit: Orbit;
   slots: Slot[];
   /** facelet → slot, or -1 */
   slotOf: Int16Array;
@@ -30,17 +31,17 @@ const cycleKey = (a: number, b: number, c: number) => {
 };
 
 export class Reducer4 {
-  private centers: Orbit;
-  private wings: Orbit;
+  private centers: Cycles;
+  private wings: Cycles;
 
   constructor(private model: CubeModel) {
-    const orbit = (slots: Slot[]): Orbit => {
+    const cycles = (orbit: Orbit): Cycles => {
       const slotOf = new Int16Array(model.size).fill(-1);
-      slots.forEach((s, i) => s.facelets.forEach((f) => (slotOf[f] = i)));
-      return { slots, slotOf, macros: new Map() };
+      orbit.slots.forEach((s, i) => s.facelets.forEach((f) => (slotOf[f] = i)));
+      return { orbit, slots: orbit.slots, slotOf, macros: new Map() };
     };
-    this.centers = orbit(model.centers);
-    this.wings = orbit(model.wings);
+    this.centers = cycles(model.orbits.find((o) => o.size === 1)!);
+    this.wings = cycles(model.orbits.find((o) => o.size === 2)!);
     this.buildMacros();
   }
 
@@ -74,7 +75,7 @@ export class Reducer4 {
       bs.push([x]);
       for (let y = 0; y < gens.length; y++) if (gens[x].axis !== gens[y].axis) bs.push([x, y, inv(x)]);
     }
-    const bases: { orbit: Orbit; cycle: number[]; seq: number[] }[] = [];
+    const bases: { orbit: Cycles; cycle: number[]; seq: number[] }[] = [];
     for (let a = 0; a < gens.length; a++) {
       for (const b of bs) {
         if (gens[a].axis === gens[b[0]].axis) continue;
@@ -101,7 +102,7 @@ export class Reducer4 {
     });
 
     // Conjugate with setups S: S C S' cycles S⁻¹(a) → S⁻¹(b) → S⁻¹(c).
-    const isFull = (o: Orbit) => o.macros.size >= (o.slots.length * (o.slots.length - 1) * (o.slots.length - 2)) / 3;
+    const isFull = (o: Cycles) => o.macros.size >= (o.slots.length * (o.slots.length - 1) * (o.slots.length - 2)) / 3;
     const full = () => isFull(this.centers) && isFull(this.wings);
     let layer: number[][] = [[]];
     for (let depth = 0; ; depth++) {
@@ -128,12 +129,13 @@ export class Reducer4 {
     return this.centers.macros.size + this.wings.macros.size;
   }
 
-  /** Solve an orbit greedily with 3-cycles. `key` names the piece in a slot; `need` is the key each slot wants. */
-  private solveOrbit(faces: number[], orbit: Orbit, key: (s: number[], slot: Slot) => number, need: number[]) {
+  /** Solve an orbit greedily with 3-cycles. */
+  private solveOrbit(faces: number[], orbit: Cycles) {
     const moves: string[] = [];
     const all = orbit.slots.map((_, i) => i);
+    const need = orbit.orbit.homes;
     for (let iter = 0; iter < 200; iter++) {
-      const have = orbit.slots.map((s) => key(faces, s));
+      const have = orbit.slots.map((s) => this.model.pieceKey(faces, orbit.orbit, s));
       const wrong = all.filter((i) => have[i] !== need[i]);
       if (!wrong.length) return { faces, moves };
       let best: { gain: number; alg: string[] } | null = null;
@@ -169,11 +171,11 @@ export class Reducer4 {
       faces = model.apply(faces, m);
       moves.push(m);
     };
-    if (parity(model.corners.map((c) => model.cornerHomes.indexOf(model.cornerKey(faces, c))))) turn('U');
-    if (parity(model.wings.map((w) => model.wingHomes.indexOf(model.wingKey(faces, w))))) turn('2R');
+    if (parity(model.permutationOf(faces, model.corners))) turn('U');
+    if (parity(model.permutationOf(faces, this.wings.orbit))) turn('2R');
 
-    const centers = this.solveOrbit(faces, this.centers, (s, slot) => s[slot.facelets[0]], model.centers.map((c) => model.facelets[c.facelets[0]].face));
-    const wings = this.solveOrbit(centers.faces, this.wings, (s, slot) => model.wingKey(s, slot), model.wingHomes);
+    const centers = this.solveOrbit(faces, this.centers);
+    const wings = this.solveOrbit(centers.faces, this.wings);
     faces = wings.faces;
     moves.push(...centers.moves, ...wings.moves);
 

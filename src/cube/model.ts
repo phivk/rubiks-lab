@@ -1,15 +1,26 @@
-// Facelet model of an N×N×N cube, used for the 2×2 and the 4×4.
+// Facelet model of an N×N×N cube.
 //
 // Same conventions as the 3x3 model (src/cube/model3.ts): a state is 6·N² color ids,
 // faces in U R F D L B order, each face row by row in the usual net orientation.
 // Coordinates are doubled so every layer sits on an integer: an N-cube spans
-// -(N-1)..N-1 in steps of 2 (the 4×4 uses -3, -1, 1, 3). Move permutations are
-// derived geometrically from sticker positions.
+// -(N-1)..N-1 in steps of 2 (the 3×3 uses -2, 0, 2; the 4×4 -3, -1, 1, 3). Move
+// permutations are derived geometrically from sticker positions.
 //
-// Notation: R (outer layer), Rw or r (outer two layers), 2R (second layer only),
-// x y z (whole cube).
+// Notation, for any face letter (here R):
+//   R        the outer layer             nR    the n-th layer alone (2R, 3R)
+//   Rw or r  the outer two layers        nRw   the outer n layers (3Rw)
+//   M E S    the middle layer of an odd cube, turning like L, D and F
+//   x y z    the whole cube, turning like R, U and F
+//
+// Pieces fall into orbits: the slots a piece can travel between. Slots in one orbit
+// share their sorted absolute coordinates, e.g. on the 5×5: (4,4,4) corners, (4,4,0)
+// midges, (4,4,2) wings, (4,2,2) x-centers, (4,2,0) t-centers, (4,0,0) fixed centers.
+// From the 6×6 on, oblique centers like (5,3,1) form two mirror-image orbits that share
+// those coordinates; telling them apart needs a chirality check, which isn't built yet,
+// so they're treated as one orbit.
 
 import { COLOR_NAMES } from '../core/colors';
+import { parity } from '../core/perm';
 import type { State, Validation, Vec3 } from '../core/types';
 
 export const UNSET = 6;
@@ -17,6 +28,8 @@ export const FACES = 'URFDLB';
 const FACE_AXIS = [1, 0, 2, 1, 0, 2];
 const FACE_SIGN = [1, 1, 1, -1, -1, -1];
 const FACE_NORMALS: Vec3[] = [[0, 1, 0], [1, 0, 0], [0, 0, 1], [0, -1, 0], [-1, 0, 0], [0, 0, -1]];
+/** M, E and S turn like L, D and F */
+const SLICE_SIGN = [-1, -1, 1];
 
 export interface Facelet {
   index: number;
@@ -33,15 +46,31 @@ export interface LayerTurn {
   quarters: number;
 }
 
-/** A piece slot: its stickers in a canonical order that every move preserves. */
+/** A piece slot: its stickers in a canonical order. */
 export interface Slot {
   pos: Vec3;
   facelets: number[];
 }
 
-const MOVE_RE = /^(2?)([URFDLBurfdlbxyz])(w?)(2'|2|'|)$/;
+export interface Orbit {
+  /** the slots' sorted absolute coordinates, largest first, e.g. [4, 4, 2] */
+  coords: number[];
+  /** stickers per piece: 3 for corners, 2 for edges, 1 for centers */
+  size: number;
+  /**
+   * Whether a piece can sit in its slot rotated: corners twist and midges flip. Wings
+   * can't, so their sticker order is the same in every slot; centers have one sticker.
+   */
+  twists: boolean;
+  slots: Slot[];
+  /** key of the piece that belongs in each slot (see `pieceKey`) */
+  homes: string[];
+}
+
+const MOVE_RE = /^([1-9]\d*)?([URFDLBMESurfdlbxyz])(w?)(2'|2|'|)$/;
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const mod = (a: number, n: number) => ((a % n) + n) % n;
 
 /** Rotate an integer vector by quarter turns (+ = counter-clockwise, right-hand rule) about an axis. */
 export function rotateVec(v: Vec3, axis: number, quarterTurns: number): Vec3 {
@@ -55,18 +84,20 @@ export function rotateVec(v: Vec3, axis: number, quarterTurns: number): Vec3 {
   return [x, y, z];
 }
 
+/** How far `cols` is rotated from `home` (cols[(j + r) % k] === home[j]), or -1 if it isn't a rotation of it. */
+function rotation(cols: number[], home: number[]) {
+  return home.findIndex((_, r) => home.every((h, j) => cols[(j + r) % home.length] === h));
+}
+
 export class CubeModel {
   readonly facelets: Facelet[] = [];
   /** coordinates of the layers along an axis, e.g. [-3, -1, 1, 3] */
   readonly coords: number[];
-  readonly corners: Slot[];
-  /** edge pieces off the middle of an edge (the 4×4's 24 wings); empty for the 2×2 */
-  readonly wings: Slot[];
-  /** center stickers (the 4×4's 24 centers); empty for the 2×2 */
-  readonly centers: Slot[];
-  /** key of the corner / wing that belongs in each slot (see `cornerKey`, `wingKey`) */
-  readonly cornerHomes: string[];
-  readonly wingHomes: number[];
+  /** every orbit: corners first, then edges (midges before wings), then centers */
+  readonly orbits: Orbit[];
+  readonly corners: Orbit;
+  /** the middle sticker of each face (odd N only), in face order */
+  readonly fixedCenters: number[];
   private byKey = new Map<string, number>();
   private permCache = new Map<string, number[]>();
 
@@ -86,36 +117,53 @@ export class CubeModel {
         }
       }
     }
+    const k = n * n;
+    this.fixedCenters = n % 2 ? [0, 1, 2, 3, 4, 5].map((f) => f * k + (k - 1) / 2) : [];
 
     const byPos = new Map<string, Facelet[]>();
     for (const f of this.facelets) byPos.set(String(f.pos), [...(byPos.get(String(f.pos)) ?? []), f]);
-    const slots = [...byPos.values()].map((fs) => ({ pos: fs[0].pos, fs }));
-    // Corners: the U/D sticker first, then clockwise seen from outside (as in the 3x3 model).
-    this.corners = slots.filter((s) => s.fs.length === 3).map(({ pos, fs }) => {
-      const first = fs.find((f) => f.normal[1] !== 0)!;
-      const rest = fs.filter((f) => f !== first);
-      const next = rest.find((f) => dot(cross(first.normal, f.normal), pos) < 0)!;
-      return { pos, facelets: [first.index, next.index, rest.find((f) => f !== next)!.index] };
-    });
-    // Wings: a single wing can't flip in place, so ordering its stickers by handedness is move-invariant.
-    this.wings = slots.filter((s) => s.fs.length === 2).map(({ pos, fs }) => {
-      const [a, b] = dot(cross(fs[0].normal, fs[1].normal), pos) > 0 ? fs : [fs[1], fs[0]];
-      return { pos, facelets: [a.index, b.index] };
-    });
-    this.centers = slots.filter((s) => s.fs.length === 1).map(({ pos, fs }) => ({ pos, facelets: [fs[0].index] }));
+    const orbits = new Map<string, Omit<Orbit, 'homes'>>();
+    for (const fs of byPos.values()) {
+      const pos = fs[0].pos;
+      const coords = pos.map(Math.abs).sort((a, b) => b - a);
+      let facelets: number[];
+      let twists = fs.length > 1;
+      if (fs.length === 3) {
+        // corners: the U/D sticker first, then clockwise seen from outside (as in the 3x3 model)
+        const first = fs.find((f) => f.normal[1] !== 0)!;
+        const rest = fs.filter((f) => f !== first);
+        const next = rest.find((f) => dot(cross(first.normal, f.normal), pos) < 0)!;
+        facelets = [first.index, next.index, rest.find((f) => f !== next)!.index];
+      } else if (fs.length === 2 && coords[2] === 0) {
+        // midges: the U/D sticker first, else the F/B one (as in the 3x3 model)
+        const first = fs.find((f) => f.normal[1] !== 0) ?? fs.find((f) => f.normal[2] !== 0)!;
+        facelets = [first.index, fs.find((f) => f !== first)!.index];
+      } else if (fs.length === 2) {
+        // wings can't flip in place, so ordering their stickers by handedness is move-invariant
+        const [a, b] = dot(cross(fs[0].normal, fs[1].normal), pos) > 0 ? fs : [fs[1], fs[0]];
+        facelets = [a.index, b.index];
+        twists = false;
+      } else facelets = [fs[0].index];
+      const key = String(coords);
+      if (!orbits.has(key)) orbits.set(key, { coords, size: fs.length, twists, slots: [] });
+      orbits.get(key)!.slots.push({ pos, facelets });
+    }
     const solved = this.solved();
-    this.cornerHomes = this.corners.map((c) => this.cornerKey(solved, c));
-    this.wingHomes = this.wings.map((w) => this.wingKey(solved, w));
+    this.orbits = [...orbits.values()]
+      .sort((a, b) => b.size - a.size || +b.twists - +a.twists || b.coords.join().localeCompare(a.coords.join()))
+      .map((o) => ({ ...o, homes: o.slots.map((slot) => this.pieceKey(solved, o, slot)) }));
+    this.corners = this.orbits[0];
   }
 
-  /** Identifies the corner in a slot, whatever its twist. */
-  cornerKey(s: State, slot: Slot) {
-    return slot.facelets.map((f) => s[f]).sort().join();
+  /** Identifies the piece in a slot: its colors, in order unless the piece can twist in place. */
+  pieceKey(s: State, orbit: Omit<Orbit, 'homes'>, slot: Slot) {
+    const cols = slot.facelets.map((f) => s[f]);
+    return (orbit.twists ? cols.sort() : cols).join();
   }
 
-  /** Identifies the wing in a slot. Wings can't flip, so the color order tells the two wings of a pair apart. */
-  wingKey(s: State, slot: Slot) {
-    return s[slot.facelets[0]] * 6 + s[slot.facelets[1]];
+  /** For an orbit whose pieces are all different: which home slot's piece sits in each slot (-1 if none). */
+  permutationOf(s: State, orbit: Orbit) {
+    return orbit.slots.map((slot) => orbit.homes.indexOf(this.pieceKey(s, orbit, slot)));
   }
 
   get size() {
@@ -141,45 +189,62 @@ export class CubeModel {
   parseMove(token: string): LayerTurn | null {
     const m = MOVE_RE.exec(token.replace(/’/g, "'"));
     if (!m) return null;
-    const [, inner, letter, w, suffix] = m;
+    const [, num, letter, w, suffix] = m;
+    const n = this.n;
     const amount = suffix === "'" ? -1 : suffix.startsWith('2') ? 2 : 1;
     const rot = 'xyz'.indexOf(letter);
-    if (rot >= 0) {
-      if (inner || w) return null;
-      return { axis: rot as 0 | 1 | 2, layers: this.coords.slice(), quarters: -amount };
-    }
-    const lower = letter !== letter.toUpperCase();
-    if (lower && w) return null;
-    const wide = lower || w === 'w';
-    if (inner && wide) return null;
-    const depths = inner ? [2] : wide ? [1, 2] : [1];
-    if (depths.some((d) => 2 * d > this.n)) return null;
+    if (rot >= 0) return num || w ? null : { axis: rot as 0 | 1 | 2, layers: this.coords.slice(), quarters: -amount };
+    const slice = 'MES'.indexOf(letter);
+    if (slice >= 0) return num || w || n % 2 === 0 ? null : { axis: slice as 0 | 1 | 2, layers: [0], quarters: -SLICE_SIGN[slice] * amount };
+
     const f = FACES.indexOf(letter.toUpperCase());
+    const lower = letter !== FACES[f];
+    let depths: number[];
+    if (lower || w) {
+      if (lower && (num || w)) return null;
+      const d = num ? +num : 2;
+      // the outer d layers; all N of them would be a rotation
+      if (d < 2 || d >= n) return null;
+      depths = Array.from({ length: d }, (_, i) => i + 1);
+    } else {
+      const d = num ? +num : 1;
+      // one layer, counted from the nearer face
+      if (2 * d > n + 1) return null;
+      depths = [d];
+    }
     const s = FACE_SIGN[f];
     return {
       axis: FACE_AXIS[f] as 0 | 1 | 2,
-      layers: depths.map((d) => s * (this.n + 1 - 2 * d)).sort((a, b) => a - b),
+      layers: depths.map((d) => s * (n + 1 - 2 * d)).sort((a, b) => a - b),
       quarters: -s * amount,
     };
   }
 
-  /** Standard name of a layer turn, '' for no turn, or null if it has no name. */
+  /** Standard name of a layer turn, '' for no turn, or null if it has no name. Every single layer has one. */
   moveName(t: LayerTurn): string | null {
-    const q = ((t.quarters % 4) + 4) % 4;
+    const q = mod(t.quarters, 4);
     if (q === 0) return '';
+    const n = this.n;
+    const layers = [...t.layers].sort((a, b) => a - b);
+    if (layers.some((l, i) => i > 0 && l !== layers[i - 1] + 2)) return null;
+    const lo = layers[0], hi = layers[layers.length - 1];
     let letter: string, s: number;
-    if (t.layers.length === this.n) {
+    if (layers.length === n) {
       letter = 'xyz'[t.axis];
       s = 1;
+    } else if (layers.length === 1 && lo === 0) {
+      letter = 'MES'[t.axis];
+      s = SLICE_SIGN[t.axis];
     } else {
-      s = t.layers.every((l) => l > 0) ? 1 : t.layers.every((l) => l < 0) ? -1 : 0;
+      // a single layer belongs to the nearer face; a block of layers to the face it includes
+      s = layers.length === 1 ? Math.sign(lo) : hi === n - 1 ? 1 : lo === 1 - n ? -1 : 0;
       if (!s) return null;
       const face = FACES[FACE_AXIS.findIndex((a, f) => a === t.axis && FACE_SIGN[f] === s)];
-      const depths = t.layers.map((l) => (this.n + 1 - s * l) / 2).sort().join();
-      if (depths === '1') letter = face;
-      else if (depths === '1,2') letter = face + 'w';
-      else if (depths === '2') letter = '2' + face;
-      else return null;
+      if (layers.length > 1) letter = (layers.length === 2 ? '' : layers.length) + face + 'w';
+      else {
+        const depth = (n + 1 - s * lo) / 2;
+        letter = (depth === 1 ? '' : depth) + face;
+      }
     }
     if (q === 2) return letter + '2';
     return (q === 1 ? 1 : -1) === -s ? letter : letter + "'";
@@ -187,7 +252,7 @@ export class CubeModel {
 
   /** perm[dest] = src */
   permutation(t: LayerTurn): number[] {
-    const q = ((t.quarters % 4) + 4) % 4;
+    const q = mod(t.quarters, 4);
     const key = `${t.axis}:${t.layers.join(',')}:${q}`;
     let perm = this.permCache.get(key);
     if (perm) return perm;
@@ -215,7 +280,7 @@ export class CubeModel {
     const invalid: string[] = [];
     for (const tok of text.replace(/[()[\],]/g, ' ').split(/\s+/).filter(Boolean)) {
       // allow compact input like "RUR'U'"
-      const parts = tok.match(/2?[URFDLBurfdlbxyz]w?(?:2'|2|'|’)?/g);
+      const parts = tok.match(/(?:[1-9]\d*)?[URFDLBMESurfdlbxyz]w?(?:2'|2|'|’)?/g);
       if (!parts || parts.join('') !== tok || parts.some((p) => !this.parseMove(p))) {
         invalid.push(tok);
         continue;
@@ -233,7 +298,7 @@ export class CubeModel {
       let merged = false;
       for (let i = out.length - 1; i >= 0 && out[i].axis === t.axis; i--) {
         if (out[i].layers.join() !== t.layers.join()) continue;
-        const q = (((out[i].quarters + t.quarters) % 4) + 4) % 4;
+        const q = mod(out[i].quarters + t.quarters, 4);
         if (q === 0) out.splice(i, 1);
         else out[i] = { ...t, quarters: q };
         merged = true;
@@ -278,18 +343,20 @@ export class CubeModel {
   }
 
   /**
-   * Colors → faces, taking the corner at DBL as the reference. Without fixed centers
-   * the cube may be held any way round; this picks the orientation the solver aims for.
-   * Assumes a valid state.
+   * Colors → faces: the orientation the solvers aim for. An odd cube takes it from its
+   * fixed centers. An even cube has none and may be held any way round, so it takes
+   * the corner at DBL as the reference. Assumes a valid state.
    */
   toFaces(s: State): number[] {
-    const m = this.n - 1;
-    const dbl = this.corners.find((c) => c.pos.every((x) => x === -m))!;
     const faceOfColor: number[] = [];
-    for (const i of dbl.facelets) {
-      const f = this.facelets[i].face;
-      faceOfColor[s[i]] = f;
-      faceOfColor[(s[i] + 3) % 6] = (f + 3) % 6;
+    if (this.n % 2) this.fixedCenters.forEach((i, f) => (faceOfColor[s[i]] = f));
+    else {
+      const dbl = this.corners.slots.find((c) => c.pos.every((x) => x < 0))!;
+      for (const i of dbl.facelets) {
+        const f = this.facelets[i].face;
+        faceOfColor[s[i]] = f;
+        faceOfColor[(s[i] + 3) % 6] = (f + 3) % 6;
+      }
     }
     return s.map((c) => faceOfColor[c]);
   }
@@ -315,45 +382,72 @@ export class CubeModel {
       }
     }
     const names = (cols: number[]) => cols.map((c) => COLOR_NAMES[c]).join('–');
+    const invalid = (message: string, stickers: number[]): Validation => ({ ok: false, kind: 'invalid', message, stickers });
 
-    // A corner exists if its colors, read in order, are a rotation of a solved corner's.
-    const cornerAt = (cols: number[]) => {
-      const k = this.cornerHomes.indexOf([...cols].sort().join());
-      const home = k < 0 ? [] : this.corners[k].facelets.map((f) => this.facelets[f].face);
-      return [0, 1, 2].some((r) => home.every((h, j) => cols[(j + r) % 3] === h)) ? k : -1;
-    };
-    const cornersSeen = new Map<number, number[]>();
-    let twist = 0;
-    for (const c of this.corners) {
-      const cols = c.facelets.map((i) => s[i]);
-      const piece = cornerAt(cols);
-      if (piece < 0) return { ok: false, kind: 'invalid', message: `Corner ${names(cols)} can't exist on a real cube`, stickers: c.facelets };
-      const other = cornersSeen.get(piece);
-      if (other) return { ok: false, kind: 'invalid', message: `Two corners are both ${names(cols)}`, stickers: [...c.facelets, ...other] };
-      cornersSeen.set(piece, c.facelets);
-      twist += cols.findIndex((x) => x === 0 || x === 3);
-    }
-
-    const wingsSeen = new Map<number, number[]>();
-    for (const w of this.wings) {
-      const cols = w.facelets.map((i) => s[i]);
-      const key = this.wingKey(s, w);
-      if (!this.wingHomes.includes(key)) return { ok: false, kind: 'invalid', message: `Edge ${names(cols)} can't exist on a real cube`, stickers: w.facelets };
-      const other = wingsSeen.get(key);
-      if (other) {
-        return {
-          ok: false, kind: 'invalid', stickers: [...w.facelets, ...other],
-          message: `Two ${names(cols)} edge pieces are the same way round — one is flipped. Each edge color pair appears once each way.`,
-        };
+    // An odd cube's fixed centers say which face is which, so check them and read every
+    // other piece relative to them.
+    let faces = s;
+    if (this.n % 2) {
+      const centers = this.fixedCenters.map((i) => s[i]);
+      if (new Set(centers).size !== 6) return invalid('Each center must be a different color', this.fixedCenters);
+      for (let f = 0; f < 3; f++) {
+        if (centers[f + 3] !== (centers[f] + 3) % 6) return invalid('Centers are not arranged like a real cube', this.fixedCenters);
       }
-      wingsSeen.set(key, w.facelets);
+      faces = this.toFaces(s);
     }
 
-    if (twist % 3 !== 0) {
-      return {
-        ok: false, kind: 'invalid', stickers: this.corners.flatMap((c) => c.facelets),
-        message: 'A corner is twisted in place — this state is unreachable. Check your corner stickers.',
-      };
+    // Corners and edges: every piece must exist and appear once.
+    const perms = new Map<Orbit, number[]>();
+    const turns = new Map<Orbit, number>();
+    for (const o of this.orbits) {
+      if (o.size === 1) continue;
+      const label = o.size === 3 ? 'corner' : 'edge';
+      const perm: number[] = [];
+      let turned = 0;
+      for (const slot of o.slots) {
+        const cols = slot.facelets.map((i) => s[i]);
+        const piece = o.homes.indexOf(this.pieceKey(faces, o, slot));
+        const r = piece < 0 ? -1 : rotation(slot.facelets.map((i) => faces[i]), o.slots[piece].facelets.map((i) => this.facelets[i].face));
+        if (r < 0) return invalid(`${label === 'corner' ? 'Corner' : 'Edge'} ${names(cols)} can't exist on a real cube`, slot.facelets);
+        const other = perm.indexOf(piece);
+        if (other >= 0) {
+          const stickers = [...slot.facelets, ...o.slots[other].facelets];
+          if (o.twists) return invalid(`Two ${label}s are both ${names(cols)}`, stickers);
+          return invalid(`Two ${names(cols)} edge pieces are the same way round — one is flipped. Each edge color pair appears once each way.`, stickers);
+        }
+        perm.push(piece);
+        turned += r;
+      }
+      perms.set(o, perm);
+      turns.set(o, turned);
+    }
+
+    // Centers of one kind can't trade places with centers of another.
+    for (const o of this.orbits) {
+      if (o.size !== 1 || o.slots.length === 6) continue;
+      const need = o.slots.length / 6;
+      for (let c = 0; c < 6; c++) {
+        const here = o.slots.flatMap((slot) => (s[slot.facelets[0]] === c ? slot.facelets : []));
+        if (here.length !== need) {
+          const kind = o.coords[1] === o.coords[2] ? 'x-center' : o.coords[2] === 0 ? 't-center' : 'oblique center';
+          return invalid(`${COLOR_NAMES[c]} is on ${here.length} of the ${o.slots.length} ${kind} pieces — each color needs exactly ${need}`, here);
+        }
+      }
+    }
+
+    const midges = this.orbits.find((o) => o.size === 2 && o.twists);
+    if (turns.get(this.corners)! % 3 !== 0) {
+      return invalid('A corner is twisted in place — this state is unreachable. Check your corner stickers.', this.corners.slots.flatMap((c) => c.facelets));
+    }
+    if (midges && turns.get(midges)! % 2 !== 0) {
+      return invalid('An edge is flipped in place — this state is unreachable. Check your edge stickers.', midges.slots.flatMap((c) => c.facelets));
+    }
+    // With fixed centers, a quarter turn swaps both corners and midges, so their parities match.
+    if (midges && parity(perms.get(this.corners)!) !== parity(perms.get(midges)!)) {
+      return invalid(
+        'Two pieces are swapped (parity) — this state is unreachable. Check for a swapped pair.',
+        [...this.corners.slots, ...midges.slots].flatMap((c) => c.facelets),
+      );
     }
     return { ok: true };
   }

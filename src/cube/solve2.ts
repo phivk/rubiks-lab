@@ -34,8 +34,8 @@ export class Solver2 {
   private homes: string[];
 
   constructor(private model: CubeModel) {
-    const dbl = model.corners.findIndex((c) => c.pos.every((x) => x < 0));
-    const corners = model.corners.map((c) => c.facelets);
+    const dbl = model.corners.slots.findIndex((c) => c.pos.every((x) => x < 0));
+    const corners = model.corners.slots.map((c) => c.facelets);
     this.slots = [...corners.filter((_, i) => i !== dbl), corners[dbl]];
     this.homes = this.slots.map((fs) => fs.map((f) => model.facelets[f].face).sort().join());
   }
