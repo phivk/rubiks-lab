@@ -525,7 +525,20 @@ function renderPlayback() {
   ($('#btn-first') as HTMLButtonElement).disabled = s.index === 0;
   ($('#btn-next') as HTMLButtonElement).disabled = s.index >= n;
   ($('#btn-last') as HTMLButtonElement).disabled = s.index >= n;
-  document.querySelector('#chips .current')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  followCurrentChip();
+}
+
+/** Keep the current move in view by scrolling the chip list only, never the panel around it. */
+function followCurrentChip() {
+  const chips = $('#chips');
+  // past the last move there's no current one: follow the last played
+  const cur = chips.querySelector<HTMLElement>('.current') ?? [...chips.querySelectorAll<HTMLElement>('.done')].pop();
+  if (!cur) return;
+  const pad = 6;
+  if (cur.offsetTop - pad < chips.scrollTop) chips.scrollTo({ top: cur.offsetTop - pad, behavior: 'smooth' });
+  else if (cur.offsetTop + cur.offsetHeight + pad > chips.scrollTop + chips.clientHeight) {
+    chips.scrollTo({ top: cur.offsetTop + cur.offsetHeight + pad - chips.clientHeight, behavior: 'smooth' });
+  }
 }
 
 // ---------- chrome ----------

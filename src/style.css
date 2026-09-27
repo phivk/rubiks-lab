@@ -311,7 +311,12 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @keyframes blink { 50% { opacity: 0.2; } }
 .sol-meta .link { color: var(--accent); font-weight: 600; font-size: 12px; }
 
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  /* long solutions scroll here, so the player below stays in reach */
+  position: relative; max-height: 246px; overflow-y: auto; scrollbar-width: thin;
+  align-content: flex-start; padding: 2px;
+}
 .chip {
   display: inline-flex; align-items: baseline; gap: 4px; min-width: 44px; justify-content: center;
   padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--chip); cursor: pointer;
