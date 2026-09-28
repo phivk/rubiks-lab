@@ -1,13 +1,13 @@
 import './style.css';
-import type { Puzzle, State } from './puzzles/types';
-import { cube } from './puzzles/cube';
-import { pyraminx } from './puzzles/pyraminx';
+import type { Puzzle, State } from './core/types';
+import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
+import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
-const PUZZLES: Puzzle[] = [cube, pyraminx];
+const PUZZLES: Puzzle[] = [cube2, cube3, cube4, cube5, pyraminx];
 
 // ---------- state ----------
 
@@ -19,8 +19,8 @@ interface Session {
 }
 const sessions = new Map<string, Session>(PUZZLES.map((p) => [p.id, { state: p.solved(), moveHistory: [], redoStack: [] }]));
 
-let puzzle: Puzzle = cube;
-let session = sessions.get(cube.id)!;
+let puzzle: Puzzle = cube3;
+let session = sessions.get(cube3.id)!;
 let mode: Mode = 'play';
 let paintColor = 0;
 
@@ -49,6 +49,9 @@ const net = new NetView($('#net'), (i) => {
   if (mode === 'paint') paintSticker(i);
   else setMode('paint');
 });
+
+/** how many stickers of each color a complete puzzle has */
+const perColor = () => puzzle.stickers.filter((s) => s.color === 0).length;
 
 const applyMove = (s: State, move: string) => puzzle.parseMove(move)!.perm.map((src) => s[src]);
 
@@ -170,6 +173,8 @@ async function switchPuzzle(p: Puzzle) {
     const on = b.dataset.puzzle === p.id;
     b.classList.toggle('active', on);
     b.setAttribute('aria-selected', String(on));
+    // on a phone the tabs scroll sideways
+    if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
   document.body.dataset.puzzle = p.id;
   view.setPuzzle(p, session.state);
@@ -182,6 +187,7 @@ async function switchPuzzle(p: Puzzle) {
   paintColor = p.paletteOrder[0];
   setMode(mode);
   renderHistory();
+  renderSolution();
   onStateChanged();
   try { localStorage.setItem('puzzle', p.id); } catch { /* storage unavailable */ }
 }
@@ -205,8 +211,8 @@ function paintSticker(i: number) {
   renderHistory();
   // advance to the next color once this one is complete
   const count = (c: number) => session.state.filter((x) => x === c).length;
-  if (paintColor !== puzzle.unset && count(paintColor) === 9) {
-    const next = puzzle.paletteOrder.find((c) => c !== puzzle.unset && count(c) < 9);
+  if (paintColor !== puzzle.unset && count(paintColor) === perColor()) {
+    const next = puzzle.paletteOrder.find((c) => c !== puzzle.unset && count(c) < perColor());
     if (next !== undefined) {
       paintColor = next;
       renderPalette();
@@ -229,7 +235,7 @@ function setMode(m: Mode) {
   if (m === 'paint') {
     playing = false;
     if (!session.state.includes(puzzle.unset)) {
-      paintColor = puzzle.paletteOrder.find((c) => c !== puzzle.unset && session.state.filter((x) => x === c).length !== 9) ?? puzzle.paletteOrder[0];
+      paintColor = puzzle.paletteOrder.find((c) => c !== puzzle.unset && session.state.filter((x) => x === c).length !== perColor()) ?? puzzle.paletteOrder[0];
     }
     renderPalette();
   }
@@ -429,7 +435,7 @@ function renderPalette() {
     b.title = `${puzzle.colorNames[c]} (${k + 1})`;
     b.setAttribute('aria-label', b.title);
     if (!eraser) {
-      const left = 9 - counts[c];
+      const left = perColor() - counts[c];
       const n = document.createElement('span');
       n.className = 'n' + (left === 0 ? ' done' : left < 0 ? ' over' : '');
       n.textContent = left === 0 ? '✓' : String(left);
@@ -464,7 +470,7 @@ function renderSolution(fresh = false) {
   el.classList.toggle('stale', !!solution?.stale);
   const sub = $('#solve-sub');
   if (!solution) {
-    sub.textContent = 'Finds the shortest route home';
+    sub.textContent = puzzle.solveHint ?? 'Finds the shortest route home';
     return;
   }
   const s = solution;
@@ -519,7 +525,20 @@ function renderPlayback() {
   ($('#btn-first') as HTMLButtonElement).disabled = s.index === 0;
   ($('#btn-next') as HTMLButtonElement).disabled = s.index >= n;
   ($('#btn-last') as HTMLButtonElement).disabled = s.index >= n;
-  document.querySelector('#chips .current')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  followCurrentChip();
+}
+
+/** Keep the current move in view by scrolling the chip list only, never the panel around it. */
+function followCurrentChip() {
+  const chips = $('#chips');
+  // past the last move there's no current one: follow the last played
+  const cur = chips.querySelector<HTMLElement>('.current') ?? [...chips.querySelectorAll<HTMLElement>('.done')].pop();
+  if (!cur) return;
+  const pad = 6;
+  if (cur.offsetTop - pad < chips.scrollTop) chips.scrollTo({ top: cur.offsetTop - pad, behavior: 'smooth' });
+  else if (cur.offsetTop + cur.offsetHeight + pad > chips.scrollTop + chips.clientHeight) {
+    chips.scrollTo({ top: cur.offsetTop + cur.offsetHeight + pad - chips.clientHeight, behavior: 'smooth' });
+  }
 }
 
 // ---------- chrome ----------
@@ -554,12 +573,12 @@ function saveToUrl() {
   clearTimeout(urlTimer);
   urlTimer = window.setTimeout(() => {
     const solvedHome = puzzle.encode(session.state) === puzzle.encode(puzzle.solved());
-    const hash = solvedHome ? (puzzle === cube ? '' : `#${puzzle.id}`) : `#${puzzle.id}:${puzzle.encode(session.state)}`;
+    const hash = solvedHome ? (puzzle === cube3 ? '' : `#${puzzle.id}`) : `#${puzzle.id}:${puzzle.encode(session.state)}`;
     window.history.replaceState(null, '', location.pathname + location.search + hash);
   }, 200);
 }
 
-/** `#pyra:GGG…`, `#3x3:UUU…`, `#pyra`, or a bare 54-letter cube (older links). */
+/** `#pyra:GGG…`, `#3x3:UUU…`, `#5x5:UUU…`, `#pyra`, or a bare 54-letter cube (older links). */
 function loadFromUrl(): { puzzle: Puzzle; loaded: boolean } | null {
   const raw = decodeURIComponent(location.hash.slice(1));
   if (!raw) return null;
@@ -574,9 +593,16 @@ function loadFromUrl(): { puzzle: Puzzle; loaded: boolean } | null {
 // ---------- wiring ----------
 
 function bind() {
-  document.querySelectorAll<HTMLButtonElement>('.puzzle-switch button').forEach((b) =>
-    b.addEventListener('click', () => void switchPuzzle(PUZZLES.find((p) => p.id === b.dataset.puzzle)!)),
-  );
+  for (const p of PUZZLES) {
+    const b = document.createElement('button');
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', 'false');
+    b.dataset.puzzle = p.id;
+    b.innerHTML = `<svg viewBox="0 0 24 24">${p.icon}</svg>`;
+    b.append(p.name);
+    b.addEventListener('click', () => void switchPuzzle(p));
+    $('.puzzle-switch').append(b);
+  }
   document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
   );
@@ -692,17 +718,16 @@ function bind() {
 // ---------- boot ----------
 
 const fromUrl = loadFromUrl();
-let initial: Puzzle = cube;
+let initial: Puzzle = cube3;
 if (fromUrl) initial = fromUrl.puzzle;
 else {
   try {
-    initial = PUZZLES.find((p) => p.id === localStorage.getItem('puzzle')) ?? cube;
+    initial = PUZZLES.find((p) => p.id === localStorage.getItem('puzzle')) ?? cube3;
   } catch { /* storage unavailable */ }
 }
 bind();
-puzzle = initial === cube ? pyraminx : cube; // force switchPuzzle to run
+puzzle = initial === cube3 ? pyraminx : cube3; // force switchPuzzle to run
 void switchPuzzle(initial).then(() => {
-  renderSolution();
   if (fromUrl?.loaded) {
     const v = puzzle.validate(session.state);
     toast(v.ok ? 'Loaded puzzle from link' : 'Loaded puzzle from link — ' + v.message);

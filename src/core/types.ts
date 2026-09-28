@@ -45,6 +45,8 @@ export interface MoveButton {
 
 export interface SolveHandlers {
   onSolution: (moves: string[], elapsed: number) => void;
+  /** a worker solver reports each search depth it starts */
+  onDepth?: (depth: number) => void;
   onDone: (optimal: boolean, elapsed: number) => void;
   onError: (message: string) => void;
 }
@@ -52,6 +54,8 @@ export interface SolveHandlers {
 export interface Puzzle {
   id: string;
   name: string;
+  /** the switcher tab's icon: SVG content for a 24×24 viewBox */
+  icon: string;
   /** colors by id; the last entry is the "unset" color used while painting */
   colors: string[];
   colorNames: string[];
@@ -91,6 +95,8 @@ export interface Puzzle {
   encode: (s: State) => string;
   decode: (text: string) => State | null;
 
+  /** subtitle of the solve button, if not "Finds the shortest route home" */
+  solveHint?: string;
   solve: (state: State, budgetMs: number, handlers: SolveHandlers) => void;
   cancelSolve: () => void;
 }

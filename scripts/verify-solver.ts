@@ -1,19 +1,19 @@
 // Sanity check: scramble many random states and confirm every solver answer really solves the cube.
 // Run with `npm run verify`.
-import { applyMove, applyMoves, isSolved, parseAlg, solvedState } from '../src/cube/model';
-import { initSolver, solve } from '../src/cube/solver';
-import { validate } from '../src/cube/validate';
+import { initSolver, solve } from '../src/cube/kociemba/solver';
+import { CubeModel, FACES } from '../src/cube/model';
 
+const M = new CubeModel(3);
 const t = Date.now();
-initSolver((f) => applyMove(solvedState(), 'URFDLB'[f]));
+initSolver((f) => M.apply(M.solved(), FACES[f]));
 console.log(`tables built in ${Date.now() - t} ms`);
 
 const MOVES = ['U', 'R', 'F', 'D', 'L', 'B', 'M', 'E', 'S', 'x', 'y', 'z', 'r', 'u'];
 const cases: [string, string[], number?][] = [
-  ['R U', parseAlg('R U').moves, 2],
-  ['U R2', parseAlg('U R2').moves, 2],
-  ['sexy move', parseAlg("R U R' U'").moves, 4],
-  ['with slices + rotations', parseAlg("R U R' U' M2 x y S E'").moves],
+  ['R U', M.parseAlg('R U').moves, 2],
+  ['U R2', M.parseAlg('U R2').moves, 2],
+  ['sexy move', M.parseAlg("R U R' U'").moves, 4],
+  ['with slices + rotations', M.parseAlg("R U R' U' M2 x y S E'").moves],
 ];
 for (let i = 0; i < 20; i++) {
   cases.push([`random #${i + 1}`, Array.from({ length: 30 }, () => MOVES[(Math.random() * MOVES.length) | 0] + ['', "'", '2'][(Math.random() * 3) | 0])]);
@@ -21,17 +21,15 @@ for (let i = 0; i < 20; i++) {
 
 let failed = 0;
 for (const [name, scramble, expected] of cases) {
-  const state = applyMoves(solvedState(), scramble);
-  if (!validate(state).ok) throw new Error(`${name}: scramble produced an invalid state`);
-  const faceOfColor: number[] = [];
-  for (let f = 0; f < 6; f++) faceOfColor[state[f * 9 + 4]] = f;
+  const state = M.applyAll(M.solved(), scramble);
+  if (!M.validate(state).ok) throw new Error(`${name}: scramble produced an invalid state`);
   let best: string[] = [];
   const t0 = Date.now();
-  const result = solve(state.map((c) => faceOfColor[c]), {
+  const result = solve(M.toFaces(state), {
     onSolution: (m) => (best = m),
     shouldStop: () => Date.now() - t0 > 1000,
   });
-  const ok = isSolved(applyMoves(state, best)) && (expected === undefined || (result === 'optimal' && best.length === expected));
+  const ok = M.isSolved(M.applyAll(state, best)) && (expected === undefined || (result === 'optimal' && best.length === expected));
   if (!ok) failed++;
   console.log(`${ok ? '✓' : '✗'} ${name.padEnd(24)} ${String(best.length).padStart(2)} moves  ${result}`);
 }

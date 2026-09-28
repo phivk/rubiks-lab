@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import type { DragOption, Puzzle, State, Turn, Vec3 } from '../puzzles/types';
+import type { DragOption, Puzzle, State, Turn, Vec3 } from '../core/types';
 
 export type Mode = 'play' | 'paint';
 
@@ -90,8 +90,6 @@ export class PuzzleView {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.enablePan = false;
-    this.controls.minDistance = 6.5;
-    this.controls.maxDistance = 18;
     this.controls.rotateSpeed = 0.7;
 
     const key = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -158,6 +156,7 @@ export class PuzzleView {
     if (first) {
       this.camera.position.set(...puzzle.cameraHome);
       this.controls.target.set(...puzzle.cameraTarget);
+      [this.controls.minDistance, this.controls.maxDistance] = this.zoomRange();
     }
     else {
       this.resetCamera();
@@ -407,11 +406,21 @@ export class PuzzleView {
     this.setHover(-1);
   }
 
+  /** How close and far the camera may go: a range around the puzzle's home distance (6.5–18 for the 3×3). */
+  private zoomRange(): [number, number] {
+    const home = new THREE.Vector3(...this.puzzle.cameraHome).distanceTo(new THREE.Vector3(...this.puzzle.cameraTarget));
+    return [home * 0.55, home * 1.5];
+  }
+
   resetCamera() {
     const from = this.camera.position.clone().sub(this.controls.target);
     const fromTarget = this.controls.target.clone();
     const toTarget = new THREE.Vector3(...this.puzzle.cameraTarget);
     const to = new THREE.Vector3(...this.puzzle.cameraHome).sub(toTarget);
+    const [min, max] = this.zoomRange();
+    // let the camera travel from where it is (another puzzle's range) until it arrives
+    this.controls.minDistance = Math.min(min, from.length());
+    this.controls.maxDistance = Math.max(max, from.length());
     const start = performance.now();
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / 600);
@@ -420,6 +429,7 @@ export class PuzzleView {
       const offset = from.clone().lerp(to, k).setLength(from.length() + (to.length() - from.length()) * k);
       this.camera.position.copy(this.controls.target).add(offset);
       if (t < 1) requestAnimationFrame(step);
+      else [this.controls.minDistance, this.controls.maxDistance] = [min, max];
     };
     requestAnimationFrame(step);
   }

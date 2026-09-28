@@ -82,6 +82,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   display: flex; flex-direction: column; gap: 14px;
   scrollbar-width: thin;
 }
+/* when a panel is taller than the screen it scrolls, rather than squashing its contents */
+.panel > * { flex-shrink: 0; }
 .panel.left { grid-column: 1; }
 .panel.right { grid-column: 3; }
 
@@ -309,7 +311,12 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 @keyframes blink { 50% { opacity: 0.2; } }
 .sol-meta .link { color: var(--accent); font-weight: 600; font-size: 12px; }
 
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  /* long solutions scroll here, so the player below stays in reach */
+  position: relative; max-height: 246px; overflow-y: auto; scrollbar-width: thin;
+  align-content: flex-start; padding: 2px;
+}
 .chip {
   display: inline-flex; align-items: baseline; gap: 4px; min-width: 44px; justify-content: center;
   padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--chip); cursor: pointer;
@@ -384,8 +391,11 @@ kbd {
   .panel { margin: 0 16px 16px; max-height: none; overflow: visible; }
   .panel.right { order: 3; }
   .panel.left { order: 4; }
-  .puzzle-switch { position: static; transform: none; }
-  .puzzle-switch button { padding: 0 10px; }
+  /* the tabs shrink and scroll sideways rather than widening the page */
+  .puzzle-switch { position: static; transform: none; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .puzzle-switch::-webkit-scrollbar { display: none; }
+  .puzzle-switch button { padding: 0 10px; flex: none; }
+  .brand, .top-actions { flex: none; }
   .puzzle-switch button svg, #btn-camera, #btn-help, .divider { display: none; }
   .brand-name { display: none; }
   .toasts { top: 60px; }

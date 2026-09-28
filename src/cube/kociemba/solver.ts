@@ -7,6 +7,8 @@
 // via a quarter turn of R/L/F/B), so once phase-1 depth reaches the best length
 // found, no shorter solution can exist: the result is proven optimal.
 
+import { buildPruning, permRank, permUnrank } from '../../core/perm';
+
 // ---------- cubie level ----------
 
 interface CubieCube {
@@ -16,11 +18,12 @@ interface CubieCube {
   eo: number[];
 }
 
-const CORNER_FACELETS = [
+/** Facelets of each corner / edge slot, in Kociemba order (see `CubeModel`'s 3×3 sticker order). */
+export const CORNER_FACELETS = [
   [8, 9, 20], [6, 18, 38], [0, 36, 47], [2, 45, 11],
   [29, 26, 15], [27, 44, 24], [33, 53, 42], [35, 17, 51],
 ];
-const EDGE_FACELETS = [
+export const EDGE_FACELETS = [
   [5, 10], [7, 19], [3, 37], [1, 46], [32, 16], [28, 25],
   [30, 43], [34, 52], [23, 12], [21, 41], [50, 39], [48, 14],
 ];
@@ -71,34 +74,11 @@ const identity = (): CubieCube => ({
 
 // ---------- coordinates ----------
 
-const FACT = [1, 1, 2, 6, 24, 120, 720, 5040, 40320];
 function binom(n: number, k: number): number {
   if (k < 0 || k > n) return 0;
   let r = 1;
   for (let i = 0; i < k; i++) r = (r * (n - i)) / (i + 1);
   return r;
-}
-
-function permRank(p: number[]): number {
-  let r = 0;
-  const n = p.length;
-  for (let i = 0; i < n; i++) {
-    let smaller = 0;
-    for (let j = i + 1; j < n; j++) if (p[j] < p[i]) smaller++;
-    r += smaller * FACT[n - 1 - i];
-  }
-  return r;
-}
-function permUnrank(r: number, n: number): number[] {
-  const avail = Array.from({ length: n }, (_, i) => i);
-  const p: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const f = FACT[n - 1 - i];
-    const k = Math.floor(r / f);
-    r %= f;
-    p.push(avail.splice(k, 1)[0]);
-  }
-  return p;
 }
 
 const getTwist = (c: CubieCube) => c.co.slice(0, 7).reduce((a, x) => a * 3 + x, 0);
@@ -165,25 +145,6 @@ function buildMoveTable(n: number, moves: number[], nMoves: number, set: (c: Cub
     moves.forEach((m, mi) => { t[x * nMoves + mi] = get(mult(c, moveCubes[m])); });
   }
   return t;
-}
-
-function buildPruning(n1: number, n2: number, move1: ArrayLike<number>, move2: ArrayLike<number>, nMoves: number, start: number): Uint8Array {
-  const size = n1 * n2;
-  const table = new Uint8Array(size).fill(255);
-  const queue = new Int32Array(size);
-  let head = 0, tail = 0;
-  table[start] = 0;
-  queue[tail++] = start;
-  while (head < tail) {
-    const idx = queue[head++];
-    const a = (idx / n2) | 0, b = idx % n2;
-    const d = table[idx] + 1;
-    for (let m = 0; m < nMoves; m++) {
-      const j = move1[a * nMoves + m] * n2 + move2[b * nMoves + m];
-      if (table[j] === 255) { table[j] = d; queue[tail++] = j; }
-    }
-  }
-  return table;
 }
 
 /** Build move and pruning tables. `faceMove(face)` returns the facelet state after a clockwise turn of that face. */

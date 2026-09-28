@@ -1,4 +1,4 @@
-import type { Puzzle, State } from '../puzzles/types';
+import type { Puzzle, State } from '../core/types';
 
 const SVG = 'http://www.w3.org/2000/svg';
 // Draw at 100× the puzzle's map units so text sizes stay well above browsers' minimum font size.
