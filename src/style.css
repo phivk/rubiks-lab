@@ -192,8 +192,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .alg-error:empty { display: none; }
 
 .history {
-  display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; max-height: 96px; overflow-y: auto;
-  font-family: var(--mono); font-size: 12px;
+  /* four rows of 22px moves fit before it scrolls */
+  display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; max-height: 100px; overflow-y: auto;
+  font-family: var(--mono); font-size: 12px; line-height: 18px;
 }
 .history > .muted { font-family: Inter, sans-serif; }
 .history .h { padding: 2px 6px; border-radius: 5px; background: var(--chip); color: var(--text-2); }
@@ -235,7 +236,6 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .net.editable .cell:hover { stroke: #fff; stroke-width: 10; }
 .net .label { font-size: 42px; font-weight: 700; fill: rgba(0, 0, 0, 0.5); stroke: none; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .net .cell.bad { animation: pulse 1.2s ease-in-out 2; }
-@keyframes pulse { 50% { stroke: var(--bad); stroke-width: 16; } }
 .label-row:has(.map-tools) { align-items: center; }
 .map-tools { display: flex; align-items: center; gap: 10px; }
 .map-tools .muted:empty { display: none; }
@@ -247,6 +247,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .rings .ring { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 5; transition: stroke 0.15s; }
 .rings .ring.turning { stroke: rgba(255, 255, 255, 0.55); }
 .rings .cell { stroke-width: 3.5; }
+@keyframes pulse { 50% { stroke: var(--bad); stroke-width: 16; } }
 
 .status {
   display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; padding: 10px 12px; border-radius: 10px;
