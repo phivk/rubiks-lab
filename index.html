@@ -67,8 +67,18 @@
           </div>
         </section>
 
-        <div class="label-row"><span class="eyebrow">Map</span><span class="muted small" id="net-hint">Unfolded view</span></div>
+        <div class="label-row">
+          <span class="eyebrow">Map</span>
+          <span class="map-tools">
+            <span class="muted small" id="net-hint">Unfolded view</span>
+            <span class="map-switch" id="map-switch" role="tablist" aria-label="Map style">
+              <button role="tab" data-map="net" title="Unfolded faces">Net</button>
+              <button role="tab" data-map="rings" title="Each layer a ring, each sticker a dot where two rings cross">Rings</button>
+            </span>
+          </span>
+        </div>
         <div class="net" id="net"></div>
+        <div class="net rings hidden" id="rings"></div>
         <div class="status" id="status"></div>
       </aside>
 

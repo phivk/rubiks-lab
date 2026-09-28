@@ -4,6 +4,7 @@ import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
+import { RingView } from './view/rings';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -45,10 +46,15 @@ const view = new PuzzleView($('#stage'), {
   onStickerClick: (i) => paintSticker(i),
   canDragTurn: () => queue.length === 0 && !running,
 });
-const net = new NetView($('#net'), (i) => {
+const onMapClick = (i: number) => {
   if (mode === 'paint') paintSticker(i);
   else setMode('paint');
-});
+};
+const net = new NetView($('#net'), onMapClick);
+const rings = new RingView($('#rings'), onMapClick);
+type MapKind = 'net' | 'rings';
+let mapKind: MapKind = 'net';
+try { if (localStorage.getItem('map') === 'rings') mapKind = 'rings'; } catch { /* storage unavailable */ }
 
 /** how many stickers of each color a complete puzzle has */
 const perColor = () => puzzle.stickers.filter((s) => s.color === 0).length;
@@ -73,7 +79,9 @@ async function runQueue() {
     const next = applyMove(session.state, job.move);
     // speed up when the queue backs up so input never feels laggy
     const hurry = queue.length > 2 ? 0.45 : queue.length > 0 ? 0.75 : 1;
-    await view.animateTurn(puzzle.parseMove(job.move)!, next, job.duration * hurry);
+    const turn = puzzle.parseMove(job.move)!;
+    rings.animateTurn(turn, next, job.duration * hurry);
+    await view.animateTurn(turn, next, job.duration * hurry);
     const wasSolved = puzzle.isSolved(session.state);
     session.state = next;
     onStateChanged();
@@ -179,6 +187,8 @@ async function switchPuzzle(p: Puzzle) {
   document.body.dataset.puzzle = p.id;
   view.setPuzzle(p, session.state);
   net.setPuzzle(p);
+  rings.setPuzzle(p);
+  renderMapKind();
   buildMovepad();
   ($('#alg-input') as HTMLInputElement).placeholder = p.algPlaceholder;
   $('#alg-error').textContent = '';
@@ -227,7 +237,8 @@ function setMode(m: Mode) {
   $('.mode-play').classList.toggle('hidden', m !== 'play');
   $('.mode-paint').classList.toggle('hidden', m !== 'paint');
   $('#net').classList.toggle('editable', m === 'paint');
-  $('#net-hint').textContent = m === 'paint' ? 'Tap to paint' : 'Unfolded view';
+  $('#rings').classList.toggle('editable', m === 'paint');
+  renderMapKind();
   $('#stage-hint').textContent = m === 'paint'
     ? 'Tap a sticker to paint it · Drag to look around'
     : 'Drag a face to turn it · Drag the background to orbit';
@@ -257,6 +268,7 @@ async function startSolve() {
       view.setHighlight(v.stickers);
       view.flashHighlight();
       net.flash(v.stickers);
+      rings.flash(v.stickers);
     }
     toast(v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message, 'bad');
     if (mode !== 'paint') setMode('paint');
@@ -363,8 +375,30 @@ function togglePlay() {
 
 // ---------- rendering ----------
 
+function setMapKind(k: MapKind) {
+  mapKind = k;
+  try { localStorage.setItem('map', k); } catch { /* storage unavailable */ }
+  renderMapKind();
+}
+
+/** Puzzles without a ring map always show the net. */
+function renderMapKind() {
+  const hasRings = !!puzzle.rings;
+  const k = hasRings ? mapKind : 'net';
+  $('#map-switch').classList.toggle('hidden', !hasRings);
+  document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) => {
+    const on = b.dataset.map === k;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  $('#net').classList.toggle('hidden', k !== 'net');
+  $('#rings').classList.toggle('hidden', k !== 'rings');
+  $('#net-hint').textContent = mode === 'paint' ? 'Tap to paint' : hasRings ? '' : 'Unfolded view';
+}
+
 function onStateChanged() {
   net.update(session.state);
+  rings.update(session.state);
   renderStatus();
   $('#solved-badge').classList.toggle('hidden', !puzzle.isSolved(session.state));
   if (mode === 'paint') renderPalette();
@@ -605,6 +639,9 @@ function bind() {
   }
   document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
+  );
+  document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) =>
+    b.addEventListener('click', () => setMapKind(b.dataset.map as MapKind)),
   );
   $('#btn-scramble').addEventListener('click', scramble);
   $('#btn-reset').addEventListener('click', () => {

@@ -4,6 +4,7 @@ import { syncSolver } from '../core/syncSolver';
 import type { DragOption, MoveButton, Puzzle, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
 import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
+import { ringMap } from './rings';
 import { Solver2 } from './solve2';
 
 const unit = (axis: number): Vec3 => [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0];
@@ -85,6 +86,7 @@ function makeCube(M: CubeModel, { wide }: { wide: boolean }): Shared {
     cameraHome: [6.3 * zoom, 5.3 * zoom, 8.6 * zoom],
     cameraTarget: [0, 0, 0],
     netSize: [4 * n, 3 * n],
+    rings: ringMap(M),
 
     solved: () => M.solved(),
     isSolved: (s) => M.isSolved(s),

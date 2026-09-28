@@ -30,6 +30,16 @@ export interface StickerDef {
   netLabel?: string;
 }
 
+/** A second map: each layer a circle, each sticker a dot where its layers' circles cross. In map units. */
+export interface RingMap {
+  circles: { cx: number; cy: number; r: number; stickers: number[] }[];
+  /** dot center per sticker */
+  points: [number, number][];
+  /** dot radius */
+  dot: number;
+  size: [number, number];
+}
+
 /** One way a grabbed sticker can turn. `toMove(steps)` names the move for a number of `step`-sized right-hand rotations. */
 export interface DragOption {
   axis: Vec3;
@@ -71,6 +81,7 @@ export interface Puzzle {
   /** point the camera orbits around */
   cameraTarget: Vec3;
   netSize: [number, number];
+  rings?: RingMap;
 
   solved: () => State;
   isSolved: (s: State) => boolean;
