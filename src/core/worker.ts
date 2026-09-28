@@ -57,6 +57,8 @@ export class SolverClient {
   private nextId = 1;
   private current: { id: number; handlers: SolveHandlers } | null = null;
   ready!: Promise<void>;
+  /** Settles `ready` early, so a solve waiting on a cancelled worker doesn't hang. */
+  private releaseReady!: () => void;
 
   constructor(private createWorker: () => Worker) {
     this.spawn();
@@ -65,6 +67,7 @@ export class SolverClient {
   private spawn() {
     this.worker = this.createWorker();
     this.ready = new Promise((resolve) => {
+      this.releaseReady = resolve;
       this.worker.addEventListener('message', (e: MessageEvent<SolverResponse>) => {
         if (e.data.type === 'ready') resolve();
       });
@@ -90,6 +93,8 @@ export class SolverClient {
     const id = this.nextId++;
     this.current = { id, handlers };
     await this.ready;
+    // cancelled (or replaced by a newer solve) while waiting: don't post to the respawned worker
+    if (this.current?.id !== id) return;
     const req: SolverRequest = { id, state, budgetMs };
     this.worker.postMessage(req);
   }
@@ -97,6 +102,7 @@ export class SolverClient {
   cancel() {
     if (!this.current) return;
     this.current = null;
+    this.releaseReady();
     this.worker.terminate();
     this.spawn();
   }
