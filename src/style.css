@@ -245,8 +245,18 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .map-switch button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); }
 .map-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .rings .ring { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 5; transition: stroke 0.15s; }
+.rings .ring.grabbed { stroke: rgba(255, 255, 255, 0.32); }
 .rings .ring.turning { stroke: rgba(255, 255, 255, 0.55); }
 .rings .cell { stroke-width: 3.5; }
+/* in turn mode, dots are dragged along their rings; touch-action keeps a phone from scrolling instead */
+.rings:not(.editable) .cell { cursor: grab; touch-action: none; }
+.rings:not(.editable) .cell:hover { stroke: rgba(255, 255, 255, 0.7); }
+.rings .ring-label { pointer-events: none; }
+.rings .ring-label rect { stroke: rgba(0, 0, 0, 0.45); stroke-width: 3.5; }
+/* stroke: none undoes the icon stroke every svg gets */
+.rings .ring-label text { font-weight: 700; fill: rgba(0, 0, 0, 0.72); stroke: none; text-anchor: middle; dominant-baseline: central; }
+.rings .ring-label.slice rect { fill: #2a2e38; stroke: rgba(255, 255, 255, 0.22); }
+.rings .ring-label.slice text { fill: var(--text); }
 @keyframes pulse { 50% { stroke: var(--bad); stroke-width: 16; } }
 
 .status {

@@ -32,11 +32,27 @@ export interface StickerDef {
 
 /** A second map: each layer a circle, each sticker a dot where its layers' circles cross. In map units. */
 export interface RingMap {
-  circles: { cx: number; cy: number; r: number; stickers: number[] }[];
+  circles: {
+    cx: number;
+    cy: number;
+    r: number;
+    stickers: number[];
+    /** names the move that turns this layer by some quarter turns */
+    move: (quarters: number) => string;
+    /** 1 if a +1 quarter turn carries the dots toward growing angle (clockwise on screen), else -1 */
+    sense: 1 | -1;
+    /** the layer's name, if it's short enough to draw */
+    label?: string;
+    /** the face this layer turns with, if it's an outer layer */
+    face?: number;
+    labelAt: [number, number];
+  }[];
   /** dot center per sticker */
   points: [number, number][];
   /** dot radius */
   dot: number;
+  /** radius of a ring's label */
+  labelSize: number;
   size: [number, number];
 }
 

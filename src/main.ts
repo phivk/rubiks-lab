@@ -51,7 +51,12 @@ const onMapClick = (i: number) => {
   else setMode('paint');
 };
 const net = new NetView($('#net'), onMapClick);
-const rings = new RingView($('#rings'), onMapClick);
+// on the ring map, dragging a dot turns its layer, so tapping only paints
+const rings = new RingView($('#rings'), {
+  onClick: (i) => { if (mode === 'paint') paintSticker(i); },
+  onTurn: (move) => commitUserMove(move),
+  canTurn: () => mode === 'play',
+});
 type MapKind = 'net' | 'rings';
 let mapKind: MapKind = 'net';
 try { if (localStorage.getItem('map') === 'rings') mapKind = 'rings'; } catch { /* storage unavailable */ }
@@ -393,7 +398,7 @@ function renderMapKind() {
   });
   $('#net').classList.toggle('hidden', k !== 'net');
   $('#rings').classList.toggle('hidden', k !== 'rings');
-  $('#net-hint').textContent = mode === 'paint' ? 'Tap to paint' : hasRings ? '' : 'Unfolded view';
+  $('#net-hint').textContent = mode === 'paint' ? 'Tap to paint' : k === 'rings' ? 'Drag a dot to turn' : hasRings ? '' : 'Unfolded view';
 }
 
 function onStateChanged() {

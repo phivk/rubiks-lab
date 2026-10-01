@@ -8,9 +8,10 @@
 // U, R and F one goes on the side nearer the triangle's middle, the D, L or B one outside.
 // With big enough circles, each circle meets the dots of its band in the same order they
 // sit around the cube, so turning a layer slides its dots along its circle.
+// Each circle is labeled with its layer's name on its far side, where there are no dots.
 
 import type { RingMap } from '../core/types';
-import type { CubeModel } from './model';
+import { FACES, type CubeModel } from './model';
 
 type P = [number, number];
 
@@ -46,26 +47,44 @@ export function ringMap(M: CubeModel): RingMap {
   });
 
   const circles = [0, 1, 2].flatMap((axis) =>
-    M.coords.map((layer) => ({
-      cx: centers[axis][0],
-      cy: centers[axis][1],
-      r: radius(layer),
-      stickers: M.facelets.filter((f) => f.pos[axis] === layer && f.normal[axis] === 0).map((f) => f.index),
-    })),
+    M.coords.map((layer) => {
+      const [cx, cy] = centers[axis], r = radius(layer);
+      const turn = (quarters: number) => ({ axis: axis as 0 | 1 | 2, layers: [layer], quarters });
+      const stickers = M.facelets.filter((f) => f.pos[axis] === layer && f.normal[axis] === 0).map((f) => f.index);
+      // which way round a +1 quarter turn carries the dots: toward growing angle, or against it
+      const perm = M.permutation(turn(1));
+      const angle = (i: number) => Math.atan2(points[i][1] - cy, points[i][0] - cx);
+      const moved = stickers.filter((d) => perm[d] !== d);
+      const mean = moved.reduce((sum, d) => sum + ((((angle(d) - angle(perm[d])) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)), 0) / moved.length;
+      // the outer layers are faces; of the inner ones, only the 3×3's M, E and S have a short name
+      const name = M.moveName(turn(1))!.replace(/'$/, '');
+      const face = FACES.indexOf(name);
+      const out = Math.hypot(cx, cy);
+      return {
+        cx, cy, r, stickers,
+        move: (quarters: number) => M.moveName(turn(quarters)) ?? '',
+        sense: (mean < Math.PI ? 1 : -1) as 1 | -1,
+        label: face >= 0 || name.length === 1 ? name : undefined,
+        face: face >= 0 ? face : undefined,
+        labelAt: [cx + (r * cx) / out, cy + (r * cy) / out] as P,
+      };
+    }),
   );
 
   let closest = Infinity;
   for (let i = 0; i < points.length; i++) {
     for (let j = i + 1; j < points.length; j++) closest = Math.min(closest, Math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1]));
   }
+  const labelSize = Math.min(step * 0.45, 0.11);
   // shift everything so the drawing starts at 0, 0
-  const pad = closest / 2;
+  const pad = Math.max(closest / 2, labelSize);
   const minX = Math.min(...circles.map((c) => c.cx - c.r)) - pad, minY = Math.min(...circles.map((c) => c.cy - c.r)) - pad;
   const maxX = Math.max(...circles.map((c) => c.cx + c.r)) + pad, maxY = Math.max(...circles.map((c) => c.cy + c.r)) + pad;
   return {
-    circles: circles.map((c) => ({ ...c, cx: c.cx - minX, cy: c.cy - minY })),
+    circles: circles.map((c) => ({ ...c, cx: c.cx - minX, cy: c.cy - minY, labelAt: [c.labelAt[0] - minX, c.labelAt[1] - minY] })),
     points: points.map(([x, y]) => [x - minX, y - minY]),
     dot: closest * 0.42,
+    labelSize,
     size: [maxX - minX, maxY - minY],
   };
 }

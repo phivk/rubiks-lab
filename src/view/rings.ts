@@ -6,18 +6,33 @@ const UNIT = 100;
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
-/** The ring map of a puzzle (see `src/cube/rings.ts`): dots slide along a layer's circle as it turns. */
+/** How far the pointer moves before a drag picks a ring, in CSS pixels. */
+const DRAG_START = 8;
+
+export interface RingHandlers {
+  onClick: (index: number) => void;
+  /** a dot was dragged along one of its rings */
+  onTurn: (move: string) => void;
+  canTurn: () => boolean;
+}
+
+/**
+ * The ring map of a puzzle (see `src/cube/rings.ts`): dots slide along a layer's circle as
+ * it turns. Dragging a dot along one of its two circles turns that layer a quarter turn.
+ */
 export class RingView {
   private dots: SVGCircleElement[] = [];
   private rings: SVGCircleElement[] = [];
   private puzzle!: Puzzle;
   private frame = 0;
   private finish: (() => void) | null = null;
+  private drag: { pointer: number; dot: number; x: number; y: number } | null = null;
 
-  constructor(private container: HTMLElement, private onClick: (index: number) => void) {}
+  constructor(private container: HTMLElement, private handlers: RingHandlers) {}
 
   setPuzzle(puzzle: Puzzle) {
     this.stop();
+    this.drag = null;
     this.puzzle = puzzle;
     const map = puzzle.rings;
     if (!map) {
@@ -45,11 +60,79 @@ export class RingView {
       el.setAttribute('cy', String(y * UNIT));
       el.setAttribute('r', String(map.dot * UNIT));
       el.setAttribute('class', 'cell');
-      el.addEventListener('click', () => this.onClick(i));
+      el.addEventListener('click', () => this.handlers.onClick(i));
+      el.addEventListener('pointerdown', (e) => this.startDrag(e, i));
       svg.append(el);
       return el;
     });
+    // each layer's name on its far side: faces in their color, M/E/S plain
+    for (const c of map.circles) {
+      if (!c.label) continue;
+      const [x, y] = c.labelAt;
+      const g = document.createElementNS(SVG, 'g');
+      g.setAttribute('class', c.face === undefined ? 'ring-label slice' : 'ring-label');
+      // a rounded square, so a label doesn't look like one more sticker
+      const s = map.labelSize * UNIT;
+      const chip = document.createElementNS(SVG, 'rect');
+      chip.setAttribute('x', String(x * UNIT - s));
+      chip.setAttribute('y', String(y * UNIT - s));
+      chip.setAttribute('width', String(2 * s));
+      chip.setAttribute('height', String(2 * s));
+      chip.setAttribute('rx', String(0.35 * s));
+      if (c.face !== undefined) chip.style.fill = puzzle.colors[c.face];
+      const text = document.createElementNS(SVG, 'text');
+      text.setAttribute('x', String(x * UNIT));
+      text.setAttribute('y', String(y * UNIT));
+      text.setAttribute('font-size', String(map.labelSize * 1.4 * UNIT));
+      text.textContent = c.label;
+      g.append(chip, text);
+      svg.append(g);
+    }
+    svg.addEventListener('pointermove', (e) => this.moveDrag(e));
+    svg.addEventListener('pointerup', () => this.endDrag());
+    svg.addEventListener('pointercancel', () => this.endDrag());
     this.container.replaceChildren(svg);
+  }
+
+  /** The circles a dot sits on. */
+  private circlesOf(dot: number) {
+    return this.puzzle.rings!.circles.flatMap((c, i) => (c.stickers.includes(dot) ? [i] : []));
+  }
+
+  private startDrag(e: PointerEvent, dot: number) {
+    if (!this.handlers.canTurn() || this.drag) return;
+    this.drag = { pointer: e.pointerId, dot, x: e.clientX, y: e.clientY };
+    (e.currentTarget as Element).closest('svg')!.setPointerCapture(e.pointerId);
+    for (const i of this.circlesOf(dot)) this.rings[i].classList.add('grabbed');
+  }
+
+  /** Once the pointer has moved far enough, turn the circle it's moving along. */
+  private moveDrag(e: PointerEvent) {
+    const d = this.drag;
+    if (!d || e.pointerId !== d.pointer) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (Math.hypot(dx, dy) < DRAG_START) return;
+    const map = this.puzzle.rings!;
+    const [px, py] = map.points[d.dot];
+    // the screen and the map share their axes, so the drag's direction can be compared as is
+    let best = { along: 0, circle: -1 };
+    for (const i of this.circlesOf(d.dot)) {
+      const c = map.circles[i];
+      const a = Math.atan2(py - c.cy, px - c.cx);
+      // the tangent toward growing angle
+      const along = (-Math.sin(a) * dx + Math.cos(a) * dy) / Math.hypot(dx, dy);
+      if (Math.abs(along) > Math.abs(best.along)) best = { along, circle: i };
+    }
+    this.endDrag();
+    if (!best.along) return;
+    const c = map.circles[best.circle];
+    this.handlers.onTurn(c.move(Math.sign(best.along) * c.sense));
+  }
+
+  private endDrag() {
+    if (!this.drag) return;
+    this.drag = null;
+    for (const r of this.rings) r.classList.remove('grabbed');
   }
 
   update(state: State) {
