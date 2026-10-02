@@ -45,6 +45,10 @@ const view = new PuzzleView($('#stage'), {
   onDragTurn: (move) => commitUserMove(move, false),
   onStickerClick: (i) => paintSticker(i),
   canDragTurn: () => queue.length === 0 && !running,
+  // the ring map mirrors the sticker under the pointer and the layers being turned
+  onHover: (i) => rings.showHover(i),
+  onGrab: (i, pieces) => rings.showGrab(i, pieces),
+  onDrag: (move, steps) => rings.showDrag(move, steps),
 });
 const onMapClick = (i: number) => {
   if (mode === 'paint') paintSticker(i);
@@ -56,6 +60,8 @@ const rings = new RingView($('#rings'), {
   onClick: (i) => { if (mode === 'paint') paintSticker(i); },
   onTurn: (move) => commitUserMove(move),
   canTurn: () => mode === 'play',
+  onHover: (i) => view.showHover(i),
+  onGrab: (i, pieces) => view.showGrab(i, pieces),
 });
 type MapKind = 'net' | 'rings';
 let mapKind: MapKind = 'net';
