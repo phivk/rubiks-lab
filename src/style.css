@@ -237,6 +237,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .net.editable .cell:hover { stroke: #fff; stroke-width: 10; }
 .net .label { font-size: 42px; font-weight: 700; fill: rgba(0, 0, 0, 0.5); stroke: none; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .net .cell.bad { animation: pulse 1.2s ease-in-out 2; }
+/* during a turn, a sticker's place shows empty while copies slide over it */
+.net .cell.slot { visibility: hidden; }
+.net .ghost { stroke: rgba(0, 0, 0, 0.35); stroke-width: 4; stroke-linejoin: round; pointer-events: none; }
 /* in turn mode, stickers (and ring dots) are dragged to turn; touch-action keeps a phone from scrolling instead */
 .net:not(.editable) .cell { cursor: grab; touch-action: none; }
 .net svg.dragging, .net svg.dragging .cell { cursor: grabbing; }

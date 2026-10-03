@@ -94,6 +94,7 @@ async function runQueue() {
     // speed up when the queue backs up so input never feels laggy
     const hurry = queue.length > 2 ? 0.45 : queue.length > 0 ? 0.75 : 1;
     const turn = puzzle.parseMove(job.move)!;
+    net.animateTurn(turn, next, job.duration * hurry);
     rings.animateTurn(turn, next, job.duration * hurry);
     await view.animateTurn(turn, next, job.duration * hurry);
     const wasSolved = puzzle.isSolved(session.state);
