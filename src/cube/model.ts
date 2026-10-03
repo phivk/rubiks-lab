@@ -23,6 +23,7 @@
 import { COLOR_NAMES } from '../core/colors';
 import { parity } from '../core/perm';
 import type { State, Validation, Vec3 } from '../core/types';
+import { cross, dot } from '../core/vec';
 
 export const UNSET = 6;
 export const FACES = 'URFDLB';
@@ -69,8 +70,6 @@ export interface Orbit {
 }
 
 const MOVE_RE = /^([1-9]\d*)?([URFDLBMESurfdlbxyz])(w?)(2'|2|'|)$/;
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const mod = (a: number, n: number) => ((a % n) + n) % n;
 
 /** Rotate an integer vector by quarter turns (+ = counter-clockwise, right-hand rule) about an axis. */

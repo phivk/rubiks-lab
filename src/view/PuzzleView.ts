@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { DragOption, Puzzle, State, Turn, Vec3 } from '../core/types';
-import { ringsOf } from './rings';
+import { easeInOut, easeOut, turnDuration } from './anim';
+import { litStickers, ringsOf } from './map';
 
 export type Mode = 'play' | 'paint';
 
@@ -19,9 +20,6 @@ export interface PuzzleViewEvents {
   /** a drag has turned the layer `steps` of the way through `move` (one step), or ended (null) */
   onDrag: (move: string | null, steps: number) => void;
 }
-
-const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 
 /** How bright the stickers outside the held rings stay. */
 const DIM = 0.4;
@@ -89,6 +87,8 @@ export class PuzzleView {
   private state: State = [];
   private highlighted = new Set<number>();
   private hovered = -1;
+  /** the latest mouse move to look under, once this frame */
+  private hoverAt: PointerEvent | null = null;
   /** the sticker under the pointer in the ring view */
   private linkedHover = -1;
   /** the sticker pressed here or in the ring view, and the stickers of its rings */
@@ -154,7 +154,10 @@ export class PuzzleView {
     el.addEventListener('pointermove', this.onPointerMove);
     el.addEventListener('pointerup', this.onPointerUp);
     el.addEventListener('pointercancel', this.onPointerUp);
-    el.addEventListener('pointerleave', () => this.setHover(-1));
+    el.addEventListener('pointerleave', () => {
+      this.hoverAt = null;
+      this.setHover(-1);
+    });
     this.outline.visible = false;
 
     new ResizeObserver(() => this.resize()).observe(container);
@@ -258,9 +261,7 @@ export class PuzzleView {
    */
   showGrab(i: number, pieces?: number[]) {
     this.held = i;
-    const map = this.puzzle.rings;
-    const rings = i >= 0 && map ? ringsOf(this.puzzle, i, pieces) : [];
-    this.lit = rings.length ? new Set(rings.flatMap((r) => map!.circles[r].stickers)) : null;
+    this.lit = litStickers(this.puzzle, ringsOf(this.puzzle, i, pieces));
     this.refreshColors();
     this.refreshOutline();
   }
@@ -353,8 +354,7 @@ export class PuzzleView {
     }
     const puzzle = this.puzzle;
     this.beginLayer(turn.pieces);
-    const big = Math.abs(turn.angle) > Math.PI * 0.75;
-    await this.tweenAngle(new THREE.Vector3(...turn.axis), 0, turn.angle, duration * (big ? 1.35 : 1));
+    await this.tweenAngle(new THREE.Vector3(...turn.axis), 0, turn.angle, turnDuration(turn, duration));
     if (puzzle !== this.puzzle) return;
     this.endLayer();
     this.setState(after);
@@ -365,6 +365,9 @@ export class PuzzleView {
   }
 
   private tick = (now: number) => {
+    // one raycast a frame for hover, however fast the mouse reports
+    if (this.hoverAt && !this.drag) this.setHover(this.pick(this.hoverAt)?.sticker ?? -1);
+    this.hoverAt = null;
     if (this.anim) {
       const a = this.anim;
       const t = Math.min(1, (now - a.start) / a.duration);
@@ -453,7 +456,9 @@ export class PuzzleView {
     const d = this.drag;
     if (!d || d.pointerId !== e.pointerId) {
       // not while orbiting, so the stickers sweeping past don't light up
-      if (e.pointerType === 'mouse') this.setHover(e.buttons ? -1 : this.pick(e)?.sticker ?? -1);
+      if (e.pointerType !== 'mouse') return;
+      this.hoverAt = e.buttons ? null : e;
+      if (e.buttons) this.setHover(-1);
       return;
     }
     if (!d.isTurn) return;

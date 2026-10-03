@@ -15,6 +15,9 @@ import { FACES, type CubeModel } from './model';
 
 type P = [number, number];
 
+/** How far round from angle `from` to angle `to`, going toward growing angle: 0 to 2π. */
+export const ccw = (from: number, to: number) => (((to - from) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+
 // Where each axis's circles are centered, as angles on the triangle (SVG's y points down):
 // y (U/D) at the top, x (R/L) bottom right, z (F/B) bottom left.
 const CENTER_ANGLE = [30, -90, 150];
@@ -55,7 +58,7 @@ export function ringMap(M: CubeModel): RingMap {
       const perm = M.permutation(turn(1));
       const angle = (i: number) => Math.atan2(points[i][1] - cy, points[i][0] - cx);
       const moved = stickers.filter((d) => perm[d] !== d);
-      const mean = moved.reduce((sum, d) => sum + ((((angle(d) - angle(perm[d])) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)), 0) / moved.length;
+      const mean = moved.reduce((sum, d) => sum + ccw(angle(perm[d]), angle(d)), 0) / moved.length;
       // the outer layers are faces; of the inner ones, only the 3×3's M, E and S have a short name
       const name = M.moveName(turn(1))!.replace(/'$/, '');
       const face = FACES.indexOf(name);

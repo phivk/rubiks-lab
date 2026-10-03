@@ -12,6 +12,8 @@ export interface Turn {
   axis: Vec3;
   pieces: number[];
   angle: number;
+  /** the smallest turn of this kind, in radians (a quarter turn on a cube); `angle` is a whole number of them */
+  step: number;
   /** perm[dest] = src */
   perm: number[];
 }

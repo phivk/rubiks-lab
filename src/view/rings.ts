@@ -1,67 +1,25 @@
 import type { Puzzle, State, Turn } from '../core/types';
-
-const SVG = 'http://www.w3.org/2000/svg';
-// Same scale as the net, so text and strokes size alike.
-const UNIT = 100;
-
-const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
-
-/** How far the pointer moves before a drag picks a ring, in CSS pixels. */
-const DRAG_START = 8;
-
-export interface RingHandlers {
-  onClick: (index: number) => void;
-  /** a dot was dragged along one of its rings */
-  onTurn: (move: string) => void;
-  canTurn: () => boolean;
-  /** the mouse moved onto a dot, or off them all (-1) */
-  onHover: (index: number) => void;
-  /** a dot was pressed to drag (`pieces` once the drag picked a layer), or let go (-1) */
-  onGrab: (index: number, pieces?: number[]) => void;
-}
-
-/** The circles a sticker sits on; given the pieces of a turning layer, only that layer's. */
-export function ringsOf(puzzle: Puzzle, sticker: number, pieces?: number[]): number[] {
-  const turning = pieces && new Set(pieces);
-  return (puzzle.rings?.circles ?? []).flatMap((c, i) =>
-    c.stickers.includes(sticker) && (!turning || c.stickers.every((s) => turning.has(puzzle.stickers[s].piece))) ? [i] : [],
-  );
-}
+import { ccw } from '../cube/rings';
+import { turnDuration } from './anim';
+import { MapView, SVG, UNIT, ringsOf } from './map';
 
 /**
  * The ring map of a puzzle (see `src/cube/rings.ts`): dots slide along a layer's circle as
  * it turns. Dragging a dot along one of its two circles turns that layer a quarter turn.
  */
-export class RingView {
-  private dots: SVGCircleElement[] = [];
+export class RingView extends MapView {
   private rings: SVGCircleElement[] = [];
   private labels: (SVGGElement | undefined)[] = [];
-  private puzzle!: Puzzle;
-  private frame = 0;
-  private finish: (() => void) | null = null;
-  /** a pressed dot, held until the pointer lets go; `turned` once it has turned its layer */
-  private drag: { pointer: number; dot: number; x: number; y: number; turned: boolean } | null = null;
-  /** dots pulled off their places by a drag in the 3D view */
-  private dragging = false;
-  /** the dot under the pointer, here or in the 3D view */
-  private hovered = -1;
-  /** the dot pressed, here or in the 3D view, and the circles lit for it */
-  private held = -1;
-  private lit: number[] = [];
-
-  constructor(private container: HTMLElement, private handlers: RingHandlers) {}
+  /** dots pulled off their places by a drag in the 3D view, and how they move */
+  private drawn: { move: string; paths: Path[]; destOf: number[]; moving: number[]; turning: number[] } | null = null;
 
   setPuzzle(puzzle: Puzzle) {
-    this.stop();
-    this.drag = null;
-    this.hovered = -1;
-    this.held = -1;
-    this.lit = [];
-    this.dragging = false;
+    this.reset();
+    this.drawn = null;
     this.puzzle = puzzle;
     const map = puzzle.rings;
     if (!map) {
-      this.dots = [];
+      this.cells = [];
       this.rings = [];
       this.labels = [];
       this.container.replaceChildren();
@@ -80,16 +38,13 @@ export class RingView {
       svg.append(el);
       return el;
     });
-    this.dots = map.points.map(([x, y], i) => {
+    this.cells = map.points.map(([x, y], i) => {
       const el = document.createElementNS(SVG, 'circle');
       el.setAttribute('cx', String(x * UNIT));
       el.setAttribute('cy', String(y * UNIT));
       el.setAttribute('r', String(map.dot * UNIT));
       el.setAttribute('class', 'cell');
-      el.addEventListener('click', () => this.handlers.onClick(i));
-      el.addEventListener('pointerdown', (e) => this.startDrag(e, i));
-      el.addEventListener('pointerenter', (e) => this.hover(e, i));
-      el.addEventListener('pointerleave', (e) => this.hover(e, -1));
+      this.listen(el, i);
       svg.append(el);
       return el;
     });
@@ -117,94 +72,47 @@ export class RingView {
       svg.append(g);
       return g;
     });
-    svg.addEventListener('pointermove', (e) => this.moveDrag(e));
-    svg.addEventListener('pointerup', () => this.endDrag());
-    svg.addEventListener('pointercancel', () => this.endDrag());
+    this.listenDrags(svg);
     this.container.replaceChildren(svg);
   }
 
-  /** Outline the dot of a sticker the pointer is on in the 3D view (-1 for none). */
-  showHover(dot: number) {
-    this.hovered = dot;
-    this.refreshFocus();
-  }
-
-  /** Outline a pressed dot and light the circles it sits on (or only the one that turns `pieces`); -1 lets go. */
-  showGrab(dot: number, pieces?: number[]) {
-    this.held = dot;
-    this.lit = dot >= 0 ? ringsOf(this.puzzle, dot, pieces) : [];
-    this.refreshFocus();
-  }
-
-  private refreshFocus() {
-    const outlined = this.held >= 0 ? this.held : this.hovered;
-    this.dots.forEach((d, i) => d.classList.toggle('hover', i === outlined));
-    // like the 3D view, everything off the held rings dims
-    const on = new Set(this.lit.flatMap((r) => this.puzzle.rings!.circles[r].stickers));
-    const dim = this.lit.length > 0;
-    this.dots.forEach((d, i) => d.classList.toggle('dim', dim && !on.has(i)));
+  protected refreshDim() {
+    super.refreshDim();
+    const dim = this.litRings.length > 0;
     this.rings.forEach((r, i) => {
-      r.classList.toggle('grabbed', this.lit.includes(i));
-      r.classList.toggle('dim', dim && !this.lit.includes(i));
-      this.labels[i]?.classList.toggle('dim', dim && !this.lit.includes(i));
+      const on = this.litRings.includes(i);
+      r.classList.toggle('grabbed', on);
+      r.classList.toggle('dim', dim && !on);
+      this.labels[i]?.classList.toggle('dim', dim && !on);
     });
   }
 
-  private hover(e: PointerEvent, dot: number) {
-    // a touch has no hover, and a drag holds its dot
-    if (e.pointerType !== 'mouse' || this.drag) return;
-    this.showHover(dot);
-    this.handlers.onHover(dot);
-  }
-
-  private startDrag(e: PointerEvent, dot: number) {
-    if (!this.handlers.canTurn() || this.drag) return;
-    this.drag = { pointer: e.pointerId, dot, x: e.clientX, y: e.clientY, turned: false };
-    const svg = (e.currentTarget as Element).closest('svg')!;
-    svg.setPointerCapture(e.pointerId);
-    svg.classList.add('dragging');
-    this.showGrab(dot);
-    this.handlers.onGrab(dot);
-  }
-
-  /** Once the pointer has moved far enough, turn the circle it's moving along. */
-  private moveDrag(e: PointerEvent) {
-    const d = this.drag;
-    if (!d || d.turned || e.pointerId !== d.pointer) return;
-    const dx = e.clientX - d.x, dy = e.clientY - d.y;
-    if (Math.hypot(dx, dy) < DRAG_START) return;
+  /** The circle a dot is dragged along, whichever of its two the drag follows most closely. */
+  protected pickTurn(dot: number, dx: number, dy: number) {
     const map = this.puzzle.rings!;
-    const [px, py] = map.points[d.dot];
+    const [px, py] = map.points[dot];
     // the screen and the map share their axes, so the drag's direction can be compared as is
     let best = { along: 0, circle: -1 };
-    for (const i of ringsOf(this.puzzle, d.dot)) {
+    for (const i of ringsOf(this.puzzle, dot)) {
       const c = map.circles[i];
       const a = Math.atan2(py - c.cy, px - c.cx);
       // the tangent toward growing angle
       const along = (-Math.sin(a) * dx + Math.cos(a) * dy) / Math.hypot(dx, dy);
       if (Math.abs(along) > Math.abs(best.along)) best = { along, circle: i };
     }
-    // one turn per press; the dot stays held, lighting only its turning ring, until let go
-    d.turned = true;
-    if (!best.along) return;
+    if (!best.along) return null;
     const c = map.circles[best.circle];
     const move = c.move(Math.sign(best.along) * c.sense);
-    const pieces = this.puzzle.parseMove(move)!.pieces;
-    this.showGrab(d.dot, pieces);
-    this.handlers.onGrab(d.dot, pieces);
-    this.handlers.onTurn(move);
-  }
-
-  private endDrag() {
-    if (!this.drag) return;
-    this.drag = null;
-    this.container.querySelector('svg')?.classList.remove('dragging');
-    this.showGrab(-1);
-    this.handlers.onGrab(-1);
+    return { move, pieces: this.puzzle.parseMove(move)!.pieces };
   }
 
   update(state: State) {
-    state.forEach((c, i) => this.dots[i]?.style.setProperty('fill', this.puzzle.colors[c]));
+    state.forEach((c, i) => this.cells[i]?.style.setProperty('fill', this.puzzle.colors[c]));
+  }
+
+  private place(i: number, [x, y]: [number, number]) {
+    this.cells[i].setAttribute('cx', String(x * UNIT));
+    this.cells[i].setAttribute('cy', String(y * UNIT));
   }
 
   /**
@@ -214,41 +122,40 @@ export class RingView {
   showDrag(move: string | null, steps: number) {
     const map = this.puzzle.rings;
     if (!map) return;
-    this.stop();
-    if (!move) {
+    if (!move || !this.visible) {
       this.settle();
       return;
     }
     if (steps < 0) [move, steps] = [this.puzzle.invertMove(move), -steps];
-    const turn = this.puzzle.parseMove(move);
-    if (!turn) return;
-    const { paths, turning } = this.paths(turn);
-    this.dragging = true;
-    this.rings.forEach((r, i) => r.classList.toggle('turning', turning.includes(i)));
-    // where each sticker goes: the dot showing it follows its path there, a step at a time
-    const destOf: number[] = [];
-    turn.perm.forEach((src, dest) => (destOf[src] = dest));
+    if (this.drawn?.move !== move) {
+      this.stop();
+      this.settle();
+      const turn = this.puzzle.parseMove(move);
+      if (!turn) return;
+      const { paths, turning } = this.paths(turn);
+      // where each sticker goes: the dot showing it follows its path there, a step at a time
+      const destOf: number[] = [];
+      turn.perm.forEach((src, dest) => (destOf[src] = dest));
+      const moving = destOf.flatMap((d, i) => (d === i ? [] : [i]));
+      for (const i of turning) this.rings[i].classList.add('turning');
+      this.drawn = { move, paths, destOf, moving, turning };
+    }
+    const { paths, destOf, moving } = this.drawn;
     const whole = Math.floor(steps);
-    this.dots.forEach((el, i) => {
+    for (const i of moving) {
       let at = i;
       for (let k = 0; k < whole; k++) at = destOf[at];
-      const next = destOf[at];
-      const [x, y] = next === at ? map.points[at] : paths[next](steps - whole);
-      el.setAttribute('cx', String(x * UNIT));
-      el.setAttribute('cy', String(y * UNIT));
-    });
+      this.place(i, paths[destOf[at]](steps - whole));
+    }
   }
 
-  /** Put every dot back on its place after a drag in the 3D view. */
+  /** Put the dots a drag in the 3D view moved back on their places. */
   private settle() {
-    if (!this.dragging) return;
-    this.dragging = false;
+    if (!this.drawn) return;
     const map = this.puzzle.rings!;
-    this.dots.forEach((el, i) => {
-      el.setAttribute('cx', String(map.points[i][0] * UNIT));
-      el.setAttribute('cy', String(map.points[i][1] * UNIT));
-    });
-    for (const r of this.rings) r.classList.remove('turning');
+    for (const i of this.drawn.moving) this.place(i, map.points[i]);
+    for (const i of this.drawn.turning) this.rings[i].classList.remove('turning');
+    this.drawn = null;
   }
 
   /**
@@ -265,7 +172,6 @@ export class RingView {
     for (const c of turning) for (const s of c.stickers) onRing.set(s, c);
 
     const angle = (c: { cx: number; cy: number }, i: number) => Math.atan2(map.points[i][1] - c.cy, map.points[i][0] - c.cx);
-    const ccw = (from: number, to: number) => (((to - from) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
     // every dot on a ring goes the same way round: whichever way is shorter on average
     const way = new Map(turning.map((c) => {
       const moved = c.stickers.filter((d) => turn.perm[d] !== d);
@@ -273,7 +179,7 @@ export class RingView {
       return [c, mean > Math.PI ? -1 : 1];
     }));
 
-    const paths: ((t: number) => [number, number])[] = [];
+    const paths: Path[] = [];
     turn.perm.forEach((src, dest) => {
       if (src === dest) return;
       const c = onRing.get(dest);
@@ -296,46 +202,16 @@ export class RingView {
     this.stop();
     this.settle();
     this.update(next);
+    if (!this.visible) return;
     const { paths, turning } = this.paths(turn);
     for (const i of turning) this.rings[i].classList.add('turning');
-    const place = (t: number) => {
-      paths.forEach((path, i) => {
-        const [x, y] = path(t);
-        this.dots[i].setAttribute('cx', String(x * UNIT));
-        this.dots[i].setAttribute('cy', String(y * UNIT));
-      });
-    };
+    const place = (t: number) => paths.forEach((path, i) => this.place(i, path(t)));
     this.finish = () => {
       place(1);
       for (const i of turning) this.rings[i].classList.remove('turning');
     };
-    const start = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration);
-      if (t < 1) {
-        place(ease(t));
-        this.frame = requestAnimationFrame(tick);
-      } else this.stop();
-    };
-    place(0);
-    this.frame = requestAnimationFrame(tick);
-  }
-
-  /** Jump a running animation to its end. */
-  private stop() {
-    cancelAnimationFrame(this.frame);
-    this.finish?.();
-    this.finish = null;
-  }
-
-  flash(indices: number[]) {
-    for (const i of indices) {
-      const c = this.dots[i];
-      if (!c) continue;
-      c.classList.remove('bad');
-      void c.getBoundingClientRect();
-      c.classList.add('bad');
-    }
-    setTimeout(() => indices.forEach((i) => this.dots[i]?.classList.remove('bad')), 2600);
+    this.play(turnDuration(turn, duration), place);
   }
 }
+
+type Path = (t: number) => [number, number];

@@ -41,31 +41,31 @@ const SPEEDS = [0.35, 0.6, 1, 1.7, 3];
 let speed = 1;
 const BASE_MS = 340;
 
-const view = new PuzzleView($('#stage'), {
+// every view shows the sticker under the pointer and the layers being turned, wherever that happens
+type Linked = { showHover: (i: number) => void; showGrab: (i: number, pieces?: number[]) => void };
+const others = (self: Linked) => [view, ...maps].filter((v) => v !== self);
+const link = (self: () => Linked) => ({
+  onHover: (i: number) => others(self()).forEach((v) => v.showHover(i)),
+  onGrab: (i: number, pieces?: number[]) => others(self()).forEach((v) => v.showGrab(i, pieces)),
+});
+
+const view: PuzzleView = new PuzzleView($('#stage'), {
   onDragTurn: (move) => commitUserMove(move, false),
   onStickerClick: (i) => paintSticker(i),
   canDragTurn: () => queue.length === 0 && !running,
-  // the maps mirror the sticker under the pointer and the layers being turned
-  onHover: (i) => { net.showHover(i); rings.showHover(i); },
-  onGrab: (i, pieces) => { net.showGrab(i, pieces); rings.showGrab(i, pieces); },
-  onDrag: (move, steps) => { net.showDrag(move, steps); rings.showDrag(move, steps); },
+  ...link(() => view),
+  onDrag: (move, steps) => maps.forEach((m) => m.showDrag(move, steps)),
 });
 // on the maps, dragging a sticker turns its layer, so tapping only paints
-const onMapClick = (i: number) => { if (mode === 'paint') paintSticker(i); };
-const net = new NetView($('#net'), {
-  onClick: onMapClick,
-  onTurn: (move) => commitUserMove(move),
+const mapHandlers = (self: () => Linked) => ({
+  onClick: (i: number) => { if (mode === 'paint') paintSticker(i); },
+  onTurn: (move: string) => commitUserMove(move),
   canTurn: () => mode === 'play',
-  onHover: (i) => { view.showHover(i); rings.showHover(i); },
-  onGrab: (i, pieces) => { view.showGrab(i, pieces); rings.showGrab(i, pieces); },
+  ...link(self),
 });
-const rings = new RingView($('#rings'), {
-  onClick: onMapClick,
-  onTurn: (move) => commitUserMove(move),
-  canTurn: () => mode === 'play',
-  onHover: (i) => { view.showHover(i); net.showHover(i); },
-  onGrab: (i, pieces) => { view.showGrab(i, pieces); net.showGrab(i, pieces); },
-});
+const net: NetView = new NetView($('#net'), mapHandlers(() => net));
+const rings: RingView = new RingView($('#rings'), mapHandlers(() => rings));
+const maps = [net, rings];
 type MapKind = 'net' | 'rings';
 let mapKind: MapKind = 'net';
 try { if (localStorage.getItem('map') === 'rings') mapKind = 'rings'; } catch { /* storage unavailable */ }
@@ -94,8 +94,7 @@ async function runQueue() {
     // speed up when the queue backs up so input never feels laggy
     const hurry = queue.length > 2 ? 0.45 : queue.length > 0 ? 0.75 : 1;
     const turn = puzzle.parseMove(job.move)!;
-    net.animateTurn(turn, next, job.duration * hurry);
-    rings.animateTurn(turn, next, job.duration * hurry);
+    maps.forEach((m) => m.animateTurn(turn, next, job.duration * hurry));
     await view.animateTurn(turn, next, job.duration * hurry);
     const wasSolved = puzzle.isSolved(session.state);
     session.state = next;
@@ -201,8 +200,7 @@ async function switchPuzzle(p: Puzzle) {
   });
   document.body.dataset.puzzle = p.id;
   view.setPuzzle(p, session.state);
-  net.setPuzzle(p);
-  rings.setPuzzle(p);
+  maps.forEach((m) => m.setPuzzle(p));
   renderMapKind();
   buildMovepad();
   ($('#alg-input') as HTMLInputElement).placeholder = p.algPlaceholder;
@@ -279,11 +277,11 @@ async function startSolve() {
   }
   const v = puzzle.validate(session.state);
   if (!v.ok) {
-    if (v.stickers) {
-      view.setHighlight(v.stickers);
+    const bad = v.stickers;
+    if (bad) {
+      view.setHighlight(bad);
       view.flashHighlight();
-      net.flash(v.stickers);
-      rings.flash(v.stickers);
+      maps.forEach((m) => m.flash(bad));
     }
     toast(v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message, 'bad');
     if (mode !== 'paint') setMode('paint');
@@ -412,8 +410,7 @@ function renderMapKind() {
 }
 
 function onStateChanged() {
-  net.update(session.state);
-  rings.update(session.state);
+  maps.forEach((m) => m.update(session.state));
   renderStatus();
   $('#solved-badge').classList.toggle('hidden', !puzzle.isSolved(session.state));
   if (mode === 'paint') renderPalette();

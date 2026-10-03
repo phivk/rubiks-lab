@@ -65,6 +65,7 @@ function makeCube(M: CubeModel, { wide }: { wide: boolean }): Shared {
     axis: unit(t.axis),
     pieces: layerPieces(t.axis, t.layers),
     angle: (t.quarters * Math.PI) / 2,
+    step: Math.PI / 2,
     perm: M.permutation(t),
   });
   const zoom = (n + 1) / 4;
