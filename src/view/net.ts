@@ -89,6 +89,8 @@ export class NetView {
   private dirs: { option: DragOption; dir: V2 }[][] = [];
   private frame = 0;
   private finish: (() => void) | null = null;
+  /** stickers slid along by a drag in the 3D view */
+  private dragging: { move: string; count: number; place: (steps: number) => void } | null = null;
   /** a pressed sticker, held until the pointer lets go; `turned` once it has turned its layer */
   private drag: { pointer: number; sticker: number; x: number; y: number; turned: boolean } | null = null;
   /** the sticker under the pointer, here or in another view */
@@ -320,6 +322,28 @@ export class NetView {
   }
 
   /**
+   * Follow a drag in the 3D view: slide the stickers `steps` of the way through `move` (one
+   * step of it, maybe fractional or negative), or back to their places (null).
+   */
+  showDrag(move: string | null, steps: number) {
+    if (!move || this.container.classList.contains('hidden')) {
+      if (this.dragging) this.stop();
+      return;
+    }
+    if (steps < 0) [move, steps] = [this.puzzle.invertMove(move), -steps];
+    // copies for as many steps as the drag has gone round
+    const count = Math.max(1, Math.ceil(steps));
+    if (!this.dragging || this.dragging.move !== move || this.dragging.count < count) {
+      this.stop();
+      const turn = this.puzzle.parseMove(move);
+      const place = turn && this.slide(turn, turn.angle, count, this.state);
+      if (!place) return;
+      this.dragging = { move, count, place };
+    }
+    this.dragging.place(steps);
+  }
+
+  /**
    * Lay copies of the turning stickers over their places, showing `before`, and return how
    * to place them a number of `step`s into the turn, up to `count`. Unfolded around a face,
    * a turn moves the part of its layer on that face rigidly: a strip shifts across it (each
@@ -424,6 +448,7 @@ export class NetView {
     cancelAnimationFrame(this.frame);
     this.finish?.();
     this.finish = null;
+    this.dragging = null;
   }
 
   flash(indices: number[]) {

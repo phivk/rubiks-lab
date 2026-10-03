@@ -48,7 +48,7 @@ const view = new PuzzleView($('#stage'), {
   // the maps mirror the sticker under the pointer and the layers being turned
   onHover: (i) => { net.showHover(i); rings.showHover(i); },
   onGrab: (i, pieces) => { net.showGrab(i, pieces); rings.showGrab(i, pieces); },
-  onDrag: (move, steps) => rings.showDrag(move, steps),
+  onDrag: (move, steps) => { net.showDrag(move, steps); rings.showDrag(move, steps); },
 });
 // on the maps, dragging a sticker turns its layer, so tapping only paints
 const onMapClick = (i: number) => { if (mode === 'paint') paintSticker(i); };
