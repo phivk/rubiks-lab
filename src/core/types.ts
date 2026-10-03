@@ -12,6 +12,8 @@ export interface Turn {
   axis: Vec3;
   pieces: number[];
   angle: number;
+  /** the smallest turn of this kind, in radians (a quarter turn on a cube); `angle` is a whole number of them */
+  step: number;
   /** perm[dest] = src */
   perm: number[];
 }
@@ -28,6 +30,32 @@ export interface StickerDef {
   net: [number, number][];
   /** optional label drawn on the map (e.g. face letters on 3x3 centers) */
   netLabel?: string;
+}
+
+/** A second map: each layer a circle, each sticker a dot where its layers' circles cross. In map units. */
+export interface RingMap {
+  circles: {
+    cx: number;
+    cy: number;
+    r: number;
+    stickers: number[];
+    /** names the move that turns this layer by some quarter turns */
+    move: (quarters: number) => string;
+    /** 1 if a +1 quarter turn carries the dots toward growing angle (clockwise on screen), else -1 */
+    sense: 1 | -1;
+    /** the layer's name, if it's short enough to draw */
+    label?: string;
+    /** the face this layer turns with, if it's an outer layer */
+    face?: number;
+    labelAt: [number, number];
+  }[];
+  /** dot center per sticker */
+  points: [number, number][];
+  /** dot radius */
+  dot: number;
+  /** radius of a ring's label */
+  labelSize: number;
+  size: [number, number];
 }
 
 /** One way a grabbed sticker can turn. `toMove(steps)` names the move for a number of `step`-sized right-hand rotations. */
@@ -71,6 +99,7 @@ export interface Puzzle {
   /** point the camera orbits around */
   cameraTarget: Vec3;
   netSize: [number, number];
+  rings?: RingMap;
 
   solved: () => State;
   isSolved: (s: State) => boolean;

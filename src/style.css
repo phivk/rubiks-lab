@@ -192,8 +192,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .alg-error:empty { display: none; }
 
 .history {
-  display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; max-height: 96px; overflow-y: auto;
-  font-family: var(--mono); font-size: 12px;
+  /* four rows of 22px moves fit before it scrolls */
+  display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; max-height: 100px; overflow-y: auto;
+  font-family: var(--mono); font-size: 12px; line-height: 18px;
 }
 .history > .muted { font-family: Inter, sans-serif; }
 .history .h { padding: 2px 6px; border-radius: 5px; background: var(--chip); color: var(--text-2); }
@@ -225,7 +226,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   border-radius: 12px;
   border: 1px solid var(--line);
 }
-.net svg { width: 100%; max-width: 290px; height: auto; display: block; overflow: visible; }
+/* user-select: dragging across the map shouldn't select its labels */
+.net svg { width: 100%; max-width: 290px; height: auto; display: block; overflow: visible; -webkit-user-select: none; user-select: none; }
 .net .cell {
   stroke: rgba(0, 0, 0, 0.35); stroke-width: 4; stroke-linejoin: round;
   transition: fill 0.2s, stroke 0.12s;
@@ -235,6 +237,35 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .net.editable .cell:hover { stroke: #fff; stroke-width: 10; }
 .net .label { font-size: 42px; font-weight: 700; fill: rgba(0, 0, 0, 0.5); stroke: none; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .net .cell.bad { animation: pulse 1.2s ease-in-out 2; }
+/* during a turn, a sticker's place shows empty while copies slide over it */
+.net .cell.slot { visibility: hidden; }
+.net .ghost { stroke: rgba(0, 0, 0, 0.35); stroke-width: 4; stroke-linejoin: round; pointer-events: none; }
+/* in turn mode, stickers (and ring dots) are dragged to turn; touch-action keeps a phone from scrolling instead */
+.net:not(.editable) .cell { cursor: grab; touch-action: none; }
+.net svg.dragging, .net svg.dragging .cell { cursor: grabbing; }
+/* pressing a sticker dims all but its layers' stickers, as the 3D view does */
+.net .dim { opacity: 0.4; }
+/* set from any view, so the 3D cube and the maps show the same sticker */
+.net .cell.hover { stroke: rgba(255, 255, 255, 0.7); }
+.label-row:has(.map-tools) { align-items: center; }
+.map-tools { display: flex; align-items: center; gap: 10px; }
+.map-switch { display: inline-flex; gap: 2px; padding: 2px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 8px; }
+.map-switch button { background: none; border: 0; border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 11px; font-weight: 600; color: var(--text-3); cursor: pointer; }
+.map-switch button:hover { color: var(--text); }
+.map-switch button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); }
+.map-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rings .ring { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 5; transition: stroke 0.15s; }
+.rings .ring.grabbed { stroke: rgba(255, 255, 255, 0.32); }
+.rings .ring.turning { stroke: rgba(255, 255, 255, 0.55); }
+.rings .cell { stroke-width: 3.5; }
+/* a turn hands each dot its sticker's new color as it moves, so a fill fade would flash the old one */
+.rings:not(.editable) .cell { transition: stroke 0.12s; }
+.rings .ring-label { pointer-events: none; }
+.rings .ring-label rect { stroke: rgba(0, 0, 0, 0.45); stroke-width: 3.5; }
+/* stroke: none undoes the icon stroke every svg gets */
+.rings .ring-label text { font-weight: 700; fill: rgba(0, 0, 0, 0.72); stroke: none; text-anchor: middle; dominant-baseline: central; }
+.rings .ring-label.slice rect { fill: #2a2e38; stroke: rgba(255, 255, 255, 0.22); }
+.rings .ring-label.slice text { fill: var(--text); }
 @keyframes pulse { 50% { stroke: var(--bad); stroke-width: 16; } }
 
 .status {

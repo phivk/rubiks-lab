@@ -18,6 +18,7 @@
 
 import { parity } from '../core/perm';
 import type { State, Vec3 } from '../core/types';
+import { cross, dot } from '../core/vec';
 import { CubeModel, type Orbit, type Slot } from './model';
 
 interface Cycles {
@@ -38,8 +39,6 @@ const cycleKey = (a: number, b: number, c: number) => {
 
 const cube3Model = new CubeModel(3);
 
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 export class Reducer {
   /** one per orbit outside the 3×3 */

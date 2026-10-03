@@ -3,6 +3,7 @@ import { CORNER_FACELETS, EDGE_FACELETS, initSolver, solve } from '../src/cube/k
 import type { Vec3 } from '../src/core/types';
 import { CubeModel, FACES } from '../src/cube/model';
 import { Reducer } from '../src/cube/reduce';
+import { ringMap } from '../src/cube/rings';
 import { Solver2 } from '../src/cube/solve2';
 
 function fail(msg: string): never {
@@ -56,6 +57,20 @@ for (const n of [2, 3, 4, 5]) {
     }
   }
   console.log(`✓ ${n}×${n}: ${M.size} stickers, moves are permutations, every single layer is named`);
+
+  // ring map: every dot is drawn, and turning a layer slides every dot on its circle the same number of places
+  const rings = ringMap(M);
+  if (rings.points.some((p) => p.some(Number.isNaN))) fail(`${n}: ring map has a sticker where its circles don't cross`);
+  for (const c of rings.circles) {
+    const angle = (i: number) => Math.atan2(rings.points[i][1] - c.cy, rings.points[i][0] - c.cx);
+    const order = c.stickers.slice().sort((a, b) => angle(a) - angle(b));
+    const f = M.facelets[c.stickers[0]];
+    const axis = [0, 1, 2].find((a) => c.stickers.every((i) => M.facelets[i].normal[a] === 0)) as 0 | 1 | 2;
+    const perm = M.permutation({ axis, layers: [f.pos[axis]], quarters: 1 });
+    const k = order.length;
+    if (new Set(order.map((dest, i) => (order.indexOf(perm[dest]) - i + k) % k)).size !== 1) fail(`${n}: ring ${axis}/${f.pos[axis]} is out of order`);
+  }
+  console.log(`✓ ${n}×${n}: ring map has every layer's stickers in order around its circle`);
 
   // orbits: the expected shapes, covering every sticker, and moves keep each orbit's sticker order
   if (M.orbits.map((o) => o.slots.length).join() !== ORBITS[n].join()) fail(`${n}: orbits ${M.orbits.map((o) => o.slots.length)}`);

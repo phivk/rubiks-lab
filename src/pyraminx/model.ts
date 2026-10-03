@@ -199,7 +199,7 @@ export function parseMove(move: string): Turn | null {
     const pieces = m[1] === m[1].toUpperCase() ? bigLayer(v) : [TIP(v)];
     // clockwise as seen from outside, looking at the vertex
     const angle = ((m[2] ? 1 : -1) * 2 * Math.PI) / 3;
-    t = { axis: AXES[v].toArray() as Vec3, pieces, angle, perm: permutation(v, pieces, angle) };
+    t = { axis: AXES[v].toArray() as Vec3, pieces, angle, step: (2 * Math.PI) / 3, perm: permutation(v, pieces, angle) };
     turnCache.set(key, t);
   }
   return t;

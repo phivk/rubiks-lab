@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { DragOption, Puzzle, State, Turn, Vec3 } from '../core/types';
+import { easeInOut, easeOut, turnDuration } from './anim';
+import { litStickers, ringsOf } from './map';
 
 export type Mode = 'play' | 'paint';
 
@@ -11,34 +13,60 @@ export interface PuzzleViewEvents {
   onStickerClick: (index: number) => void;
   /** return false to prevent drag-turns (e.g. while an animation queue is running) */
   canDragTurn: () => boolean;
+  /** the mouse moved onto a sticker, or off the puzzle (-1) */
+  onHover: (index: number) => void;
+  /** a sticker was pressed to turn its layer (`pieces` once the drag picked one), or let go (-1) */
+  onGrab: (index: number, pieces?: number[]) => void;
+  /** a drag has turned the layer `steps` of the way through `move` (one step), or ended (null) */
+  onDrag: (move: string | null, steps: number) => void;
 }
 
-const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+/** How bright the stickers outside the held rings stay. */
+const DIM = 0.4;
 
-/** A flat polygon with rounded corners, built in world space from a 3D outline. */
-function roundedPolygon(outline: Vec3[], normal: Vec3, radius: number): THREE.BufferGeometry {
+/** A 3D outline laid flat around its middle, and the matrix that puts it back. */
+function flatten(outline: Vec3[], normal: Vec3) {
   const pts = outline.map((p) => new THREE.Vector3(...p));
   const n = new THREE.Vector3(...normal).normalize();
   const origin = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).divideScalar(pts.length);
   const u = pts[1].clone().sub(pts[0]).normalize();
   const v = n.clone().cross(u);
   const flat = pts.map((p) => new THREE.Vector2(p.clone().sub(origin).dot(u), p.clone().sub(origin).dot(v)));
-  const shape = new THREE.Shape();
+  return { flat, matrix: new THREE.Matrix4().makeBasis(u, v, n).setPosition(origin) };
+}
+
+function roundCorners(path: THREE.Path, flat: THREE.Vector2[], radius: number) {
   flat.forEach((p, i) => {
     const prev = flat[(i + flat.length - 1) % flat.length];
     const next = flat[(i + 1) % flat.length];
     const r = Math.min(radius, p.distanceTo(prev) / 2.5, p.distanceTo(next) / 2.5);
     const a = p.clone().add(prev.clone().sub(p).normalize().multiplyScalar(r));
     const b = p.clone().add(next.clone().sub(p).normalize().multiplyScalar(r));
-    if (i === 0) shape.moveTo(a.x, a.y);
-    else shape.lineTo(a.x, a.y);
-    shape.quadraticCurveTo(p.x, p.y, b.x, b.y);
+    if (i === 0) path.moveTo(a.x, a.y);
+    else path.lineTo(a.x, a.y);
+    path.quadraticCurveTo(p.x, p.y, b.x, b.y);
   });
-  shape.closePath();
-  const geo = new THREE.ShapeGeometry(shape, 6);
-  const m = new THREE.Matrix4().makeBasis(u, v, n).setPosition(origin);
-  return geo.applyMatrix4(m);
+  path.closePath();
+}
+
+/** A flat polygon with rounded corners, built in world space from a 3D outline. */
+function roundedPolygon(outline: Vec3[], normal: Vec3, radius: number): THREE.BufferGeometry {
+  const { flat, matrix } = flatten(outline, normal);
+  const shape = new THREE.Shape();
+  roundCorners(shape, flat, radius);
+  return new THREE.ShapeGeometry(shape, 6).applyMatrix4(matrix);
+}
+
+/** A band along a sticker's edge, half on it and half off, lifted just above it. */
+function edgeBand(outline: Vec3[], normal: Vec3, radius: number): THREE.BufferGeometry {
+  const { flat, matrix } = flatten(outline, normal);
+  const scaled = (k: number) => flat.map((p) => p.clone().multiplyScalar(k));
+  const shape = new THREE.Shape();
+  roundCorners(shape, scaled(1.08), radius * 1.08);
+  const hole = new THREE.Path();
+  roundCorners(hole, scaled(0.86), radius * 0.86);
+  shape.holes.push(hole);
+  return new THREE.ShapeGeometry(shape, 6).translate(0, 0, 0.004).applyMatrix4(matrix);
 }
 
 export class PuzzleView {
@@ -59,7 +87,29 @@ export class PuzzleView {
   private state: State = [];
   private highlighted = new Set<number>();
   private hovered = -1;
-  private anim: { axis: THREE.Vector3; from: number; to: number; start: number; duration: number; ease: (t: number) => number; resolve: () => void } | null = null;
+  /** the latest mouse move to look under, once this frame */
+  private hoverAt: PointerEvent | null = null;
+  /** the sticker under the pointer in the ring view */
+  private linkedHover = -1;
+  /** the sticker pressed here or in the ring view, and the stickers of its rings */
+  private held = -1;
+  private lit: Set<number> | null = null;
+  private outline = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
+  );
+  private outlined = -1;
+  private bands = new Map<number, THREE.BufferGeometry>();
+  private anim: {
+    axis: THREE.Vector3;
+    from: number;
+    to: number;
+    start: number;
+    duration: number;
+    ease: (t: number) => number;
+    onAngle?: (angle: number) => void;
+    resolve: () => void;
+  } | null = null;
   private drag: {
     pointerId: number;
     startX: number;
@@ -104,7 +154,11 @@ export class PuzzleView {
     el.addEventListener('pointermove', this.onPointerMove);
     el.addEventListener('pointerup', this.onPointerUp);
     el.addEventListener('pointercancel', this.onPointerUp);
-    el.addEventListener('pointerleave', () => this.setHover(-1));
+    el.addEventListener('pointerleave', () => {
+      this.hoverAt = null;
+      this.setHover(-1);
+    });
+    this.outline.visible = false;
 
     new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
@@ -118,6 +172,12 @@ export class PuzzleView {
     this.anim?.resolve();
     this.anim = null;
     this.endLayer();
+    // the outline is shared: keep it out of the pieces about to be disposed
+    this.outline.removeFromParent();
+    this.outline.visible = false;
+    this.outlined = -1;
+    this.bands.forEach((g) => g.dispose());
+    this.bands.clear();
     for (const g of this.pieces) {
       g.traverse((o) => {
         if (o instanceof THREE.Mesh) {
@@ -151,6 +211,9 @@ export class PuzzleView {
       this.stickers.push(mesh);
     }
     this.hovered = -1;
+    this.linkedHover = -1;
+    this.held = -1;
+    this.lit = null;
     this.highlighted.clear();
     this.setState(state);
     if (first) {
@@ -175,8 +238,53 @@ export class PuzzleView {
 
   setState(state: State) {
     this.state = state.slice();
-    this.stickers.forEach((m, i) => m.material.color.set(this.puzzle.colors[state[i]]));
+    this.refreshColors();
     this.refreshEmissive();
+  }
+
+  private refreshColors() {
+    this.stickers.forEach((m, i) => {
+      m.material.color.set(this.puzzle.colors[this.state[i]]);
+      if (this.lit && !this.lit.has(i)) m.material.color.multiplyScalar(DIM);
+    });
+  }
+
+  /** Outline a sticker the pointer is on in the ring view (-1 for none). */
+  showHover(i: number) {
+    this.linkedHover = i;
+    this.refreshOutline();
+  }
+
+  /**
+   * Outline a pressed sticker and dim everything off the rings it sits in (or only the
+   * ring that turns `pieces`), as the ring view does; -1 lets go.
+   */
+  showGrab(i: number, pieces?: number[]) {
+    this.held = i;
+    this.lit = litStickers(this.puzzle, ringsOf(this.puzzle, i, pieces));
+    this.refreshColors();
+    this.refreshOutline();
+  }
+
+  private grab(i: number, pieces?: number[]) {
+    this.showGrab(i, pieces);
+    this.events.onGrab(i, pieces);
+  }
+
+  private refreshOutline() {
+    const i = this.held >= 0 ? this.held : this.hovered >= 0 ? this.hovered : this.linkedHover;
+    if (i === this.outlined) return;
+    this.outlined = i;
+    const s = this.puzzle.stickers[i];
+    this.outline.visible = !!s;
+    if (!s) return;
+    let band = this.bands.get(i);
+    if (!band) {
+      band = edgeBand(s.outline, s.normal, this.puzzle.stickerCornerRadius);
+      this.bands.set(i, band);
+    }
+    this.outline.geometry = band;
+    this.pieces[s.piece].add(this.outline);
   }
 
   setHighlight(indices: number[]) {
@@ -188,7 +296,14 @@ export class PuzzleView {
     if (i === this.hovered) return;
     this.hovered = i;
     this.refreshEmissive();
-    this.renderer.domElement.style.cursor = i >= 0 && this.mode === 'paint' ? 'crosshair' : '';
+    this.refreshOutline();
+    this.events.onHover(i);
+    this.refreshCursor();
+  }
+
+  /** As on the ring map: grab a sticker to turn, grabbing while held. */
+  private refreshCursor() {
+    this.renderer.domElement.style.cursor = this.drag?.isTurn ? 'grabbing' : this.hovered < 0 ? '' : this.mode === 'paint' ? 'crosshair' : 'grab';
   }
 
   private refreshEmissive() {
@@ -224,9 +339,9 @@ export class PuzzleView {
     this.layerActive = false;
   }
 
-  private tweenAngle(axis: THREE.Vector3, from: number, to: number, duration: number, ease = easeInOut) {
+  private tweenAngle(axis: THREE.Vector3, from: number, to: number, duration: number, ease = easeInOut, onAngle?: (angle: number) => void) {
     return new Promise<void>((resolve) => {
-      this.anim = { axis, from, to, start: performance.now(), duration, ease, resolve };
+      this.anim = { axis, from, to, start: performance.now(), duration, ease, onAngle, resolve };
     });
   }
 
@@ -239,8 +354,7 @@ export class PuzzleView {
     }
     const puzzle = this.puzzle;
     this.beginLayer(turn.pieces);
-    const big = Math.abs(turn.angle) > Math.PI * 0.75;
-    await this.tweenAngle(new THREE.Vector3(...turn.axis), 0, turn.angle, duration * (big ? 1.35 : 1));
+    await this.tweenAngle(new THREE.Vector3(...turn.axis), 0, turn.angle, turnDuration(turn, duration));
     if (puzzle !== this.puzzle) return;
     this.endLayer();
     this.setState(after);
@@ -251,10 +365,15 @@ export class PuzzleView {
   }
 
   private tick = (now: number) => {
+    // one raycast a frame for hover, however fast the mouse reports
+    if (this.hoverAt && !this.drag) this.setHover(this.pick(this.hoverAt)?.sticker ?? -1);
+    this.hoverAt = null;
     if (this.anim) {
       const a = this.anim;
       const t = Math.min(1, (now - a.start) / a.duration);
-      this.setLayerAngle(a.axis, a.from + (a.to - a.from) * a.ease(t));
+      const angle = a.from + (a.to - a.from) * a.ease(t);
+      this.setLayerAngle(a.axis, angle);
+      a.onAngle?.(angle);
       if (t >= 1) {
         this.anim = null;
         a.resolve();
@@ -328,13 +447,18 @@ export class PuzzleView {
     if (isTurn) {
       this.controls.enabled = false;
       this.renderer.domElement.setPointerCapture(e.pointerId);
+      this.grab(hit.sticker);
+      this.refreshCursor();
     }
   };
 
   private onPointerMove = (e: PointerEvent) => {
     const d = this.drag;
     if (!d || d.pointerId !== e.pointerId) {
-      if (this.mode === 'paint' && e.pointerType === 'mouse') this.setHover(this.pick(e)?.sticker ?? -1);
+      // not while orbiting, so the stickers sweeping past don't light up
+      if (e.pointerType !== 'mouse') return;
+      this.hoverAt = e.buttons ? null : e;
+      if (e.buttons) this.setHover(-1);
       return;
     }
     if (!d.isTurn) return;
@@ -358,10 +482,12 @@ export class PuzzleView {
       }
       if (!d.option) return;
       this.beginLayer(d.option.pieces);
+      this.grab(d.sticker, d.option.pieces);
     }
     const dir = d.screenDir!;
     d.angle = drag.dot(dir) / dir.lengthSq();
     this.setLayerAngle(new THREE.Vector3(...d.option.axis), d.angle);
+    this.events.onDrag(d.option.toMove(1), d.angle / d.option.step);
   };
 
   private onPointerUp = (e: PointerEvent) => {
@@ -369,6 +495,8 @@ export class PuzzleView {
     if (!d || d.pointerId !== e.pointerId) return;
     this.drag = null;
     this.controls.enabled = true;
+    if (d.isTurn) this.grab(-1);
+    this.refreshCursor();
     const moved = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
     if (this.mode === 'paint') {
       if (moved < 6) {
@@ -386,19 +514,27 @@ export class PuzzleView {
     const state = this.state;
     const puzzle = this.puzzle;
     const axis = new THREE.Vector3(...opt.axis);
-    void this.tweenAngle(axis, d.angle, target, 90 + Math.abs(target - d.angle) * 160, easeOut).then(() => {
+    const one = opt.toMove(1);
+    const follow = (angle: number) => this.events.onDrag(one, angle / opt.step);
+    void this.tweenAngle(axis, d.angle, target, 90 + Math.abs(target - d.angle) * 160, easeOut, follow).then(() => {
       if (puzzle !== this.puzzle) return;
       this.endLayer();
       this.setState(state);
       const move = opt.toMove(steps);
       if (move) this.events.onDragTurn(move);
+      this.events.onDrag(null, 0);
     });
   };
 
   private cancelDrag() {
-    if (this.drag?.option) this.endLayer();
+    if (this.drag?.option) {
+      this.endLayer();
+      this.events.onDrag(null, 0);
+    }
+    if (this.drag?.isTurn) this.grab(-1);
     this.drag = null;
     this.controls.enabled = true;
+    this.refreshCursor();
   }
 
   setMode(mode: Mode) {

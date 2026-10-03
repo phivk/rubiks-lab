@@ -4,6 +4,7 @@ import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
+import { RingView } from './view/rings';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -40,15 +41,34 @@ const SPEEDS = [0.35, 0.6, 1, 1.7, 3];
 let speed = 1;
 const BASE_MS = 340;
 
-const view = new PuzzleView($('#stage'), {
+// every view shows the sticker under the pointer and the layers being turned, wherever that happens
+type Linked = { showHover: (i: number) => void; showGrab: (i: number, pieces?: number[]) => void };
+const others = (self: Linked) => [view, ...maps].filter((v) => v !== self);
+const link = (self: () => Linked) => ({
+  onHover: (i: number) => others(self()).forEach((v) => v.showHover(i)),
+  onGrab: (i: number, pieces?: number[]) => others(self()).forEach((v) => v.showGrab(i, pieces)),
+});
+
+const view: PuzzleView = new PuzzleView($('#stage'), {
   onDragTurn: (move) => commitUserMove(move, false),
   onStickerClick: (i) => paintSticker(i),
   canDragTurn: () => queue.length === 0 && !running,
+  ...link(() => view),
+  onDrag: (move, steps) => maps.forEach((m) => m.showDrag(move, steps)),
 });
-const net = new NetView($('#net'), (i) => {
-  if (mode === 'paint') paintSticker(i);
-  else setMode('paint');
+// on the maps, dragging a sticker turns its layer, so tapping only paints
+const mapHandlers = (self: () => Linked) => ({
+  onClick: (i: number) => { if (mode === 'paint') paintSticker(i); },
+  onTurn: (move: string) => commitUserMove(move),
+  canTurn: () => mode === 'play',
+  ...link(self),
 });
+const net: NetView = new NetView($('#net'), mapHandlers(() => net));
+const rings: RingView = new RingView($('#rings'), mapHandlers(() => rings));
+const maps = [net, rings];
+type MapKind = 'net' | 'rings';
+let mapKind: MapKind = 'net';
+try { if (localStorage.getItem('map') === 'rings') mapKind = 'rings'; } catch { /* storage unavailable */ }
 
 /** how many stickers of each color a complete puzzle has */
 const perColor = () => puzzle.stickers.filter((s) => s.color === 0).length;
@@ -73,7 +93,9 @@ async function runQueue() {
     const next = applyMove(session.state, job.move);
     // speed up when the queue backs up so input never feels laggy
     const hurry = queue.length > 2 ? 0.45 : queue.length > 0 ? 0.75 : 1;
-    await view.animateTurn(puzzle.parseMove(job.move)!, next, job.duration * hurry);
+    const turn = puzzle.parseMove(job.move)!;
+    maps.forEach((m) => m.animateTurn(turn, next, job.duration * hurry));
+    await view.animateTurn(turn, next, job.duration * hurry);
     const wasSolved = puzzle.isSolved(session.state);
     session.state = next;
     onStateChanged();
@@ -178,7 +200,8 @@ async function switchPuzzle(p: Puzzle) {
   });
   document.body.dataset.puzzle = p.id;
   view.setPuzzle(p, session.state);
-  net.setPuzzle(p);
+  maps.forEach((m) => m.setPuzzle(p));
+  renderMapKind();
   buildMovepad();
   ($('#alg-input') as HTMLInputElement).placeholder = p.algPlaceholder;
   $('#alg-error').textContent = '';
@@ -227,7 +250,8 @@ function setMode(m: Mode) {
   $('.mode-play').classList.toggle('hidden', m !== 'play');
   $('.mode-paint').classList.toggle('hidden', m !== 'paint');
   $('#net').classList.toggle('editable', m === 'paint');
-  $('#net-hint').textContent = m === 'paint' ? 'Tap to paint' : 'Unfolded view';
+  $('#rings').classList.toggle('editable', m === 'paint');
+  renderMapKind();
   $('#stage-hint').textContent = m === 'paint'
     ? 'Tap a sticker to paint it · Drag to look around'
     : 'Drag a face to turn it · Drag the background to orbit';
@@ -253,10 +277,11 @@ async function startSolve() {
   }
   const v = puzzle.validate(session.state);
   if (!v.ok) {
-    if (v.stickers) {
-      view.setHighlight(v.stickers);
+    const bad = v.stickers;
+    if (bad) {
+      view.setHighlight(bad);
       view.flashHighlight();
-      net.flash(v.stickers);
+      maps.forEach((m) => m.flash(bad));
     }
     toast(v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message, 'bad');
     if (mode !== 'paint') setMode('paint');
@@ -363,8 +388,29 @@ function togglePlay() {
 
 // ---------- rendering ----------
 
+function setMapKind(k: MapKind) {
+  mapKind = k;
+  try { localStorage.setItem('map', k); } catch { /* storage unavailable */ }
+  renderMapKind();
+}
+
+/** Puzzles without a ring map always show the net. */
+function renderMapKind() {
+  const hasRings = !!puzzle.rings;
+  const k = hasRings ? mapKind : 'net';
+  $('#map-switch').classList.toggle('hidden', !hasRings);
+  document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) => {
+    const on = b.dataset.map === k;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  $('#net').classList.toggle('hidden', k !== 'net');
+  $('#rings').classList.toggle('hidden', k !== 'rings');
+  $('#net-hint').textContent = mode === 'paint' ? 'Tap to paint' : k === 'rings' ? 'Drag a dot to turn' : 'Drag a sticker to turn';
+}
+
 function onStateChanged() {
-  net.update(session.state);
+  maps.forEach((m) => m.update(session.state));
   renderStatus();
   $('#solved-badge').classList.toggle('hidden', !puzzle.isSolved(session.state));
   if (mode === 'paint') renderPalette();
@@ -605,6 +651,9 @@ function bind() {
   }
   document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
+  );
+  document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) =>
+    b.addEventListener('click', () => setMapKind(b.dataset.map as MapKind)),
   );
   $('#btn-scramble').addEventListener('click', scramble);
   $('#btn-reset').addEventListener('click', () => {
