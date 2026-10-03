@@ -391,6 +391,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .scanner.mirrored video { transform: scaleX(-1); }
 .scanner > div { position: relative; }
 .scan-top, .scan-bottom {
+  z-index: 1;
   width: min(100%, 440px); padding: 12px 14px; border-radius: var(--radius);
   background: rgba(11, 13, 18, 0.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px;
@@ -410,6 +411,13 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* the detected color shows as a dot, so the sticker itself stays visible around it */
 .scan-grid span::after { content: ''; width: 34%; aspect-ratio: 1; border-radius: 50%; background: var(--c, transparent); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45); opacity: 0; transition: opacity 0.15s; }
 .scan-grid span[style]::after { opacity: 1; }
+/* screen light: a white frame filling the screen around a window onto the cube */
+.scanner.light .scan-grid::before {
+  content: ''; position: absolute; inset: -18px; border-radius: 20px; pointer-events: none;
+  box-shadow: 0 0 0 200vmax #fff;
+}
+.scanner.light .scan-grid { outline-color: rgba(0, 0, 0, 0.6); }
+.scanner [data-act=light][aria-pressed=true] { background: #fff; color: #111; border-color: #fff; }
 .scan-faces { display: flex; gap: 8px; justify-content: center; }
 .scan-face {
   width: 40px; height: 40px; padding: 3px; display: grid; gap: 1.5px;

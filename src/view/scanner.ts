@@ -51,6 +51,7 @@ export class Scanner {
         <div class="scan-faces"></div>
         <div class="row">
           <button class="btn grow" data-act="cancel">Cancel</button>
+          <button class="btn icon hidden" data-act="light" title="Light up the cube with the screen" aria-label="Screen light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
           <button class="btn grow scan-capture" data-act="capture"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>Capture</button>
         </div>
       </div>`;
@@ -60,6 +61,10 @@ export class Scanner {
     this.faces = this.root.querySelector('.scan-faces')!;
     this.root.querySelector('[data-act=cancel]')!.addEventListener('click', () => this.close());
     this.root.querySelector('[data-act=capture]')!.addEventListener('click', () => this.capture());
+    this.root.querySelector('[data-act=light]')!.addEventListener('click', () => {
+      this.setLight(!this.root.classList.contains('light'));
+      try { localStorage.setItem('scanLight', this.root.classList.contains('light') ? '1' : '0'); } catch { /* storage unavailable */ }
+    });
     this.root.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.close();
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this.capture(); }
@@ -104,9 +109,20 @@ export class Scanner {
     // phones report their back camera as 'environment'; webcams often report nothing
     this.mirrored = this.stream.getVideoTracks()[0]?.getSettings().facingMode !== 'environment';
     this.root.classList.toggle('mirrored', this.mirrored);
+    // a camera on the screen's side can use the screen as a lamp; a phone's back camera can't
+    this.root.querySelector('[data-act=light]')!.classList.toggle('hidden', !this.mirrored);
+    let light = true;
+    try { light = localStorage.getItem('scanLight') !== '0'; } catch { /* storage unavailable */ }
+    this.setLight(this.mirrored && light);
     this.render();
     this.timer = window.setInterval(() => this.sample(), SAMPLE_MS);
     (this.root.querySelector('[data-act=capture]') as HTMLButtonElement).focus();
+  }
+
+  /** Turn everything around the grid white, so the screen lights the cube in a dim room. */
+  private setLight(on: boolean) {
+    this.root.classList.toggle('light', on);
+    this.root.querySelector('[data-act=light]')!.setAttribute('aria-pressed', String(on));
   }
 
   close() {
