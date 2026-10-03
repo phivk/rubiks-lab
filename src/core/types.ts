@@ -71,6 +71,18 @@ export interface MoveButton {
   color?: string;
 }
 
+/** One face to point the camera at while scanning, and how to hold the puzzle for it. */
+export interface ScanFace {
+  /** color id of the face's center */
+  center: number;
+  /** color id of the center that should be on top */
+  top: number;
+  /** how to get there from the face before, with the camera behind the puzzle (a phone's) or in front of it (a webcam) */
+  how: { back: string; front: string };
+  /** stickers as the camera sees them, row by row from the top left */
+  stickers: number[];
+}
+
 export interface SolveHandlers {
   onSolution: (moves: string[], elapsed: number) => void;
   /** a worker solver reports each search depth it starts */
@@ -120,6 +132,9 @@ export interface Puzzle {
   shortcutsHtml: string;
   paintIntroHtml: string;
   algPlaceholder: string;
+
+  /** the faces to scan, in order, if the puzzle can be scanned with a camera */
+  scan?: ScanFace[];
 
   encode: (s: State) => string;
   decode: (text: string) => State | null;

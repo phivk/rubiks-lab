@@ -1,10 +1,11 @@
 import './style.css';
-import type { Puzzle, State } from './core/types';
+import type { Puzzle, State, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 import { RingView } from './view/rings';
+import { Scanner } from './view/scanner';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -66,6 +67,7 @@ const mapHandlers = (self: () => Linked) => ({
 const net: NetView = new NetView($('#net'), mapHandlers(() => net));
 const rings: RingView = new RingView($('#rings'), mapHandlers(() => rings));
 const maps = [net, rings];
+const scanner = new Scanner({ onDone: loadScan, onError: (message) => toast(message, 'bad') });
 type MapKind = 'net' | 'rings';
 let mapKind: MapKind = 'net';
 try { if (localStorage.getItem('map') === 'rings') mapKind = 'rings'; } catch { /* storage unavailable */ }
@@ -207,6 +209,8 @@ async function switchPuzzle(p: Puzzle) {
   $('#alg-error').textContent = '';
   $('.mode-paint .intro').innerHTML = p.paintIntroHtml;
   $('#puzzle-shortcuts').innerHTML = p.shortcutsHtml;
+  $('#btn-scan').classList.toggle('hidden', !p.scan);
+  $('.seg').classList.toggle('three', !!p.scan);
   paintColor = p.paletteOrder[0];
   setMode(mode);
   renderHistory();
@@ -277,14 +281,7 @@ async function startSolve() {
   }
   const v = puzzle.validate(session.state);
   if (!v.ok) {
-    const bad = v.stickers;
-    if (bad) {
-      view.setHighlight(bad);
-      view.flashHighlight();
-      maps.forEach((m) => m.flash(bad));
-    }
-    toast(v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message, 'bad');
-    if (mode !== 'paint') setMode('paint');
+    showInvalid(v);
     return;
   }
   if (puzzle.isSolved(session.state)) {
@@ -292,6 +289,38 @@ async function startSolve() {
     return;
   }
   runSolver(1500);
+}
+
+/** Point out what's wrong with the puzzle and open paint mode to fix it. */
+function showInvalid(v: Validation & { ok: false }, prefix = '') {
+  const bad = v.stickers;
+  if (bad) {
+    view.setHighlight(bad);
+    view.flashHighlight();
+    maps.forEach((m) => m.flash(bad));
+  }
+  toast(prefix + (v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message), 'bad');
+  if (mode !== 'paint') setMode('paint');
+}
+
+// ---------- scanning ----------
+
+async function startScan() {
+  queue.length = 0;
+  await idle();
+  void scanner.open(puzzle);
+}
+
+function loadScan(state: State) {
+  setStateDirect(state);
+  const v = puzzle.validate(session.state);
+  if (!v.ok) {
+    showInvalid(v, 'Scanned, but some colors need fixing: ');
+    return;
+  }
+  setMode('play');
+  if (puzzle.isSolved(session.state)) toast('Scanned — your cube is already solved', 'good');
+  else toast('Scanned — hit Solve to find the way home', 'good');
 }
 
 function runSolver(budgetMs: number) {
@@ -649,7 +678,8 @@ function bind() {
     b.addEventListener('click', () => void switchPuzzle(p));
     $('.puzzle-switch').append(b);
   }
-  document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) =>
+  $('#btn-scan').addEventListener('click', () => void startScan());
+  document.querySelectorAll<HTMLButtonElement>('.seg button[data-mode]').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
   );
   document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) =>
@@ -732,7 +762,7 @@ function bind() {
   window.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'text') return;
-    if (($('#help') as HTMLDialogElement).open) return;
+    if (($('#help') as HTMLDialogElement).open || scanner.isOpen) return;
     const k = e.key;
     if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ') {
       e.preventDefault();

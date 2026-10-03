@@ -1,7 +1,7 @@
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { COLORS, COLOR_NAMES } from '../core/colors';
 import { syncSolver } from '../core/syncSolver';
-import type { DragOption, MoveButton, Puzzle, StickerDef, Turn, Vec3 } from '../core/types';
+import type { DragOption, MoveButton, Puzzle, ScanFace, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
 import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
 import { ringMap } from './rings';
@@ -189,10 +189,32 @@ export const cube2: Puzzle = {
 
 // ---------- 3×3 ----------
 
+/**
+ * Front, then turning the cube to the left (right, back, left), then tipped forwards (up)
+ * and backwards (down). Each face's stickers are stored the way a camera sees it held like
+ * that, so the scan reads straight across.
+ */
+// Seen from behind the cube a webcam is looking at, left and right swap, and so do towards and away.
+const SCAN_HOW = [
+  { back: 'Hold the cube up to the camera', front: 'Hold the cube up to the camera' },
+  { back: 'Turn it to the left', front: 'Turn it to the right' },
+  { back: 'Turn it to the left again', front: 'Turn it to the right again' },
+  { back: 'And once more', front: 'And once more' },
+  { back: 'Turn back to the start, then tip the top towards you', front: 'Turn back to the start, then tip the top away from you' },
+  { back: 'Keep tipping it towards you, half a turn', front: 'Keep tipping it away from you, half a turn' },
+];
+const scanFaces = (M: CubeModel): ScanFace[] => [2, 1, 5, 4, 0, 3].map((f, k) => ({
+  center: f,
+  top: f === 0 ? 5 : f === 3 ? 2 : 0,
+  how: SCAN_HOW[k],
+  stickers: Array.from({ length: M.n ** 2 }, (_, i) => f * M.n ** 2 + i),
+}));
+
+const model3 = new CubeModel(3);
 const solver3 = new SolverClient(() => new Worker(new URL('./workers/3x3.worker.ts', import.meta.url), { type: 'module' }));
 
 export const cube3: Puzzle = {
-  ...makeCube(new CubeModel(3), { wide: false }),
+  ...makeCube(model3, { wide: false }),
   id: '3x3',
   name: '3×3',
   icon: CUBE_ICON,
@@ -202,6 +224,7 @@ export const cube3: Puzzle = {
   movePadExtra: rows(['M', 'E', 'S', 'x', 'y', 'z']),
   movePadExtraLabel: 'Slices & rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
+  scan: scanFaces(model3),
 };
 
 // ---------- 4×4 ----------

@@ -159,6 +159,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 }
 .seg button svg { width: 16px; height: 16px; }
 .seg button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.seg.three { grid-template-columns: 1fr 1fr 1fr; }
+.seg button.hidden { display: none; }
 
 .label-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: -6px; }
 .eyebrow { font-size: 11px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
@@ -377,6 +379,48 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .speed { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-2); }
 .speed input { flex: 1; accent-color: var(--accent); }
 .speed span:last-child { width: 34px; text-align: right; font-family: var(--mono); }
+
+/* ---------- scanner ---------- */
+.scanner {
+  position: fixed; inset: 0; z-index: 40; background: #000;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+}
+.scanner.hidden { display: none; }
+.scanner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scanner.mirrored video { transform: scaleX(-1); }
+.scanner > div { position: relative; }
+.scan-top, .scan-bottom {
+  width: min(100%, 440px); padding: 12px 14px; border-radius: var(--radius);
+  background: rgba(11, 13, 18, 0.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px;
+}
+.scan-step { font-size: 12px; color: var(--text-2); }
+.scan-prompt { font-size: 16px; font-weight: 500; }
+.scan-prompt b { font-weight: 650; white-space: nowrap; }
+.scan-prompt b i { display: inline-block; width: 12px; height: 12px; margin-right: 5px; border-radius: 3px; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+.scan-warn { font-size: 12.5px; color: var(--warn); }
+.scan-warn:empty { display: none; }
+.scan-grid {
+  width: min(78vw, 46vh); aspect-ratio: 1; display: grid; gap: 4px;
+  grid-template-columns: repeat(var(--n), 1fr);
+  border-radius: 14px; outline: 2px solid rgba(255, 255, 255, 0.85); outline-offset: 4px;
+}
+.scan-grid span { border: 1.5px solid rgba(255, 255, 255, 0.55); border-radius: 8px; display: grid; place-items: center; }
+/* the detected color shows as a dot, so the sticker itself stays visible around it */
+.scan-grid span::after { content: ''; width: 34%; aspect-ratio: 1; border-radius: 50%; background: var(--c, transparent); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45); opacity: 0; transition: opacity 0.15s; }
+.scan-grid span[style]::after { opacity: 1; }
+.scan-faces { display: flex; gap: 8px; justify-content: center; }
+.scan-face {
+  width: 40px; height: 40px; padding: 3px; display: grid; gap: 1.5px;
+  grid-template-columns: repeat(var(--n), 1fr);
+  border-radius: 8px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.06); cursor: pointer;
+}
+.scan-face i { border-radius: 2px; background: rgba(255, 255, 255, 0.08); }
+.scan-face.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.scan-capture { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 650; }
+.scan-capture:hover { background: #a090ff; border-color: #a090ff; }
+.scan-capture svg { fill: currentColor; }
 
 /* ---------- toasts ---------- */
 .toasts { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; pointer-events: none; align-items: center; }
