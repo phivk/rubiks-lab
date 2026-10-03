@@ -45,23 +45,26 @@ const view = new PuzzleView($('#stage'), {
   onDragTurn: (move) => commitUserMove(move, false),
   onStickerClick: (i) => paintSticker(i),
   canDragTurn: () => queue.length === 0 && !running,
-  // the ring map mirrors the sticker under the pointer and the layers being turned
-  onHover: (i) => rings.showHover(i),
-  onGrab: (i, pieces) => rings.showGrab(i, pieces),
+  // the maps mirror the sticker under the pointer and the layers being turned
+  onHover: (i) => { net.showHover(i); rings.showHover(i); },
+  onGrab: (i, pieces) => { net.showGrab(i, pieces); rings.showGrab(i, pieces); },
   onDrag: (move, steps) => rings.showDrag(move, steps),
 });
-const onMapClick = (i: number) => {
-  if (mode === 'paint') paintSticker(i);
-  else setMode('paint');
-};
-const net = new NetView($('#net'), onMapClick);
-// on the ring map, dragging a dot turns its layer, so tapping only paints
-const rings = new RingView($('#rings'), {
-  onClick: (i) => { if (mode === 'paint') paintSticker(i); },
+// on the maps, dragging a sticker turns its layer, so tapping only paints
+const onMapClick = (i: number) => { if (mode === 'paint') paintSticker(i); };
+const net = new NetView($('#net'), {
+  onClick: onMapClick,
   onTurn: (move) => commitUserMove(move),
   canTurn: () => mode === 'play',
-  onHover: (i) => view.showHover(i),
-  onGrab: (i, pieces) => view.showGrab(i, pieces),
+  onHover: (i) => { view.showHover(i); rings.showHover(i); },
+  onGrab: (i, pieces) => { view.showGrab(i, pieces); rings.showGrab(i, pieces); },
+});
+const rings = new RingView($('#rings'), {
+  onClick: onMapClick,
+  onTurn: (move) => commitUserMove(move),
+  canTurn: () => mode === 'play',
+  onHover: (i) => { view.showHover(i); net.showHover(i); },
+  onGrab: (i, pieces) => { view.showGrab(i, pieces); net.showGrab(i, pieces); },
 });
 type MapKind = 'net' | 'rings';
 let mapKind: MapKind = 'net';
@@ -404,7 +407,7 @@ function renderMapKind() {
   });
   $('#net').classList.toggle('hidden', k !== 'net');
   $('#rings').classList.toggle('hidden', k !== 'rings');
-  $('#net-hint').textContent = mode === 'paint' ? 'Tap to paint' : k === 'rings' ? 'Drag a dot to turn' : hasRings ? '' : 'Unfolded view';
+  $('#net-hint').textContent = mode === 'paint' ? 'Tap to paint' : k === 'rings' ? 'Drag a dot to turn' : 'Drag a sticker to turn';
 }
 
 function onStateChanged() {

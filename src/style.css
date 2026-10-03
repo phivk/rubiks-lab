@@ -237,6 +237,13 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .net.editable .cell:hover { stroke: #fff; stroke-width: 10; }
 .net .label { font-size: 42px; font-weight: 700; fill: rgba(0, 0, 0, 0.5); stroke: none; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .net .cell.bad { animation: pulse 1.2s ease-in-out 2; }
+/* in turn mode, stickers (and ring dots) are dragged to turn; touch-action keeps a phone from scrolling instead */
+.net:not(.editable) .cell { cursor: grab; touch-action: none; }
+.net svg.dragging, .net svg.dragging .cell { cursor: grabbing; }
+/* pressing a sticker dims all but its layers' stickers, as the 3D view does */
+.net .dim { opacity: 0.4; }
+/* set from any view, so the 3D cube and the maps show the same sticker */
+.net .cell.hover { stroke: rgba(255, 255, 255, 0.7); }
 .label-row:has(.map-tools) { align-items: center; }
 .map-tools { display: flex; align-items: center; gap: 10px; }
 .map-tools .muted:empty { display: none; }
@@ -249,14 +256,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .rings .ring.grabbed { stroke: rgba(255, 255, 255, 0.32); }
 .rings .ring.turning { stroke: rgba(255, 255, 255, 0.55); }
 .rings .cell { stroke-width: 3.5; }
-/* in turn mode, dots are dragged along their rings; touch-action keeps a phone from scrolling instead */
 /* a turn hands each dot its sticker's new color as it moves, so a fill fade would flash the old one */
-.rings:not(.editable) .cell { cursor: grab; touch-action: none; transition: stroke 0.12s; }
-.rings svg.dragging, .rings svg.dragging .cell { cursor: grabbing; }
-/* pressing a dot dims all but its rings, as the 3D view dims all but their layers */
-.rings .dim { opacity: 0.4; }
-/* set from either view, so the 3D cube and the map show the same sticker */
-.rings .cell.hover { stroke: rgba(255, 255, 255, 0.7); }
+.rings:not(.editable) .cell { transition: stroke 0.12s; }
 .rings .ring-label { pointer-events: none; }
 .rings .ring-label rect { stroke: rgba(0, 0, 0, 0.45); stroke-width: 3.5; }
 /* stroke: none undoes the icon stroke every svg gets */
