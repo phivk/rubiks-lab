@@ -1,7 +1,7 @@
 import type { Puzzle, State, Turn } from '../core/types';
-import { ccw } from '../cube/rings';
+import { ccw } from '../core/vec';
 import { turnDuration } from './anim';
-import { MapView, SVG, UNIT, ringsOf } from './map';
+import { MapView, SVG, UNIT, ringsOf, turnsWith } from './map';
 
 /**
  * The ring map of a puzzle (see `src/cube/rings.ts`): dots slide along a layer's circle as
@@ -107,7 +107,7 @@ export class RingView extends MapView {
   }
 
   update(state: State) {
-    state.forEach((c, i) => this.cells[i]?.style.setProperty('fill', this.puzzle.colors[c]));
+    this.fill(state);
   }
 
   private place(i: number, [x, y]: [number, number]) {
@@ -167,7 +167,7 @@ export class RingView extends MapView {
     const pieces = new Set(turn.pieces);
     const turning = map.circles
       .map((c, i) => ({ ...c, i }))
-      .filter((c) => c.stickers.every((s) => pieces.has(this.puzzle.stickers[s].piece)));
+      .filter((c) => turnsWith(this.puzzle, c, pieces));
     const onRing = new Map<number, (typeof turning)[number]>();
     for (const c of turning) for (const s of c.stickers) onRing.set(s, c);
 

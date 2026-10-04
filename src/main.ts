@@ -194,13 +194,8 @@ async function switchPuzzle(p: Puzzle) {
   puzzle.cancelSolve();
   puzzle = p;
   session = sessions.get(p.id)!;
-  document.querySelectorAll<HTMLButtonElement>('.puzzle-switch button').forEach((b) => {
-    const on = b.dataset.puzzle === p.id;
-    b.classList.toggle('active', on);
-    b.setAttribute('aria-selected', String(on));
-    // on a phone the tabs scroll sideways
-    if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  });
+  // on a phone the tabs scroll sideways
+  selectTab('.puzzle-switch button', 'puzzle', p.id)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   document.body.dataset.puzzle = p.id;
   view.setPuzzle(p, session.state);
   maps.forEach((m) => m.setPuzzle(p));
@@ -325,11 +320,19 @@ function setCubeKind(kind: CubeKind) {
 }
 
 function renderCubeKind() {
-  document.querySelectorAll<HTMLButtonElement>('#cube-kind button').forEach((b) => {
-    const on = b.dataset.kind === cubeKind();
+  selectTab('#cube-kind button', 'kind', cubeKind());
+}
+
+/** Mark the tab whose `data-<key>` is `value` as selected, and return it. */
+function selectTab(selector: string, key: string, value: string) {
+  let active: HTMLButtonElement | undefined;
+  document.querySelectorAll<HTMLButtonElement>(selector).forEach((b) => {
+    const on = b.dataset[key] === value;
     b.classList.toggle('active', on);
     b.setAttribute('aria-selected', String(on));
+    if (on) active = b;
   });
+  return active;
 }
 
 function loadScan(state: State, kind: CubeKind) {
@@ -450,11 +453,7 @@ function renderMapKind() {
   const hasRings = !!puzzle.rings;
   const k = hasRings ? mapKind : 'net';
   $('#map-switch').classList.toggle('hidden', !hasRings);
-  document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) => {
-    const on = b.dataset.map === k;
-    b.classList.toggle('active', on);
-    b.setAttribute('aria-selected', String(on));
-  });
+  selectTab('#map-switch button', 'map', k);
   $('#net').classList.toggle('hidden', k !== 'net');
   $('#rings').classList.toggle('hidden', k !== 'rings');
   $('#net-hint').textContent = mode === 'paint' ? 'Tap to paint' : k === 'rings' ? 'Drag a dot to turn' : 'Drag a sticker to turn';

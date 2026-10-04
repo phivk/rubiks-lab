@@ -1,10 +1,12 @@
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { parity } from '../core/perm';
 import { syncSolver } from '../core/syncSolver';
-import type { DragOption, Puzzle, State, Validation, Vec3 } from '../core/types';
+import type { DragOption, Puzzle, ScanFace, State, Validation, Vec3 } from '../core/types';
+import { cross, dot } from '../core/vec';
+import { scanCells, toUnitBox } from '../scan/cells';
 import {
-  AXES, CENTER, COLORS, COLOR_LETTERS, COLOR_NAMES, EDGE_PAIRS, H2, N, S2, TIP, UNSET, VERTEX_NAMES,
-  applyAll, bigLayer, invertMove, isSolved, parseAlg, parseMove, pieceCorners, piecesOf, shrinkToPiece, solved, stickers,
+  AXES, CENTER, COLORS, COLOR_LETTERS, COLOR_NAMES, CUBE_COLOR_IDS, EDGE_PAIRS, H2, N, S2, TIP, UNSET, VERTEX_NAMES,
+  applyAll, bigLayer, invertMove, isSolved, parseAlg, parseMove, pieceCorners, piecesOf, rotations, shrinkToPiece, solved, stickers,
 } from './model';
 import { scramble, solveOptimal } from './solver';
 
@@ -71,6 +73,50 @@ function validate(s: State): Validation {
   return { ok: true };
 }
 
+// ---------- scanning ----------
+
+// Held tip up, the three sides turn to the camera in turn, then the top tips away so the
+// bottom faces it, upside down. The faces go by position, so it can be held any way round.
+const SCAN_HOW = [
+  'Hold the Pyraminx up to the camera, a tip on top',
+  'Keep that tip on top and turn the side on your {side} to the camera',
+  'Again: the side on your {side}',
+  'Once more to the first side, then tip the top away until the bottom faces the camera',
+];
+
+/** each face's stickers in the order the viewfinder's cells go, seen with `up` on top */
+const scanFaces: ScanFace[] = [0, 1, 2, 3].map((face, k) => {
+  const ids = stickers.filter((s) => s.color === face).map((s) => s.index);
+  const normal = stickers[ids[0]].normal;
+  const up: Vec3 = face === 3 ? [0, 0, 1] : [-normal[1] * normal[0], 1 - normal[1] ** 2, -normal[1] * normal[2]];
+  const right = cross(up, normal);
+  const shape = face === 3 ? 'down' : 'up';
+  // stickers and cells as the camera sees them, each scaled to fill the same box, and matched up
+  const seen = toUnitBox(ids.map((i) => {
+    const c = stickers[i].center.toArray() as Vec3;
+    return [dot(c, right), -dot(c, up)];
+  }));
+  const cells = toUnitBox(scanCells({ stickers: ids, shape }).map((c) => c.at));
+  const order = cells.map((c) => {
+    const d = seen.map((p) => Math.hypot(p[0] - c[0], p[1] - c[1]));
+    return ids[d.indexOf(Math.min(...d))];
+  });
+  return { face, how: SCAN_HOW[k], stickers: order, shape };
+});
+
+/** The scanned state turned so its tips and centers show the colors they do when solved. */
+function orientScan(s: State): State {
+  const axial = [0, 1, 2, 3, 4, 5, 6, 7].map(piecesOf);
+  const key = (cols: number[]) => [...cols].sort().join();
+  let best = s, bestFit = -1;
+  for (const r of rotations) {
+    const t = r.map((src) => s[src]);
+    const fit = axial.filter((idx) => key(idx.map((i) => t[i])) === key(idx.map((i) => stickers[i].color))).length;
+    if (fit > bestFit) { best = t; bestFit = fit; }
+  }
+  return best;
+}
+
 export const pyraminx: Puzzle = {
   id: 'pyra',
   name: 'Pyraminx',
@@ -133,6 +179,10 @@ export const pyraminx: Puzzle = {
     <div><kbd>⇧</kbd> + key</div><span>Counter-clockwise (prime)</span>`,
   paintIntroHtml: 'Pick a color, then tap stickers on the puzzle or the map below. Hold it with <b>yellow</b> on the bottom and <b>green</b> facing you.',
   algPlaceholder: "Type an algorithm… R U' L r",
+
+  scan: scanFaces,
+  cubeColorIds: CUBE_COLOR_IDS,
+  orientScan,
 
   encode: (s) => s.map((c) => (c === UNSET ? '?' : COLOR_LETTERS[c])).join(''),
   decode: (text) => {

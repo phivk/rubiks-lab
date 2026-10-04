@@ -3,9 +3,10 @@
 // on a face's thumbnail scans it again. When every face is in, the colors are settled
 // together (see classify.ts) and handed back as a state.
 
-import { KIND_COLORS, cubeKind, type CubeKind } from '../core/colors';
+import { KIND_COLORS, byIds, cubeKind, type CubeKind } from '../core/colors';
 import type { Puzzle, State } from '../core/types';
-import { calibrate, calibrateBlind, medianColor, nearest, scanState, type Calibration, type RGB } from '../scan/classify';
+import { scanCells, type Cell } from '../scan/cells';
+import { calibrateFaces, medianColor, nearest, scanState, type Calibration, type RGB } from '../scan/classify';
 
 export interface ScannerEvents {
   /** `kind` is the kind of cube the colors say it is, to draw it in */
@@ -13,24 +14,34 @@ export interface ScannerEvents {
   onError: (message: string) => void;
 }
 
-/** sampled pixels per grid cell, along each side */
-const CELL_PX = 24;
-/** a cell's samples come from its middle, away from the sticker's edges and the gaps between stickers */
-const INSET = 0.3;
+/** sampled pixels across the viewfinder */
+const FRAME_PX = 120;
 const SAMPLE_MS = 120;
+
+/** a face's cells as SVG shapes in a 100×100 box: a square one with rounded corners */
+const shapes = (cells: Cell[], round: number) => cells.map(({ poly }) => {
+  const xs = poly.map((p) => p[0] * 100), ys = poly.map((p) => p[1] * 100);
+  return poly.length === 4
+    ? `<rect x="${xs[0]}" y="${ys[0]}" width="${xs[1] - xs[0]}" height="${ys[2] - ys[1]}" rx="${round}"/>`
+    : `<polygon points="${xs.map((x, k) => `${x},${ys[k]}`).join(' ')}"/>`;
+}).join('');
 
 export class Scanner {
   private root: HTMLDivElement;
   private video: HTMLVideoElement;
   private grid: HTMLDivElement;
   private faces: HTMLDivElement;
+  private warn: HTMLDivElement;
+  private light: HTMLButtonElement;
+  private dots: NodeListOf<SVGCircleElement> | null = null;
   private canvas = document.createElement('canvas');
   private ctx = this.canvas.getContext('2d', { willReadFrequently: true })!;
   private stream: MediaStream | null = null;
   private timer = 0;
 
   private puzzle!: Puzzle;
-  private n = 0;
+  /** each scan face's cells in the viewfinder */
+  private cells: Cell[][] = [];
   /** samples per scan face, once captured */
   private captured: (RGB[] | null)[] = [];
   private current = 0;
@@ -39,6 +50,10 @@ export class Scanner {
   private mirrored = false;
   /** the kind of cube the colors seen so far say it is, which the preview is drawn in */
   private kind: CubeKind = 'typical';
+  /** sticker colors as that kind of cube draws them */
+  private colors: string[] = [];
+  /** the colors to match against from the captured faces but the current one */
+  private others: Calibration | null = null;
 
   constructor(private events: ScannerEvents) {
     this.root = document.createElement('div');
@@ -65,9 +80,11 @@ export class Scanner {
     this.video = this.root.querySelector('video')!;
     this.grid = this.root.querySelector('.scan-grid')!;
     this.faces = this.root.querySelector('.scan-faces')!;
+    this.warn = this.root.querySelector('.scan-warn')!;
+    this.light = this.root.querySelector('[data-act=light]')!;
     this.root.querySelector('[data-act=cancel]')!.addEventListener('click', () => this.close());
     this.root.querySelector('[data-act=capture]')!.addEventListener('click', () => this.capture());
-    this.root.querySelector('[data-act=light]')!.addEventListener('click', () => {
+    this.light.addEventListener('click', () => {
       this.setLight(!this.root.classList.contains('light'));
       try { localStorage.setItem('scanLight', this.root.classList.contains('light') ? '1' : '0'); } catch { /* storage unavailable */ }
     });
@@ -92,13 +109,13 @@ export class Scanner {
       return;
     }
     this.puzzle = puzzle;
-    this.n = Math.round(Math.sqrt(faces[0].stickers.length));
+    this.cells = faces.map((f) => scanCells(f));
     this.captured = faces.map(() => null);
     this.current = 0;
     this.live = [];
-    this.kind = cubeKind();
-    this.canvas.width = this.canvas.height = this.n * CELL_PX;
-    this.buildGrid();
+    this.setKind(cubeKind());
+    this.canvas.width = this.canvas.height = FRAME_PX;
+    this.buildFaces();
     this.root.classList.remove('hidden');
     this.render();
     try {
@@ -120,7 +137,7 @@ export class Scanner {
     this.mirrored = this.stream.getVideoTracks()[0]?.getSettings().facingMode !== 'environment';
     this.root.classList.toggle('mirrored', this.mirrored);
     // a camera on the screen's side can use the screen as a lamp; a phone's back camera can't
-    this.root.querySelector('[data-act=light]')!.classList.toggle('hidden', !this.mirrored);
+    this.light.classList.toggle('hidden', !this.mirrored);
     let light = true;
     try { light = localStorage.getItem('scanLight') !== '0'; } catch { /* storage unavailable */ }
     this.setLight(this.mirrored && light);
@@ -132,7 +149,7 @@ export class Scanner {
   /** Turn everything around the grid white, so the screen lights the cube in a dim room. */
   private setLight(on: boolean) {
     this.root.classList.toggle('light', on);
-    this.root.querySelector('[data-act=light]')!.setAttribute('aria-pressed', String(on));
+    this.light.setAttribute('aria-pressed', String(on));
   }
 
   close() {
@@ -147,21 +164,28 @@ export class Scanner {
     this.video.srcObject = null;
   }
 
-  private buildGrid() {
-    this.grid.style.setProperty('--n', String(this.n));
-    this.grid.innerHTML = '<span></span>'.repeat(this.n * this.n);
-    const center = this.puzzle.scan![0].center;
-    if (center !== undefined) this.grid.children[center].classList.add('center');
+  /** The thumbnails, one per scan face. */
+  private buildFaces() {
     this.faces.innerHTML = '';
     this.puzzle.scan!.forEach((f, k) => {
       const b = document.createElement('button');
       b.className = 'scan-face';
-      b.style.setProperty('--n', String(this.n));
       b.title = f.center === undefined ? `Scan face ${k + 1}` : `Scan the ${this.name(f.face)} face`;
-      b.innerHTML = '<i></i>'.repeat(this.n * this.n);
+      b.innerHTML = `<svg viewBox="0 0 100 100">${shapes(this.cells[k], 6)}</svg>`;
       b.addEventListener('click', () => { this.current = k; this.render(); });
       this.faces.append(b);
     });
+  }
+
+  /** The viewfinder's cells for the current face, each with a dot for the color it sees. */
+  private buildGrid() {
+    const face = this.puzzle.scan![this.current], cells = this.cells[this.current];
+    const n = Math.round(Math.sqrt(cells.length));
+    this.grid.style.setProperty('--n', String(n));
+    this.grid.innerHTML = `<svg viewBox="0 0 100 100"><g class="cells">${shapes(cells, 8 / n)}</g>${
+      cells.map((c) => `<circle cx="${c.at[0] * 100}" cy="${c.at[1] * 100}" r="${c.r * 85}"/>`).join('')}</svg>`;
+    if (face.center !== undefined) this.grid.querySelector('.cells')!.children[face.center].classList.add('center');
+    this.dots = this.grid.querySelectorAll('circle');
   }
 
   /** The grid's square in video pixels: the video fills the screen (object-fit: cover), centered. */
@@ -178,56 +202,42 @@ export class Scanner {
   private sample() {
     if (this.video.readyState < 2 || !this.video.videoWidth) return;
     const { x, y, side } = this.gridInVideo();
-    const px = this.n * CELL_PX;
-    this.ctx.drawImage(this.video, x, y, side, side, 0, 0, px, px);
-    const a = Math.round(CELL_PX * INSET), w = CELL_PX - 2 * a;
-    this.live = [];
-    for (let r = 0; r < this.n; r++) {
-      for (let c = 0; c < this.n; c++) {
-        this.live.push(medianColor(this.ctx.getImageData(c * CELL_PX + a, r * CELL_PX + a, w, w).data));
-      }
-    }
+    this.ctx.drawImage(this.video, x, y, side, side, 0, 0, FRAME_PX, FRAME_PX);
+    const { data } = this.ctx.getImageData(0, 0, FRAME_PX, FRAME_PX);
+    this.live = this.cells[this.current].map(({ at, r }) => {
+      const w = Math.round(2 * r * FRAME_PX);
+      return medianColor(data, FRAME_PX, Math.round(at[0] * FRAME_PX) - (w >> 1), Math.round(at[1] * FRAME_PX) - (w >> 1), w);
+    });
     this.renderLive();
   }
 
-  /**
-   * The colors to match against: the captured faces, with `live` in place of face `except`.
-   * Their fixed centers stand in for a typical cube's colors, and correct the rest; a cube
-   * without them corrects all of a typical cube's by every sticker seen.
-   */
+  /** The colors to match against: the captured faces, with `live` in place of face `except`. */
   private refs(except = -1, live?: RGB[]): Calibration {
-    const faces = this.puzzle.scan!;
-    const shown = faces.map((_, k) => (k === except ? live : this.captured[k] ?? undefined));
-    if (faces[0].center === undefined) return calibrateBlind(shown.flatMap((s) => s ?? []));
-    const seen: (RGB | undefined)[] = [];
-    faces.forEach((f, k) => { if (shown[k]) seen[f.face] = shown[k][f.center!]; });
-    return calibrate(seen);
+    return calibrateFaces(this.puzzle, this.captured.map((c, k) => (k === except ? live : c ?? undefined)));
   }
 
   private renderLive() {
     const face = this.puzzle.scan![this.current];
     let fit = this.refs(this.current, this.live), seen = face.face;
     if (face.center !== undefined) {
-      const others = this.refs(this.current);
+      const others = this.others!;
       seen = nearest(this.live[face.center], others.refs);
       // the center in view is this face's color, so it shows the stickers what that looks
       // like here, unless it's plainly another face's
       if (seen !== face.face) fit = others;
     }
     if (fit.kind !== this.kind) {
-      this.kind = fit.kind;
+      this.setKind(fit.kind);
       this.render();
     }
-    const cells = this.grid.children as HTMLCollectionOf<HTMLElement>;
-    this.live.forEach((s, i) => cells[i].style.setProperty('--c', this.colors[nearest(s, fit.refs)]));
-    const warn = this.root.querySelector('.scan-warn')!;
-    warn.textContent = seen === face.face ? ''
+    this.live.forEach((s, i) => this.dots![i].style.setProperty('--c', this.colors[nearest(s, fit.refs)]));
+    this.warn.textContent = seen === face.face ? ''
       : `That looks like the ${this.name(seen)} center — turn the ${this.name(face.face)} one to the camera`;
   }
 
-  /** sticker colors as the kind of cube seen so far draws them */
-  private get colors() {
-    return KIND_COLORS[this.kind];
+  private setKind(kind: CubeKind) {
+    this.kind = kind;
+    this.colors = byIds(KIND_COLORS[kind], this.puzzle.cubeColorIds);
   }
 
   private name(color: number) {
@@ -242,22 +252,23 @@ export class Scanner {
     this.root.querySelector('.scan-prompt')!.textContent = face.how.replace('{side}', this.mirrored ? 'left' : 'right');
     // without fixed centers, the faces go by position and the colors can't say which is which
     const byColor = face.center !== undefined;
-    this.root.querySelector('.scan-colors')!.innerHTML = byColor ? `${dot(face.face)} facing the camera, ${dot(face.top)} on top` : '';
+    this.root.querySelector('.scan-colors')!.innerHTML = byColor ? `${dot(face.face)} facing the camera, ${dot(face.top!)} on top` : '';
     // the same two colors on the grid, to check against the cube while lining it up
     this.grid.style.setProperty('--face', byColor ? this.colors[face.face] : '');
-    this.grid.style.setProperty('--top', byColor ? this.colors[face.top] : '');
-    this.root.querySelector('.scan-warn')!.textContent = '';
+    this.grid.style.setProperty('--top', byColor ? this.colors[face.top!] : '');
+    this.warn.textContent = '';
+    this.others = this.refs(this.current);
     const { refs } = this.refs();
     [...this.faces.children].forEach((b, k) => {
       b.classList.toggle('active', k === this.current);
-      [...b.children].forEach((cell, i) => {
+      [...b.querySelector('svg')!.children].forEach((cell, i) => {
         const s = this.captured[k]?.[i];
         // before it's scanned, only a fixed center shows, to tell the faces apart
         const c = s ? nearest(s, refs) : i === faces[k].center ? faces[k].face : -1;
-        (cell as HTMLElement).style.background = c < 0 ? '' : this.colors[c];
+        (cell as SVGElement).style.fill = c < 0 ? '' : this.colors[c];
       });
     });
-    [...this.grid.children].forEach((c) => c.removeAttribute('style'));
+    this.buildGrid();
   }
 
   /** Go to the face before or after this one, without capturing it. */
@@ -269,7 +280,7 @@ export class Scanner {
   }
 
   private capture() {
-    if (this.live.length !== this.n * this.n) return;
+    if (this.live.length !== this.cells[this.current].length) return;
     this.captured[this.current] = this.live;
     this.live = [];
     const next = this.captured.findIndex((c, k) => !c && k > this.current);

@@ -401,20 +401,18 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .scan-colors b i { display: inline-block; width: 12px; height: 12px; margin-right: 5px; border-radius: 3px; vertical-align: -1px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
 .scan-warn { font-size: 12.5px; color: var(--warn); }
 .scan-colors:empty, .scan-warn:empty { display: none; }
-.scan-grid {
-  width: min(78vw, 46vh); aspect-ratio: 1; display: grid; gap: 4px;
-  grid-template-columns: repeat(var(--n), 1fr);
-}
-.scan-grid span { border: 1.5px solid rgba(255, 255, 255, 0.55); border-radius: 8px; display: grid; place-items: center; }
+.scan-grid { width: min(78vw, 46vh); aspect-ratio: 1; }
+.scan-grid svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.scan-grid .cells > * { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 1.5px; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 /* the detected color shows as a dot, so the sticker itself stays visible around it */
-.scan-grid span::after { content: ''; width: 34%; aspect-ratio: 1; border-radius: 50%; background: var(--c, transparent); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45); opacity: 0; transition: opacity 0.15s; }
-.scan-grid span[style]::after { opacity: 1; }
+.scan-grid circle { fill: var(--c, transparent); stroke: rgba(0, 0, 0, 0.45); stroke-width: 2px; vector-effect: non-scaling-stroke; opacity: 0; transition: opacity 0.15s; }
+.scan-grid circle[style] { opacity: 1; }
 /* the center cell is ringed in the color that should face the camera, and a bar above the grid shows the one on top */
-.scan-grid span.center { border: 3px solid var(--face); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.45); }
+.scan-grid .cells > .center { stroke: var(--face); stroke-width: 3px; filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6)); }
 .scan-grid::after {
   content: ''; position: absolute; top: -14px; height: 8px; border-radius: 4px;
   /* one sticker wide, over the middle column */
-  width: calc((100% - (var(--n) - 1) * 4px) / var(--n)); left: 50%; transform: translateX(-50%);
+  width: calc(90% / var(--n)); left: 50%; transform: translateX(-50%);
   background: var(--top, transparent); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.55);
 }
 /* screen light: a white frame filling the screen around a window onto the cube */
@@ -425,13 +423,13 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .scanner [data-act=light][aria-pressed=true] { background: #fff; color: #111; border-color: #fff; }
 .scan-faces { display: flex; gap: 8px; justify-content: center; }
 .scan-face {
-  width: 40px; height: 40px; padding: 3px; display: grid; gap: 1.5px;
-  grid-template-columns: repeat(var(--n), 1fr);
+  width: 40px; height: 40px; padding: 3px;
   border-radius: 8px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.06); cursor: pointer;
 }
 /* an unscanned sticker is an empty outline, so it can't pass for a white one */
-.scan-face i { border-radius: 2px; }
-.scan-face i:not([style*=background]) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); }
+.scan-face svg { display: block; width: 100%; height: 100%; }
+.scan-face svg > * { fill: none; stroke-linejoin: round; }
+.scan-face svg > :not([style*=fill]) { stroke: rgba(255, 255, 255, 0.22); stroke-width: 1px; vector-effect: non-scaling-stroke; }
 .scan-face.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .scan-capture { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 650; }
 .scan-capture:hover { background: #a090ff; border-color: #a090ff; }

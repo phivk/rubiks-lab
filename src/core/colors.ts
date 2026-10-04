@@ -11,6 +11,9 @@ export const KIND_COLORS: Record<CubeKind, string[]> = {
   bright: ['#f4f4ef', '#d8264c', '#7ed43c', '#e4ec3c', '#ff7a3c', '#3eb0e2'],
 };
 
+/** `all`, picked by color ids, or all of it without any */
+export const byIds = <T>(all: T[], ids?: number[]) => (ids ? ids.map((id) => all[id]) : all);
+
 let kind: CubeKind = 'typical';
 /** the kind of cube the stickers are drawn as */
 export const cubeKind = () => kind;

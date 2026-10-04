@@ -8,7 +8,7 @@
 // seen). The final pass also knows how many stickers each color has, which settles the
 // close calls (red/orange, white/yellow).
 
-import type { CubeKind } from '../core/colors';
+import { byIds, type CubeKind } from '../core/colors';
 import type { Puzzle, State, Vec3 } from '../core/types';
 import { mean } from '../core/vec';
 
@@ -25,13 +25,6 @@ export const TYPICAL: RGB[] = [
   [25, 75, 175],
 ];
 
-const lin = (c: number) => {
-  c /= 255;
-  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-};
-const gamma = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
-const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
-
 /** a bright stickerless cube's colors (like many of QiYi's): sky blue, lime green, crimson red */
 export const BRIGHT: RGB[] = [
   [205, 210, 210],
@@ -44,6 +37,16 @@ export const BRIGHT: RGB[] = [
 
 /** each kind of cube's colors; the kind whose colors fit what's seen is used */
 const PALETTES: Record<CubeKind, RGB[]> = { typical: TYPICAL, bright: BRIGHT };
+
+/** a kind's colors, by a puzzle's color ids */
+const paletteOf = (kind: CubeKind, ids?: number[]) => byIds(PALETTES[kind], ids);
+
+const lin = (c: number) => {
+  c /= 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+const gamma = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
 
 /**
  * How much better than a typical cube's each kind's centers must fit for it to be taken: a
@@ -99,9 +102,9 @@ const PRIOR = 1, BLIND_PRIOR = 6;
  * The known cube is the one whose colors, so corrected, come closest to the seen ones: a
  * lime green center says it's a bright cube, whose blue is sky blue rather than navy.
  */
-export function calibrate(seen: (RGB | undefined)[]): Calibration {
+export function calibrate(seen: (RGB | undefined)[], ids?: number[]): Calibration {
   return best(kinds.map((kind) => {
-    const palette = PALETTES[kind];
+    const palette = paletteOf(kind, ids);
     const st = [0, 0, 0], tt = [0, 0, 0];
     seen.forEach((s, id) => {
       if (s) for (let k = 0; k < 3; k++) {
@@ -124,11 +127,11 @@ export function calibrate(seen: (RGB | undefined)[]): Calibration {
  * cube's average, shifted by the camera. Part of a cube is a rougher guess. The known cube
  * is the one whose colors, so shifted, leave the samples closest to one of them.
  */
-export function calibrateBlind(samples: RGB[]): Calibration {
+export function calibrateBlind(samples: RGB[], ids?: number[]): Calibration {
   const labs = samples.map(toLab);
   const st = [0, 1, 2].map((k) => samples.reduce((sum, s) => sum + lin(s[k]), 0));
   return best(kinds.map((kind) => {
-    const palette = PALETTES[kind];
+    const palette = paletteOf(kind, ids);
     const tt = paletteMean(palette).map((x) => x * samples.length);
     // one face says little about a channel on its own, so each leans on the overall gain by a few stickers' worth
     const gain = gains(st, tt, BLIND_PRIOR);
@@ -156,14 +159,17 @@ const shift = (c: RGB, gain: number[]) => c.map((x, k) => Math.round(255 * gamma
 
 /** Nearest reference color id, or -1 if there are none. `refs` may have gaps. */
 export function nearest(sample: RGB, refs: (RGB | undefined)[]): number {
+  const lab = toLab(sample);
   let best = -1, bestD = Infinity;
   refs.forEach((r, id) => {
     if (!r) return;
-    const d = labDistance(toLab(sample), toLab(r));
+    const d = labDistance(lab, toLab(r));
     if (d < bestD) { bestD = d; best = id; }
   });
   return best;
 }
+
+const sum = (v: number[]) => v.reduce((a, b) => a + b, 0);
 
 /**
  * Color ids for every sample, with `fixed` samples (the centers) pinned to theirs and each
@@ -173,8 +179,6 @@ export function nearest(sample: RGB, refs: (RGB | undefined)[]): number {
  * judged by how bright the colors it took are elsewhere; each color's reference becomes the
  * average of the stickers it took, which is steadier than one center; and it goes again.
  */
-const sum = (v: number[]) => v.reduce((a, b) => a + b, 0);
-
 function classifyAll(samples: RGB[], refs: RGB[], fixed: Map<number, number>, perColor: number): number[] {
   const linear = samples.map(toLinear);
   let out = assign(samples.map(toLab), refs.map(toLab), fixed, perColor);
@@ -212,36 +216,45 @@ function assign(labs: Lab[], refs: Lab[], fixed: Map<number, number>, perColor: 
 }
 
 /**
+ * Reference colors for a scan's faces so far (`captured[k]` the samples of `puzzle.scan[k]`,
+ * or undefined if not yet in): their fixed centers stand in for a known cube's colors and
+ * correct the rest; a puzzle without them corrects all of a known cube's by every sticker seen.
+ */
+export function calibrateFaces(puzzle: Puzzle, captured: (RGB[] | undefined)[]): Calibration {
+  const faces = puzzle.scan!, ids = puzzle.cubeColorIds;
+  if (faces[0].center === undefined) return calibrateBlind(captured.flatMap((s) => s ?? []), ids);
+  const seen: (RGB | undefined)[] = [];
+  faces.forEach((f, k) => { if (captured[k]) seen[f.face] = captured[k][f.center!]; });
+  return calibrate(seen, ids);
+}
+
+/**
  * The state a scan shows, and the kind of cube it's of: `captured[k]` holds the samples of
  * `puzzle.scan[k]`, row by row. Fixed centers decide their faces' colors, and every other
  * sticker goes to the center it's closest to; without them, the whole scan's average sets
- * the colors to match.
+ * the colors to match, and the puzzle turns the state the way it's drawn.
  */
 export function scanState(puzzle: Puzzle, captured: RGB[][]): { state: State; kind: CubeKind } {
   const faces = puzzle.scan!;
   const perFace = faces[0].stickers.length;
   const state: State = puzzle.stickers.map(() => puzzle.unset);
-  const samples = captured.flat();
   const stickers = faces.flatMap((f) => f.stickers);
   const fixed = new Map<number, number>();
-  const refs: RGB[] = [];
-  faces.forEach((f, k) => {
-    if (f.center === undefined) return;
-    fixed.set(k * perFace + f.center, f.face);
-    refs[f.face] = captured[k][f.center];
-  });
-  const fit = fixed.size ? calibrate(refs) : calibrateBlind(samples);
-  classifyAll(samples, fixed.size ? refs : fit.refs, fixed, perFace).forEach((c, i) => { state[stickers[i]] = c; });
-  return { state, kind: fit.kind };
+  faces.forEach((f, k) => { if (f.center !== undefined) fixed.set(k * perFace + f.center, f.face); });
+  const fit = calibrateFaces(puzzle, captured);
+  classifyAll(captured.flat(), fit.refs, fixed, perFace).forEach((c, i) => { state[stickers[i]] = c; });
+  return { state: puzzle.orientScan?.(state) ?? state, kind: fit.kind };
 }
 
-/** The median of each channel over an RGBA pixel buffer: robust to glare and the sticker's edges. */
-export function medianColor(data: Uint8ClampedArray): RGB {
-  const ch = [0, 1, 2].map((k) => {
+/**
+ * The median of each channel over the `w`×`w` square at `x`, `y` of an RGBA image `stride`
+ * pixels wide: robust to glare and the sticker's edges.
+ */
+export function medianColor(data: Uint8ClampedArray, stride: number, x: number, y: number, w: number): RGB {
+  return [0, 1, 2].map((k) => {
     const v: number[] = [];
-    for (let p = k; p < data.length; p += 4) v.push(data[p]);
+    for (let row = y; row < y + w; row++) for (let col = x; col < x + w; col++) v.push(data[4 * (row * stride + col) + k]);
     v.sort((a, b) => a - b);
     return v[v.length >> 1];
-  });
-  return ch as RGB;
+  }) as RGB;
 }

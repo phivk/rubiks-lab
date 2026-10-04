@@ -75,11 +75,13 @@ export interface MoveButton {
 export interface ScanFace {
   /** which face, by its color id when solved */
   face: number;
-  /** the face that should be on top, likewise */
-  top: number;
+  /** the face that should be on top, likewise, if it goes by color */
+  top?: number;
+  /** a triangular face (a Pyraminx's), pointing up or down; square without */
+  shape?: 'up' | 'down';
   /** how to get there from the face before; `{side}` is the camera's right, which is your left in front of a webcam */
   how: string;
-  /** stickers as the camera sees them, row by row from the top left */
+  /** stickers as the camera sees them, row by row from the top left (see scan/cells.ts) */
   stickers: number[];
   /**
    * index in `stickers` of a fixed center, whose color tells which face this is; without
@@ -140,6 +142,10 @@ export interface Puzzle {
 
   /** the faces to scan, in order, if the puzzle can be scanned with a camera */
   scan?: ScanFace[];
+  /** the cube color id each of its colors is picked from (see pickColors), if not the cubes' own */
+  cubeColorIds?: number[];
+  /** a scan that goes by position, held any way round, turned the way the puzzle is drawn */
+  orientScan?: (s: State) => State;
 
   encode: (s: State) => string;
   decode: (text: string) => State | null;

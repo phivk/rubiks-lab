@@ -12,8 +12,9 @@ import * as THREE from 'three';
 import { pickColors } from '../core/colors';
 import type { State, StickerDef, Turn, Vec3 } from '../core/types';
 
-/** green, blue, red and yellow, as the cubes draw them */
-export const COLORS = pickColors([2, 5, 1, 3], '#2c313c');
+/** green, blue, red and yellow, by the cubes' color ids */
+export const CUBE_COLOR_IDS = [2, 5, 1, 3];
+export const COLORS = pickColors(CUBE_COLOR_IDS, '#2c313c');
 export const COLOR_NAMES = ['Green', 'Blue', 'Red', 'Yellow', 'Eraser'];
 export const UNSET = 4;
 export const COLOR_LETTERS = 'GBRY';
@@ -205,6 +206,17 @@ export function parseMove(move: string): Turn | null {
     turnCache.set(key, t);
   }
   return t;
+}
+
+/** The 12 ways to turn the whole puzzle, as sticker permutations, starting with not at all. */
+export const rotations: number[][] = [Array.from({ length: N }, (_, i) => i)];
+const allPieces = Array.from({ length: 15 }, (_, i) => i);
+const turnWhole = [0, 1].map((v) => permutation(v, allPieces, (2 * Math.PI) / 3));
+for (let k = 0; k < rotations.length; k++) {
+  for (const t of turnWhole) {
+    const next = t.map((i) => rotations[k][i]);
+    if (!rotations.some((r) => r.every((x, i) => x === next[i]))) rotations.push(next);
+  }
 }
 
 export const apply = (s: State, move: string) => parseMove(move)!.perm.map((src) => s[src]);
