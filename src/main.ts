@@ -123,10 +123,40 @@ const idle = () => new Promise<void>((resolve) => {
 function follow(move: string, back = false) {
   const s = solution;
   // queued moves are already counted in the index, so it always describes the state after the queue
-  if (s && !s.stale && !s.searching && s.moves[back ? s.index - 1 : s.index] === move) {
+  const live = s && !s.stale && !s.searching;
+  if (live && s.moves[back ? s.index - 1 : s.index] === move) {
     s.index += back ? -1 : 1;
     playing = false;
+  } else if (live && !back && isHalfOf(s.moves[s.index], move)) {
+    // a half turn made as two quarter turns: split it, and the first quarter is done
+    splitMove(s, s.index, move);
+    s.index++;
+    playing = false;
+    renderSolution();
   } else invalidateSolution();
+}
+
+/** whether `quarter` (R or R') is half of the half turn `half` (R2) */
+const isHalfOf = (half: string | undefined, quarter: string) =>
+  !!half?.endsWith('2') && [half.slice(0, -1), half.slice(0, -1) + "'"].includes(quarter);
+
+/** Replace the solution's move at `i` with two `quarter`s, in the lesson's steps too. */
+function splitMove(s: Solution, i: number, quarter: string) {
+  s.moves.splice(i, 1, quarter, quarter);
+  if (!s.lesson) return;
+  const { steps, starts } = s.lesson;
+  let k = 0;
+  while (k + 1 < starts.length && starts[k + 1] <= i) k++;
+  let at = starts[k];
+  for (const p of steps[k].phrases) {
+    if (i < at + p.moves.length) {
+      p.moves.splice(i - at, 1, quarter, quarter);
+      break;
+    }
+    at += p.moves.length;
+  }
+  for (let j = k + 1; j < starts.length; j++) starts[j]++;
+  lessonStep = -1;
 }
 
 function commitUserMove(move: string, animate = true) {
@@ -217,6 +247,7 @@ async function switchPuzzle(p: Puzzle) {
     if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
   document.body.dataset.puzzle = p.id;
+  $('#btn-flip').classList.toggle('hidden', !p.parseMove('z2'));
   view.setPuzzle(p, session.state);
   maps.forEach((m) => m.setPuzzle(p));
   renderMapKind();
@@ -862,6 +893,8 @@ function bind() {
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-redo').addEventListener('click', redo);
   $('#btn-camera').addEventListener('click', () => view.resetCamera());
+  // turning the whole cube by dragging isn't possible, and lessons ask for a flip
+  $('#btn-flip').addEventListener('click', () => commitUserMove('z2'));
   $('#btn-help').addEventListener('click', () => ($('#help') as HTMLDialogElement).showModal());
   $('#btn-share').addEventListener('click', async () => {
     saveToUrl();

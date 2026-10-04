@@ -193,7 +193,7 @@ export function beginnerGuide(M: CubeModel): Guide {
       stage: 1,
       title: 'Flip the cube',
       html: `<p>Turn the cube upside down, so the ${name(white)} cross is on the bottom. It stays there from now on.</p>` +
-        `<p>The corners go in from the top, where you can watch them.</p>`,
+        `<p>The corners go in from the top, where you can watch them. Press play, or flip it yourself with the <b>Flip</b> button at the top.</p>`,
       phrases: rotatePhrase(flip[0]),
       focus: focusOn([...'FRBL'].map((f) => [white, center(s, f)])),
     });
