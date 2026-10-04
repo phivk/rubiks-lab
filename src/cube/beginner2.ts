@@ -12,13 +12,16 @@
 // each side: every other corner is matched to it, and opposite faces get opposite colors.
 
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
-import { alg, countMoves, lessonKit, repeat, ROTATIONS, rounds, SIDE_NAME, TOP_CORNERS, U_TURNS } from './lessonKit';
+import { headlights } from './lastLayer';
+import {
+  alg, allRotations, CORNERS, countMoves, lessonKit, lessonNotes, repeat, ROTATIONS, rounds, SIDE_NAME, TOP_CORNERS, U_TURNS,
+} from './lessonKit';
 import type { CubeModel } from './model';
 
 const SEXY = alg("R U R' U'");
 const SUNE = alg("R U R' U R U2 R'");
 const APERM = alg("R' F R' B2 R F' R' B2 R2");
-const CORNERS = ['UFR', 'URB', 'UBL', 'ULF', 'DRF', 'DFL', 'DLB', 'DBR'];
+const BOTTOM_CORNERS = CORNERS.slice(4);
 const OPPOSITE: Record<string, string> = { U: 'D', D: 'U', F: 'B', B: 'F', R: 'L', L: 'R' };
 
 export const STAGES = [
@@ -27,33 +30,14 @@ export const STAGES = [
   { name: 'Swap corners', goal: 'Move the top corners to their spots.' },
 ];
 
-/** whole-cube turns reaching all 24 ways to hold a cube, each as short as possible */
-function allRotations(M: CubeModel) {
-  const out: string[][] = [[]];
-  const seen = new Set([M.solved().join()]);
-  for (let i = 0; i < out.length; i++) {
-    for (const r of ['y', "y'", 'x', "x'", 'z', "z'"]) {
-      const moves = [...out[i], r];
-      const k = M.applyAll(M.solved(), moves).join();
-      if (!seen.has(k)) {
-        seen.add(k);
-        out.push(M.simplify(moves));
-      }
-    }
-  }
-  return out;
-}
-
 export function beginner2Guide(M: CubeModel): Guide {
   if (M.n !== 2) throw new Error('This lesson is for the 2×2');
   const K = lessonKit(M);
-  const { at, colorsAt, stickersOf, apply, name, piece, plain, code, first, rotatePhrase, topPhrase } = K;
+  const { at, colorsAt, stickersOf, find, focusOn, apply, name, piece, plain, code, first, rotatePhrase, topPhrase } = K;
   const white = 0;
   const yellow = 3;
   const HOLDS = allRotations(M);
 
-  const find = (s: State, cols: number[]) => CORNERS.find((slot) => cols.every((c) => colorsAt(s, slot).includes(c)))!;
-  const focusOn = (pieces: number[][]) => (s: State) => pieces.flatMap((p) => stickersOf(find(s, p)));
 
   /**
    * The color each face should end up, read off the starting corner `ref` (white facing
@@ -75,18 +59,17 @@ export function beginner2Guide(M: CubeModel): Guide {
 
   // ---------- 1. white layer ----------
 
-  /** text for the next step, when a step had nothing to turn */
-  let preface = '';
+  let notes = lessonNotes();
 
   function whiteLayer(s: State, steps: GuideStep[]) {
     // start from the white corner (and way of holding the cube) that has the most of the
     // layer done already, then the fewest turns
     const options = HOLDS.flatMap((r) => {
       const t = apply(s, r);
-      return ['DRF', 'DFL', 'DLB', 'DBR'].filter((slot) => t[at(slot, 'D')] === white).map((slot) => {
+      return BOTTOM_CORNERS.filter((slot) => t[at(slot, 'D')] === white).map((slot) => {
         const ref = colorsAt(t, slot);
         const placed = placedFor(ref);
-        return { r, t, ref, done: ['DRF', 'DFL', 'DLB', 'DBR'].filter((c) => placed(t, c)).length };
+        return { r, t, ref, done: BOTTOM_CORNERS.filter((c) => placed(t, c)).length };
       });
     });
     const start = options.reduce((a, b) => (b.done > a.done || (b.done === a.done && b.r.length < a.r.length) ? b : a));
@@ -105,7 +88,7 @@ export function beginner2Guide(M: CubeModel): Guide {
         phrases: [{ label: 'Turn the whole cube', moves: start.r }],
         focus: focusOn([ref]),
       });
-    } else preface = intro;
+    } else notes.add(steps, intro);
     s = start.t;
 
     // the other three white corners: each is white plus the colors of the two sides it sits between
@@ -151,11 +134,10 @@ export function beginner2Guide(M: CubeModel): Guide {
       steps.push({
         stage: 0,
         title: `The ${plain(best.cols)} corner`,
-        html: preface + `<p>Find the ${piece(best.cols)} corner.</p>` + best.text,
+        html: `<p>Find the ${piece(best.cols)} corner.</p>` + best.text,
         phrases: best.phrases,
         focus: focusOn([ref, best.cols]),
       });
-      preface = '';
       s = best.s;
       todo = todo.filter((cols) => !placed(s, find(s, cols)));
     }
@@ -178,7 +160,7 @@ export function beginner2Guide(M: CubeModel): Guide {
         : (t: State) => t[at('ULF', 'F')] === yellow;
       const u = first(s, U_TURNS, rule);
       const t = apply(s, [u, ...SUNE]);
-      const html = preface + (round === 0
+      const html = (round === 0
         ? `<p>Now the yellow stickers on top. One algorithm does it, the <b>Sune</b>: ${code(SUNE)}. It twists the top corners and leaves the white layer alone, and a simple rule says how to hold the cube each time.</p>`
         : '') +
         (up === 1
@@ -194,7 +176,6 @@ export function beginner2Guide(M: CubeModel): Guide {
         phrases: [...topPhrase(u), { label: 'Sune', moves: SUNE }],
         focus: focusTop,
       });
-      preface = '';
       s = t;
     }
     return s;
@@ -202,20 +183,14 @@ export function beginner2Guide(M: CubeModel): Guide {
 
   // ---------- 3. swap corners ----------
 
-  /** sides of the top whose two corners show the same color there */
-  const headlights = (t: State) => [...'FRBL'].filter((f) => {
-    const cs = TOP_CORNERS.filter((c) => c.includes(f));
-    return t[at(cs[0], f)] === t[at(cs[1], f)];
-  });
-
   function swapCorners(s: State, steps: GuideStep[]) {
     for (let round = 0; ; round++) {
       if (round > 3) throw new Error('2×2 guide: swap corners');
-      const lights = headlights(s);
+      const lights = headlights(K, s);
       if (lights.length === 4) break;
-      const u = lights.length ? first(s, U_TURNS, (t) => headlights(t).includes('B')) : '';
+      const u = lights.length ? first(s, U_TURNS, (t) => headlights(K, t).includes('B')) : '';
       const t = apply(s, [u, ...APERM]);
-      const done = headlights(t).length === 4;
+      const done = headlights(K, t).length === 4;
       steps.push({
         stage: 2,
         title: lights.length ? 'Headlights at the back' : 'No headlights',
@@ -254,12 +229,12 @@ export function beginner2Guide(M: CubeModel): Guide {
     stages: STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
-      preface = '';
+      notes = lessonNotes();
       let s = whiteLayer(state, steps);
       s = yellowTop(s, steps);
       s = swapCorners(s, steps);
       if (!M.isSolved(s)) throw new Error('2×2 guide: not solved');
-      return steps;
+      return notes.place(steps);
     },
   };
 }

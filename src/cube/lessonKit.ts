@@ -49,6 +49,42 @@ export interface Macro {
 
 export type Kit = ReturnType<typeof lessonKit>;
 
+/** whole-cube turns reaching all 24 ways to hold a cube, each as short as possible */
+export function allRotations(M: CubeModel) {
+  const out: string[][] = [[]];
+  const seen = new Set([M.solved().join()]);
+  for (let i = 0; i < out.length; i++) {
+    for (const r of ['y', "y'", 'x', "x'", 'z', "z'"]) {
+      const moves = [...out[i], r];
+      const k = M.applyAll(M.solved(), moves).join();
+      if (!seen.has(k)) {
+        seen.add(k);
+        out.push(M.simplify(moves));
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Text from a stage that had nothing to turn, kept for the step after it (or the last step,
+ * if none follows). Make one per lesson.
+ */
+export function lessonNotes() {
+  const pending: { at: number; html: string }[] = [];
+  return {
+    add: (steps: GuideStep[], html: string) => void pending.push({ at: steps.length, html }),
+    /** put the notes on their steps */
+    place(steps: GuideStep[]) {
+      for (const { at, html } of pending.reverse()) {
+        const k = Math.min(at, steps.length - 1);
+        if (k >= 0) steps[k] = { ...steps[k], html: html + steps[k].html };
+      }
+      return steps;
+    },
+  };
+}
+
 // a position packs into one number, six bits per tracked sticker (there are 54 stickers)
 const pack = (p: number[]) => p.reduce((k, i) => (k << 6) | i, 0);
 /** where each macro takes a packed position */
@@ -370,7 +406,7 @@ export function lessonKit(M: CubeModel) {
   }
 
   return {
-    at, stickersOf, center, find, faceShowing, stickerOf, placed, inSpot, apply, focusOn, colorsAt, hold,
+    at, stickersOf, center, find, faceShowing, stickerOf, placed, inSpot, apply, focusOn, colorsAt, hold, dest,
     name, piece, plain, code, first, rotatePhrase, topPhrase,
     macros, route, table, keyTable, pairPhrases, pairWhere,
   };

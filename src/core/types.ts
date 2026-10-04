@@ -103,10 +103,8 @@ export interface Guide {
   /** the name on the method picker */
   short: string;
   intro: string;
-  /** notation the lesson uses beyond face turns and y, explained before it starts */
+  /** notation the lesson uses beyond the puzzle's basic moves, explained before it starts */
   notation?: string;
-  /** replaces the explanation of cube notation, for puzzles that aren't cubes */
-  basics?: string;
   stages: { name: string; goal: string }[];
   /** throws if the state can't be solved this way */
   steps: (s: State) => GuideStep[];
@@ -152,6 +150,8 @@ export interface Puzzle {
   keyToMove: (code: string, shift: boolean, alt: boolean) => string | null;
   shortcutsHtml: string;
   paintIntroHtml: string;
+  /** how the basic moves are written, explained before a lesson */
+  notationHtml: string;
   algPlaceholder: string;
 
   encode: (s: State) => string;

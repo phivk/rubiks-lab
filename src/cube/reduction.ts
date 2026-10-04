@@ -17,11 +17,12 @@
 // search follows one sticker per piece of the edge; moves that would break a finished
 // edge are refused, by tracking which edge slots hold finished edges.
 
-import { COLORS, COLOR_NAMES } from '../core/colors';
 import { parity } from '../core/perm';
 import type { Guide, GuideStep, Phrase, State, Vec3 } from '../core/types';
 import { beginnerStages, STAGES as BEGINNER_STAGES } from './beginner';
-import { alg, EDGES, lessonKit, sameSlot, TOP_CORNERS, type Macro } from './lessonKit';
+import {
+  alg, allRotations, stepMoves, EDGES, lessonKit, lessonNotes, macroMoves, onceOnly, sameSlot, TOP_CORNERS, TOP_EDGES, U_TURNS, type Macro,
+} from './lessonKit';
 import { CubeModel, FACES, invertMove, type LayerTurn } from './model';
 
 const FACE_AXIS: Record<string, 0 | 1 | 2> = { R: 0, L: 0, U: 1, D: 1, F: 2, B: 2 };
@@ -32,57 +33,34 @@ const FLIP = alg("R U R' F R' F' R");
 const EDGE_PARITY_5 = alg("Rw U2 x Rw U2 Rw U2 Rw' U2 Lw U2 3Rw' U2 Rw U2 Rw' U2 Rw'");
 
 const cube3 = new CubeModel(3);
+const K3 = lessonKit(cube3);
+/** the stages of the 3×3 beginner's method this lesson finishes with, and where they start in its own list */
+const B = beginnerStages(cube3);
+const BASE = 2;
+const stageOf = (name: string) => BASE + BEGINNER_STAGES.findIndex((st) => st.name === name);
+
+type CenterMacro = Macro & { to: readonly number[] };
 
 export function reductionGuide(M: CubeModel): Guide {
   const n = M.n;
   if (n !== 4 && n !== 5) throw new Error('The reduction lesson is for the 4×4 and 5×5');
   const odd = n % 2 === 1;
   const m = n - 1;
-  const apply = (s: State, moves: string[]) => M.applyAll(s, moves.filter(Boolean));
-  const name = (c: number) => `<span class="cname" style="--c:${COLORS[c]}">${COLOR_NAMES[c].toLowerCase()}</span>`;
-  const plainName = (c: number) => COLOR_NAMES[c].toLowerCase();
-  const code = (moves: string[]) => `<code>${moves.join(' ')}</code>`;
+  const K = lessonKit(M);
+  const { apply, name, code, dest } = K;
+  const plainName = (c: number) => K.plain([c]);
   const faceOf = (i: number) => FACES[M.facelets[i].face];
-
-  /** where each sticker goes under `moves` */
-  const destCache = new Map<string, Int16Array>();
-  function dest(moves: string[]) {
-    const k = moves.join(' ');
-    let to = destCache.get(k);
-    if (to) return to;
-    to = Int16Array.from(M.facelets, (f) => f.index);
-    for (const mv of moves) {
-      const perm = M.permutation(M.parseMove(mv)!);
-      const step = new Int16Array(perm.length);
-      perm.forEach((src, d) => (step[src] = d));
-      to = to.map((i) => step[i]);
-    }
-    destCache.set(k, to);
-    return to;
-  }
-
-  // ---------- whole-cube turns ----------
-
-  const HOLDS: string[][] = [[]];
-  {
-    const seen = new Set([M.solved().join()]);
-    for (let i = 0; i < HOLDS.length; i++) {
-      for (const r of ['y', "y'", 'x', "x'", 'z', "z'"]) {
-        const moves = [...HOLDS[i], r];
-        const k = apply(M.solved(), moves).join();
-        if (!seen.has(k)) {
-          seen.add(k);
-          HOLDS.push(M.simplify(moves));
-        }
-      }
-    }
-  }
+  const HOLDS = allRotations(M);
+  let notes = lessonNotes();
 
   // ---------- centers ----------
 
+  /** the kinds of moving center piece (one on a 4×4; x- and t-centers on a 5×5), each a list of stickers */
+  const CENTER_ORBITS = M.orbits.filter((o) => o.size === 1 && o.slots.length > 6).map((o) => o.slots.map((sl) => sl.facelets[0]));
   /** every center sticker that can move between faces */
-  const CENTERS = M.orbits.filter((o) => o.size === 1 && o.slots.length > 6).flatMap((o) => o.slots.map((sl) => sl.facelets[0]));
-  const centersOn = (face: string) => CENTERS.filter((i) => faceOf(i) === face);
+  const CENTERS = CENTER_ORBITS.flat();
+  const CENTERS_ON = Object.fromEntries([...FACES].map((f) => [f, CENTERS.filter((i) => faceOf(i) === f)]));
+  const centersOn = (face: string) => CENTERS_ON[face];
   const fixedOn = (face: string) => M.fixedCenters[FACES.indexOf(face)];
   const countOn = (s: State, face: string, c: number) => centersOn(face).filter((i) => s[i] === c).length;
   const centerDone = (s: State, face: string, c: number) => countOn(s, face, c) === centersOn(face).length;
@@ -92,7 +70,7 @@ export function reductionGuide(M: CubeModel): Guide {
   function scheme(u: number, f: number): Record<string, number> {
     for (const r of HOLDS) {
       const t = cube3.applyAll(cube3.solved(), r);
-      const at = (face: string) => t[FACES.indexOf(face) * 9 + 4];
+      const at = (face: string) => K3.center(t, face);
       if (at('U') === u && at('F') === f) return Object.fromEntries([...FACES].map((face) => [face, at(face)]));
     }
     throw new Error('reduction guide: no such color scheme');
@@ -113,22 +91,24 @@ export function reductionGuide(M: CubeModel): Guide {
   const OUTER = layerTurns('outer');
   const WIDE = layerTurns('wide');
   const INNER = layerTurns('inner');
-  /** the kinds of moving center piece (one on a 4×4; x- and t-centers on a 5×5), each a list of stickers */
-  const CENTER_ORBITS = M.orbits.filter((o) => o.size === 1 && o.slots.length > 6).map((o) => o.slots.map((sl) => sl.facelets[0]));
   const posIndex = new Int16Array(M.size).fill(-1);
   for (const orbit of CENTER_ORBITS) orbit.forEach((i, k) => (posIndex[i] = k));
 
   /** maps the stickers in `slots` onto `slots`, as a set */
-  const keepsSet = (to: Int16Array, slots: number[]) => slots.every((i) => slots.includes(to[i]));
+  const keepsSet = (to: readonly number[], slots: number[]) => slots.every((i) => slots.includes(to[i]));
 
   /**
    * Macros for building the center on `target` without undoing `keep` (sets of slots to keep
    * full): single turns, and X Y X' with X a slice or wide turn across the target and Y a
    * face turn.
    */
-  function centerMacros(target: string, keep: number[][], orbit: number[], commutators = false): (Macro & { to: Int16Array })[] {
-    const ok = (to: Int16Array) => M.fixedCenters.every((i) => to[i] === i) && keep.every((slots) => keepsSet(to, slots));
-    const out = new Map<string, Macro & { to: Int16Array }>();
+  const macroCache = new Map<string, CenterMacro[]>();
+  function centerMacros(target: string, keep: number[][], orbit: number[], commutators = false): CenterMacro[] {
+    const cacheKey = [target, commutators, orbit[0], ...keep.map((slots) => slots.join())].join('|');
+    const cached = macroCache.get(cacheKey);
+    if (cached) return cached;
+    const ok = (to: readonly number[]) => M.fixedCenters.every((i) => to[i] === i) && keep.every((slots) => keepsSet(to, slots));
+    const out = new Map<string, CenterMacro>();
     const add = (moves: string[], cost: number) => {
       const to = dest(moves);
       if (!ok(to)) return;
@@ -163,47 +143,51 @@ export function reductionGuide(M: CubeModel): Guide {
         }
       }
     }
-    return [...out.values()];
+    const list = [...out.values()];
+    macroCache.set(cacheKey, list);
+    return list;
   }
 
-  const pack = (pos: number[]) => pos.reduce((k, p) => k * 32 + p, 0);
+  const popcount = (x: number) => {
+    let k = 0;
+    for (; x; x &= x - 1) k++;
+    return k;
+  };
 
   /**
    * The cheapest run of macros after which `target` holds at least `need` pieces of color c
-   * from `orbit`. It follows the set of slots holding the color, as one sorted list.
+   * from `orbit`. It follows the set of slots holding the color, as a bitmask (an orbit has
+   * 24 slots).
    */
-  function centerRoute(s: State, c: number, target: string, need: number, ms: (Macro & { to: Int16Array })[], orbit: number[]): Macro[] | null {
-    const onTarget = new Set(orbit.filter((i) => faceOf(i) === target).map((i) => posIndex[i]));
-    const start = orbit.flatMap((i, k) => (s[i] === c ? [k] : []));
+  function centerRoute(s: State, c: number, target: string, need: number, ms: CenterMacro[], orbit: number[]): Macro[] | null {
+    const onTarget = orbit.reduce((mask, i, k) => (faceOf(i) === target ? mask | (1 << k) : mask), 0);
+    const start = orbit.reduce((mask, i, k) => (s[i] === c ? mask | (1 << k) : mask), 0);
     const maps = ms.map((mc) => orbit.map((i) => posIndex[mc.to[i]]));
-    const best = new Map<number, { cost: number; prev: number; via: number }>([[pack(start), { cost: 0, prev: -1, via: -1 }]]);
-    const buckets: number[][][] = [[start]];
+    const best = new Map<number, { cost: number; prev: number; via: number }>([[start, { cost: 0, prev: -1, via: -1 }]]);
+    const buckets: number[][] = [[start]];
     for (let cost = 0; cost < buckets.length && cost <= 160; cost++) {
-      for (const pos of buckets[cost] ?? []) {
-        const k = pack(pos);
+      for (const k of buckets[cost] ?? []) {
         if (best.get(k)!.cost !== cost) continue;
-        if (pos.filter((p) => onTarget.has(p)).length >= need) {
+        if (popcount(k & onTarget) >= need) {
           const path: Macro[] = [];
           for (let cur = k; best.get(cur)!.prev !== -1; cur = best.get(cur)!.prev) path.unshift(ms[best.get(cur)!.via]);
           return path;
         }
-        ms.forEach((mc, j) => {
-          const next = pos.map((p) => maps[j][p]).sort((a, b) => a - b);
-          const nk = pack(next);
-          const nc = cost + mc.cost;
+        for (let j = 0; j < ms.length; j++) {
+          const map = maps[j];
+          let nk = 0;
+          for (let b = k; b; b &= b - 1) nk |= 1 << map[31 - Math.clz32(b & -b)];
+          const nc = cost + ms[j].cost;
           const old = best.get(nk);
           if (!old || nc < old.cost) {
             best.set(nk, { cost: nc, prev: k, via: j });
-            (buckets[nc] ??= []).push(next);
+            (buckets[nc] ??= []).push(nk);
           }
-        });
+        }
       }
     }
     return null;
   }
-
-  /** text for the next step, when a step had nothing to do */
-  let preface = '';
 
   /** Build the center of color c on `target` (U or F), as one step, keeping the centers on `done`. */
   function buildCenter(s: State, c: number, target: string, done: string[], hold: string[], steps: GuideStep[], intro: string) {
@@ -216,7 +200,7 @@ export function reductionGuide(M: CubeModel): Guide {
     for (const orbit of CENTER_ORBITS) {
       const slots = orbit.filter((i) => faceOf(i) === target);
       const ms = centerMacros(target, keep, orbit);
-      let more: (Macro & { to: Int16Array })[] | null = null;
+      let more: CenterMacro[] | null = null;
       for (let have = slots.filter((i) => s[i] === c).length; have < slots.length; have = slots.filter((i) => s[i] === c).length) {
         let path = centerRoute(s, c, target, have + 1, ms, orbit);
         if (!path) {
@@ -236,19 +220,19 @@ export function reductionGuide(M: CubeModel): Guide {
           phrases.push({ label: 'Move one in', moves: pending });
           pending = [];
         }
-        s = apply(s, path.flatMap((mc) => mc.moves));
+        s = apply(s, macroMoves(path));
       }
       keep.push(slots);
     }
     if (!phrases.length) {
-      preface += intro;
+      notes.add(steps, intro);
       return s;
     }
     const where = target === 'U' ? 'top' : 'front';
     steps.push({
       stage: 0,
       title: `The ${plainName(c)} center`,
-      html: preface + intro +
+      html: intro +
         `<p>${already ? `${already} of the ${PER_FACE} ${name(c)} center pieces ${already === 1 ? 'is' : 'are'} already on the ${where}.` : `None of the ${name(c)} center pieces is on the ${where} yet.`} ` +
         `Each group below brings one more: a slice turn lifts a piece in, a turn of the ${where} moves it out of that slice, and the slice turns back` +
         (done.length ? `, which puts the finished center${done.length > 1 ? 's' : ''} back too` : '') + '.</p>' +
@@ -258,7 +242,6 @@ export function reductionGuide(M: CubeModel): Guide {
       phrases,
       focus: (t) => [...CENTERS.filter((i) => t[i] === c), ...M.fixedCenters.filter((i) => t[i] === c)],
     });
-    preface = '';
     return s;
   }
 
@@ -271,10 +254,8 @@ export function reductionGuide(M: CubeModel): Guide {
     const notation = n === 4
       ? '<p>A 4×4 has no fixed centers: each center is four loose pieces that you group together. Lowercase or <code>w</code> turns take two layers (<code>Rw</code>), and <code>2R</code> turns just the second layer.</p>'
       : '<p>A 5×5 has a fixed center on each face that says its color; the eight pieces around it move. <code>Rw</code> turns two layers, <code>2R</code> just the second.</p>';
-    if (!centerDone(apply(s, best.r), 'U', white)) {
-      s = buildCenter(s, white, 'U', [], best.r, steps,
-        notation + `<p>Start with ${name(white)}. Hold the cube with ${odd ? `the white fixed center` : `the face with the most white center pieces`} on top${best.r.length ? '' : ' (it already is)'}.</p>`);
-    } else s = apply(s, best.r);
+    s = buildCenter(s, white, 'U', [], best.r, steps,
+      notation + `<p>Start with ${name(white)}. Hold the cube with ${odd ? `the white fixed center` : `the face with the most white center pieces`} on top${best.r.length ? '' : ' (it already is)'}.</p>`);
     // 2. yellow, opposite: flip so it's on top
     s = buildCenter(s, yellow, 'U', ['D'], ['x2'], steps,
       `<p>Flip the cube so the white center is on the bottom. ${name(yellow)} goes opposite white, so build it on top. Slices still turn freely, as long as each one turns back before it can carry a white piece away.</p>`);
@@ -286,21 +267,21 @@ export function reductionGuide(M: CubeModel): Guide {
     const want = (t: State) => odd ? Object.fromEntries([...FACES].map((f) => [f, t[fixedOn(f)]]))
       : built.length ? schemeFrom(t, built[0]) : null;
     // build the sides in a row round the cube, so the last two left are neighbours
-    for (let k = 0; ; k++) {
-      if (built.length === 3) break;
+    while (built.length < 3) {
+      const first = !built.length;
       const options = [[], ['y'], ["y'"], ['y2']].flatMap((r) => {
         const t = apply(s, r);
         const wt = want(t);
         // next to a built side: the color on a side face of a built face's neighbour
         const nextTo = (c: number) => !built.length || ['R', 'L'].some((f) => built.includes(wt![f])) && wt!.F === c;
-        return (wt && (odd || built.length) ? [wt.F] : sideColors).filter((c) => !built.includes(c) && nextTo(c)).map((c) => ({ r, t, c }));
+        return (wt ? [wt.F] : sideColors).filter((c) => !built.includes(c) && nextTo(c)).map((c) => ({ r, t, c }));
       });
       const pick = options.reduce((x, y) => (countOn(y.t, 'F', y.c) > countOn(x.t, 'F', x.c) || (countOn(y.t, 'F', y.c) === countOn(x.t, 'F', x.c) && y.r.length < x.r.length) ? y : x));
       const wt = want(pick.t);
       const facesDone = wt ? sides.filter((f) => built.includes(wt[f])) : [];
       built.push(pick.c);
       s = buildCenter(s, pick.c, 'F', ['U', 'D', ...facesDone], pick.r, steps,
-        k === 0
+        first
           ? `<p>Now the sides, built on the front. ${odd ? 'The fixed centers say which color goes where.' : `Any color can go first; take ${name(pick.c)}, which has the most pieces together already. After that, the colors of a real cube decide where the others go.`} ` +
             `Turn the cube so that side faces you${pick.r.length ? '' : ' (it already does)'}. To keep the top and bottom centers, the slices now run sideways: <code>Uw</code>, <code>Dw</code> and their single layers.</p>`
           : `<p>Turn the cube so the side that needs ${name(pick.c)} faces you${pick.r.length ? '' : ' (it already does)'}` +
@@ -367,7 +348,7 @@ export function reductionGuide(M: CubeModel): Guide {
     return { wings, midge };
   }
 
-  interface EdgeMacro { moves: string[]; cost: number; to: Int16Array; safe: number; slotTo: Int8Array; label: string }
+  interface EdgeMacro { moves: string[]; cost: number; to: readonly number[]; safe: number; slotTo: Int8Array; label: string }
 
   /** a macro's effect on whole edges: which slots move as a consistent unit, and where to */
   function edgeMacro(moves: string[], cost: number, label: string): EdgeMacro {
@@ -397,7 +378,7 @@ export function reductionGuide(M: CubeModel): Guide {
     return out;
   };
 
-  const centersKept = (to: Int16Array) => M.fixedCenters.every((i) => to[i] === i) && [...FACES].every((f) => keepsSet(to, centersOn(f)));
+  const centersKept = (to: readonly number[]) => M.fixedCenters.every((i) => to[i] === i) && [...FACES].every((f) => keepsSet(to, centersOn(f)));
   const EDGE_SINGLES = OUTER.flatMap((t) => t.moves).map((mv) => edgeMacro([mv], 4, ''));
   const SLICES = ["Uw'", 'Uw', 'Dw', "Dw'"];
   const PAIRING: EdgeMacro[] = [];
@@ -432,10 +413,10 @@ export function reductionGuide(M: CubeModel): Guide {
    */
   function edgeRoute(follow: number[], goal: (pos: number[]) => boolean, mask: number, ms: EdgeMacro[], maxCost: number) {
     type Node = { cost: number; prev: number; via: number; mask: number };
+    // stickers number under 256, so a position packs into one number
     const key = (pos: number[]) => pos.reduce((k, p) => k * 256 + p, 0);
-    const start = follow;
-    const best = new Map<number, Node>([[key(start), { cost: 0, prev: -1, via: -1, mask }]]);
-    const buckets: number[][][] = [[start]];
+    const best = new Map<number, Node>([[key(follow), { cost: 0, prev: -1, via: -1, mask }]]);
+    const buckets: number[][][] = [[follow]];
     for (let cost = 0; cost < buckets.length && cost <= maxCost; cost++) {
       for (const pos of buckets[cost] ?? []) {
         const k = key(pos);
@@ -449,13 +430,13 @@ export function reductionGuide(M: CubeModel): Guide {
         for (let j = 0; j < ms.length; j++) {
           const mc = ms[j];
           if ((node.mask & ~mc.safe) !== 0) continue;
-          const next = pos.map((p) => mc.to[p]);
-          const nk = key(next);
+          let nk = 0;
+          for (const p of pos) nk = nk * 256 + mc.to[p];
           const nc = cost + mc.cost;
           const old = best.get(nk);
           if (!old || nc < old.cost) {
             best.set(nk, { cost: nc, prev: k, via: j, mask: permuteMask(node.mask, mc) });
-            (buckets[nc] ??= []).push(next);
+            (buckets[nc] ??= []).push(pos.map((p) => mc.to[p]));
           }
         }
       }
@@ -498,15 +479,22 @@ export function reductionGuide(M: CubeModel): Guide {
 
   const ALL_PAIRS = [[0, 1], [0, 2], [0, 4], [0, 5], [3, 1], [3, 2], [3, 4], [3, 5], [1, 2], [2, 4], [4, 5], [5, 1]];
 
+  type Piece = { sticker: number; color: number };
+  /** the wing is joined to the midge */
+  const attached = (midge: Piece, w: Piece) => together([midge.sticker, w.sticker], [midge.color, w.color]);
+  /** every sticker of the given edges' pieces */
+  const edgeFocus = (pairs: number[][]) => (t: State) =>
+    pairs.flatMap(([a, b]) => {
+      const p = piecesOf(t, a, b);
+      return [...p.wings, ...(p.midge ? [p.midge] : [])].flatMap((x) => [x.sticker, partner(x.sticker)]);
+    });
+
   function edgesStage(s: State, steps: GuideStep[]) {
-    let firstStep = true;
     let current: number[] | null = null;
-    const explain = () => {
-      if (!firstStep) return '';
-      firstStep = false;
-      return `<p>Now pair up the edges, while keeping the centers. The trick: bring the pieces of one edge into the middle layer at different heights, so that turning a slice (<code>Uw</code> or <code>Dw</code>) lines them up — the centers move too, for a moment. ` +
-        `Then swap the joined edge out of the middle layer with a move like <code>R U R'</code>, which brings an unfinished edge in, and turn the slice back to fix the centers. Turns of the outer faces never split an edge, so the set-up moves are safe.</p>`;
-    };
+    const once = onceOnly();
+    const explain = () =>
+      once('edges', `<p>Now pair up the edges, while keeping the centers. The trick: bring the pieces of one edge into the middle layer at different heights, so that turning a slice (<code>Uw</code> or <code>Dw</code>) lines them up — the centers move too, for a moment. ` +
+        `Then swap the joined edge out of the middle layer with a move like <code>R U R'</code>, which brings an unfinished edge in, and turn the slice back to fix the centers. Turns of the outer faces never split an edge, so the set-up moves are safe.</p>`);
     for (let guard = 0; guard < 60; guard++) {
       const done = completeEdges(s);
       const todo = ALL_PAIRS.filter(([a, b]) => !done.has(edgeKey(a, b)));
@@ -516,18 +504,16 @@ export function reductionGuide(M: CubeModel): Guide {
         // the last two: everything about both at once
         const pieces = todo.map(([a, b]) => piecesOf(s, a, b));
         const follow = pieces.flatMap((p) => [...(p.midge ? [p.midge] : []), ...p.wings]);
-        const sizes = pieces.map((p) => p.wings.length + (p.midge ? 1 : 0));
-        const goal = (pos: number[]) => {
-          let at = 0;
-          return sizes.every((sz) => {
-            const ok = together(pos.slice(at, at + sz), follow.slice(at, at + sz).map((f) => f.color));
-            at += sz;
-            return ok;
-          });
-        };
+        // each edge's share of the followed stickers, and their colors
+        const groups = pieces.map((p, k) => {
+          const from = pieces.slice(0, k).reduce((x, q) => x + q.wings.length + (q.midge ? 1 : 0), 0);
+          const to = from + p.wings.length + (p.midge ? 1 : 0);
+          return { from, to, colors: follow.slice(from, to).map((f) => f.color) };
+        });
+        const goal = (pos: number[]) => groups.every((g) => together(pos.slice(g.from, g.to), g.colors));
         const path = edgeRoute(follow.map((f) => f.sticker), goal, mask, LAST_MACROS, 400);
         if (!path) throw new Error('reduction guide: last edges');
-        const moves = path.flatMap((mc) => mc.moves);
+        const moves = macroMoves(path);
         const usesParity = path.some((mc) => mc.label === 'parity');
         steps.push({
           stage: 1,
@@ -539,10 +525,7 @@ export function reductionGuide(M: CubeModel): Guide {
               : '<p>One edge is left.</p>') +
             (usesParity ? `<p>On a 5×5 the last edge can end up with its two outer pieces swapped, which no pairing move fixes. That’s <b>edge parity</b>; ${code(EDGE_PARITY_5)} swaps them back, at the front of the top.</p>` : ''),
           phrases: edgePhrases(path),
-          focus: (t) => {
-            const ps = todo.map(([a, b]) => piecesOf(t, a, b));
-            return ps.flatMap((p) => [...p.wings.map((w) => w.sticker), ...(p.midge ? [p.midge.sticker] : [])]).flatMap((i) => [i, partner(i)]);
-          },
+          focus: edgeFocus(todo),
         });
         s = apply(s, moves);
         continue;
@@ -553,14 +536,16 @@ export function reductionGuide(M: CubeModel): Guide {
       const candidates: number[][] = current && todo.some(([a, b]) => a === current![0] && b === current![1]) ? [current] : todo;
       for (const [a, b] of candidates) {
         const p = piecesOf(s, a, b);
-        const groups: { follow: { sticker: number; color: number }[] }[] = [];
-        if (!p.midge) groups.push({ follow: p.wings });
+        // what to join: both wings (4×4), or the midge, the wings already on it and one more (5×5)
+        const groups: Piece[][] = [];
+        if (!p.midge) groups.push(p.wings);
         else {
-          const attached = p.wings.filter((w) => together([p.midge!.sticker, w.sticker], [p.midge!.color, w.color]));
-          for (const w of p.wings) if (!attached.includes(w)) groups.push({ follow: [p.midge, ...attached, w] });
+          const on = p.wings.filter((w) => attached(p.midge!, w));
+          for (const w of p.wings) if (!on.includes(w)) groups.push([p.midge, ...on, w]);
         }
         for (const g of groups) {
-          const path = edgeRoute(g.follow.map((f) => f.sticker), (pos) => together(pos, g.follow.map((f) => f.color)), mask, PAIR_MACROS, pick ? pick.cost - 1 : 200);
+          const colors = g.map((f) => f.color);
+          const path = edgeRoute(g.map((f) => f.sticker), (pos) => together(pos, colors), mask, PAIR_MACROS, pick ? pick.cost - 1 : 200);
           if (!path) continue;
           const cost = path.reduce((x, mc) => x + mc.cost, 0);
           if (!pick || cost < pick.cost) pick = { a, b, path, cost };
@@ -569,7 +554,7 @@ export function reductionGuide(M: CubeModel): Guide {
       if (!pick) throw new Error('reduction guide: no edge to pair');
       const { a, b, path } = pick;
       const before = piecesOf(s, a, b);
-      s = apply(s, path.flatMap((mc) => mc.moves));
+      s = apply(s, macroMoves(path));
       const finished = completeEdges(s).has(edgeKey(a, b));
       current = finished ? null : [a, b];
       steps.push({
@@ -581,28 +566,17 @@ export function reductionGuide(M: CubeModel): Guide {
             ? `Set them up in the middle layer, then join, swap out and slice back.`
             : `Face turns alone bring them together here.`) +
           (odd && !finished ? ' This joins one outer piece to the middle; the other comes next.' : '') +
-          (odd && finished && before.wings.some((w) => before.midge && together([before.midge.sticker, w.sticker], [before.midge.color, w.color])) ? ' One piece was already joined; this adds the other.' : '') + '</p>',
+          (odd && finished && before.wings.some((w) => before.midge && attached(before.midge, w)) ? ' One piece was already joined; this adds the other.' : '') + '</p>',
         phrases: edgePhrases(path),
-        focus: (t) => {
-          const p = piecesOf(t, a, b);
-          return [...p.wings.map((w) => w.sticker), ...(p.midge ? [p.midge.sticker] : [])].flatMap((i) => [i, partner(i)]);
-        },
+        focus: edgeFocus([[a, b]]),
       });
     }
     if (completeEdges(s).size !== 12) throw new Error('reduction guide: edges not paired ' + completeEdges(s).size);
     return s;
   }
-  /** the other sticker of an edge piece */
-  const partnerCache = new Map<number, number>();
-  function partner(i: number) {
-    let j = partnerCache.get(i);
-    if (j === undefined) {
-      const p = M.facelets[i].pos.join();
-      j = M.facelets.find((f) => f.index !== i && f.pos.join() === p)!.index;
-      partnerCache.set(i, j);
-    }
-    return j;
-  }
+  /** the other sticker of each edge piece */
+  const PARTNER = new Map(M.orbits.filter((o) => o.size === 2).flatMap((o) => o.slots.flatMap((sl) => [[sl.facelets[0], sl.facelets[1]], [sl.facelets[1], sl.facelets[0]]])));
+  const partner = (i: number) => PARTNER.get(i)!;
 
   // ---------- the 3×3 stage ----------
 
@@ -620,8 +594,6 @@ export function reductionGuide(M: CubeModel): Guide {
   const reduce = (s: State) => bigOf.map((is) => s[is[0]]);
   const expand = (focus: number[]) => focus.flatMap((i) => bigOf[i]);
 
-  const B = beginnerStages(cube3);
-  const K3 = lessonKit(cube3);
   /** run a 3×3 stage on the reduced cube, then move its steps over to the big cube */
   function run3(s: State, stage: (s3: State, steps: GuideStep[]) => State, steps: GuideStep[]) {
     const own: GuideStep[] = [];
@@ -630,7 +602,7 @@ export function reductionGuide(M: CubeModel): Guide {
       const focus3 = st.focus;
       steps.push({
         ...st,
-        stage: st.stage + 2,
+        stage: BASE + st.stage,
         focus: (t) => {
           try {
             return expand(focus3(reduce(t)));
@@ -639,7 +611,7 @@ export function reductionGuide(M: CubeModel): Guide {
           }
         },
       });
-      s = apply(s, st.phrases.flatMap((p) => p.moves));
+      s = apply(s, stepMoves(st));
     }
     return s;
   }
@@ -650,20 +622,20 @@ export function reductionGuide(M: CubeModel): Guide {
   function ollParity(s: State, steps: GuideStep[]) {
     const s3 = reduce(s);
     const yellow = K3.center(s3, 'U');
-    const up = ['UF', 'UR', 'UB', 'UL'].filter((e) => s3[K3.at(e, 'U')] === yellow);
+    const up = TOP_EDGES.filter((e) => s3[K3.at(e, 'U')] === yellow);
     if (up.length % 2 === 0) return s;
     // put a flipped edge at the front
-    const u = ['', 'U', "U'", 'U2'].find((x) => {
+    const u = U_TURNS.find((x) => {
       const t = reduce(apply(s, [x]));
       return t[K3.at('UF', 'U')] !== yellow;
     })!;
     steps.push({
-      stage: 5,
+      stage: stageOf('Yellow cross'),
       title: 'OLL parity',
       html: `<p>Look at the top: ${up.length === 1 ? 'only one edge shows' : 'three edges show'} ${name(yellow)} on top. On a 3×3 that can’t happen — edges flip in pairs — but on a 4×4 it can, because each edge is really two pieces. ` +
         `It’s called <b>OLL parity</b> (OLL: Orient the Last Layer).</p>` +
         `<p>${u ? 'Turn the top so an edge without yellow on top is at the front, then do' : 'An edge without yellow on top is at the front. Do'} ${code(OLL_PARITY)}. It flips that edge and keeps the first two layers; the rest of the top may move, which is fine.</p>`,
-      phrases: [...(u ? [{ label: 'Turn the top', moves: [u] }] : []), { label: 'OLL parity', moves: OLL_PARITY }],
+      phrases: [...K3.topPhrase(u), { label: 'OLL parity', moves: OLL_PARITY }],
       focus: topFocus,
     });
     return apply(s, [u, ...OLL_PARITY]);
@@ -680,7 +652,7 @@ export function reductionGuide(M: CubeModel): Guide {
     if (!parity(perm)) return s;
     const inPlace = TOP_CORNERS.filter((c) => K3.inSpot(s3, c)).length;
     steps.push({
-      stage: 6,
+      stage: stageOf('Yellow edges'),
       title: 'PLL parity',
       html: `<p>Before the corners, check them: ${inPlace === 2 ? 'two corners are in their spots and the other two would have to swap' : 'none is in its spot, and they’d have to move round in a cycle of four'}. ` +
         `The corner step only ever moves three corners at a time, so it can’t fix that. On a 4×4 this is <b>PLL parity</b> (PLL: Permute the Last Layer): really two edges are swapped.</p>` +
@@ -696,7 +668,10 @@ export function reductionGuide(M: CubeModel): Guide {
   const STAGES = [
     { name: 'Centers', goal: odd ? 'Build each 3×3 center around its fixed center.' : 'Group the four center pieces of each color, in the right color order.' },
     { name: 'Edges', goal: odd ? 'Join each edge’s three pieces into one long edge.' : 'Pair up the two pieces of each edge.' },
-    ...BEGINNER_STAGES.map((st, k) => (n === 4 && k === 3 ? { ...st, goal: st.goal + ' Fix OLL parity first if it shows up.' } : n === 4 && k === 4 ? { ...st, goal: st.goal + ' Then check for PLL parity.' } : st)),
+    ...BEGINNER_STAGES.map((st) => {
+      const extra = n === 4 && { 'Yellow cross': ' Fix OLL parity first if it shows up.', 'Yellow edges': ' Then check for PLL parity.' }[st.name];
+      return extra ? { ...st, goal: st.goal + extra } : st;
+    }),
   ];
 
   return {
@@ -708,7 +683,7 @@ export function reductionGuide(M: CubeModel): Guide {
     stages: STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
-      preface = '';
+      notes = lessonNotes();
       let s = centersStage(state, steps);
       s = edgesStage(s, steps);
       s = run3(s, B.crossStage, steps);
@@ -718,14 +693,14 @@ export function reductionGuide(M: CubeModel): Guide {
       s = run3(s, B.yellowCross, steps);
       s = run3(s, B.yellowEdges, steps);
       if (n === 4) {
-        const before = steps.length;
+        // after a PLL parity fix the edges need lining up again; otherwise this adds nothing
         s = pllParity(s, steps);
-        if (steps.length > before) s = run3(s, B.yellowEdges, steps);
+        s = run3(s, B.yellowEdges, steps);
       }
       s = run3(s, B.cornerSpots, steps);
       s = run3(s, B.cornerTwists, steps);
       if (!M.isSolved(s)) throw new Error('reduction guide: not solved');
-      return steps;
+      return notes.place(steps);
     },
   };
 }

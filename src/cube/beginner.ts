@@ -393,7 +393,7 @@ export function beginnerStages(M: CubeModel) {
     return s;
   }
 
-  return { crossStage, cornersStage, middleStage, yellowCross, yellowEdges, cornerSpots, cornerTwists, spots };
+  return { crossStage, cornersStage, middleStage, yellowCross, yellowEdges, cornerSpots, cornerTwists };
 }
 
 export function beginnerGuide(M: CubeModel): Guide {

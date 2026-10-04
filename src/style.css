@@ -473,7 +473,7 @@ dialog.about { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 4
 .sources li { margin: 2px 0; }
 .sources a { color: var(--accent-2); text-decoration: none; }
 .sources a:hover { text-decoration: underline; }
-[data-about].link { font-size: inherit; color: var(--accent); text-decoration: underline; }
+#lesson-intro .link { font-size: inherit; color: var(--accent); text-decoration: underline; }
 .help-grid { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; align-items: center; font-size: 13px; color: var(--text-2); }
 kbd {
   display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; margin-right: 3px;

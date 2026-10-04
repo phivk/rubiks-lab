@@ -754,7 +754,7 @@ function renderLearn() {
     : solution ? 'From the cube as it is now' : 'Walks you through solving this cube';
   $('#lesson-intro').innerHTML = `
     <p><b>${guide.name}.</b> ${guide.intro}</p>
-    <p class="muted small">Moves use standard notation: ${guide.basics ?? `<code>R</code> turns the right face a quarter turn clockwise, as you look at that face, <code>R'</code> turns it back and <code>R2</code> turns it twice. <code>U</code> is the top and <code>F</code> the front; <code>y</code> turns the whole cube like <code>U</code>.`}${guide.notation ? ' ' + guide.notation : ''}</p>
+    <p class="muted small">Moves use standard notation: ${puzzle.notationHtml}${guide.notation ? ' ' + guide.notation : ''}</p>
     <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along. <button class="link" data-about>Where the methods come from</button></p>`;
   if (solution?.lesson) {
     renderLesson();
@@ -1007,7 +1007,7 @@ function bind() {
   window.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'text') return;
-    if (($('#help') as HTMLDialogElement).open || ($('#about') as HTMLDialogElement).open) return;
+    if (document.querySelector('dialog[open]')) return;
     const k = e.key;
     if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ') {
       e.preventDefault();

@@ -13,17 +13,22 @@
 // "lift the slot, turn the top, put it back".
 
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
-import { CENTER, COLORS, COLOR_NAMES, EDGE_PAIRS, TIP, VERTEX_NAMES, apply, applyAll, piecesOf, solved, stickers } from './model';
+import { alg } from '../cube/lessonKit';
+import { CENTER, COLORS, COLOR_NAMES, EDGE_PAIRS, TIP, VERTEX_NAMES, apply, applyAll, invertMove, piecesOf, solved, stickers } from './model';
 
 const SOLVED = solved();
 const YELLOW = 3;
-const alg = (text: string) => text.split(' ');
 const code = (moves: string[]) => `<code>${moves.join(' ')}</code>`;
 const name = (c: number) => `<span class="cname" style="--c:${COLORS[c]}">${COLOR_NAMES[c].toLowerCase()}</span>`;
 const homeColors = (piece: number) => piecesOf(piece).map((i) => SOLVED[i]);
 const pieceName = (piece: number) => homeColors(piece).map(name).join('–');
 const plain = (piece: number) => homeColors(piece).map((c) => COLOR_NAMES[c].toLowerCase()).join('–');
 const isHome = (s: State, piece: number) => piecesOf(piece).every((i) => s[i] === SOLVED[i]);
+/** solved with yellow down and green in front (any other way round isn't, for this lesson) */
+const allHome = (s: State) => s.every((c, i) => c === SOLVED[i]);
+const PLACE = ['top', 'left', 'right', 'back'];
+/** the edge sticker showing color `a` beside color `b` */
+const whereIs = (s: State, a: number, b: number) => stickers.findIndex((st, i) => st.piece >= 8 && s[i] === a && s[partner(i)] === b);
 
 const BOTTOM_EDGES = [3, 4, 5].map((k) => 8 + k); // L–R, L–B, R–B
 const TOP_EDGES = [0, 1, 2].map((k) => 8 + k); // U–L, U–R, U–B
@@ -56,22 +61,20 @@ export const STAGES = [
   { name: 'Top layer', goal: 'Solve the last three edges with one algorithm.' },
 ];
 
-/** The cheapest run of macros putting `pieces` home without moving `keep`, by uniform-cost search. */
+/** The cheapest run of macros putting the edges `pieces` home, by uniform-cost search. */
 function route(s: State, pieces: number[], macros: { moves: string[]; cost: number }[]) {
   // follow one sticker per edge: where it is says where the edge is and which way round
-  const track = pieces.map((p) => piecesOf(p).map((i) => SOLVED[i]));
-  const where = (t: State) => track.map((cols) => stickers.findIndex((st, i) => st.piece >= 8 && t[i] === cols[0] && t[partner(i)] === cols[1]));
-  const goal = track.map((_, k) => piecesOf(pieces[k])[0]).join();
+  const goal = pieces.map((p) => piecesOf(p)[0]).join();
+  // where each sticker goes under a macro: apply it to the stickers' own indices, then invert
   const maps = macros.map((m) => {
-    const to = stickers.map((st) => st.index);
-    for (const mv of m.moves) {
-      const next: number[] = [];
-      applyAll(stickers.map((st) => st.index), [mv]).forEach((src, d) => (next[src] = d));
-      for (let i = 0; i < to.length; i++) to[i] = next[to[i]];
-    }
+    const to: number[] = [];
+    applyAll(stickers.map((st) => st.index), m.moves).forEach((src, d) => (to[src] = d));
     return to;
   });
-  const start = where(s);
+  const start = pieces.map((p) => {
+    const [i, j] = piecesOf(p);
+    return whereIs(s, SOLVED[i], SOLVED[j]);
+  });
   const best = new Map<string, { cost: number; prev: string | null; via: number }>([[start.join(), { cost: 0, prev: null, via: -1 }]]);
   const buckets: number[][][] = [[start]];
   for (let c = 0; c < buckets.length && c < 200; c++) {
@@ -115,7 +118,7 @@ export function pyraminxGuide(): Guide {
         return piecesOf(TIP(v)).every((i) => t[i] === t[piecesOf(CENTER(v)).find((j) => stickers[j].color === stickers[i].color)!]);
       })!;
       if (m) {
-        phrases.push({ label: `The ${['top', 'left', 'right', 'back'][v]} tip`, moves: [m] });
+        phrases.push({ label: `The ${PLACE[v]} tip`, moves: [m] });
         s = apply(s, m);
       }
     }
@@ -142,7 +145,7 @@ export function pyraminxGuide(): Guide {
       const big = VERTEX_NAMES[v];
       const m = ['', big, big + "'"].find((mv) => isHome(mv ? apply(s, mv) : s, CENTER(v)))!;
       if (m) {
-        phrases.push({ label: `The ${['top', 'left', 'right', 'back'][v]} corner`, moves: [m] });
+        phrases.push({ label: `The ${PLACE[v]} corner`, moves: [m] });
         s = apply(s, m);
       }
     }
@@ -164,7 +167,7 @@ export function pyraminxGuide(): Guide {
   // U turns, and lifting a bottom slot with a corner turn, turning the top and putting it back
   const macros = [
     ...['U', "U'"].map((m) => ({ moves: [m], cost: 4 })),
-    ...['L', "L'", 'R', "R'", 'B', "B'"].flatMap((x) => ['U', "U'"].map((y) => ({ moves: [x, y, x.endsWith("'") ? x[0] : x + "'"], cost: 12 }))),
+    ...['L', "L'", 'R', "R'", 'B', "B'"].flatMap((x) => ['U', "U'"].map((y) => ({ moves: [x, y, invertMove(x)], cost: 12 }))),
   ];
 
   function bottomEdges(s: State, steps: GuideStep[]) {
@@ -174,8 +177,8 @@ export function pyraminxGuide(): Guide {
       const plans = BOTTOM_EDGES.filter((p) => !done.includes(p)).map((p) => ({ p, path: route(s, [...done, p], macros) }));
       const { p, path } = plans.reduce((a, b) => (b.path.flat().length < a.path.flat().length ? b : a));
       // where is it now?
-      const at = piecesOf(p).map((i) => stickers.findIndex((st, j) => st.piece >= 8 && s[j] === SOLVED[i] && s[partner(j)] === SOLVED[partner(i)]));
-      const slotPiece = stickers[at[0]].piece;
+      const [i, j] = piecesOf(p);
+      const slotPiece = stickers[whereIs(s, SOLVED[i], SOLVED[j])].piece;
       const [a, b] = EDGE_PAIRS[slotPiece - 8];
       const where = slotPiece === p ? 'It’s in its slot, but flipped.'
         : a === 0 || b === 0 ? 'It’s in the top layer.'
@@ -213,8 +216,7 @@ export function pyraminxGuide(): Guide {
   // ---------- 4. top layer ----------
 
   function topLayer(s: State, steps: GuideStep[]) {
-    const solvedAll = (t: State) => t.every((c, i) => c === SOLVED[i]);
-    if (solvedAll(s)) return s;
+    if (allHome(s)) return s;
     let best: { u: string; a: (typeof LL)[number] | null; side: number; v: string; n: number } | null = null;
     for (const u of U_TURNS) {
       for (const a of [null, ...LL]) {
@@ -223,7 +225,7 @@ export function pyraminxGuide(): Guide {
           const moves = a ? rename(a.moves, map) : [];
           for (const v of U_TURNS) {
             const all = [u, ...moves, v].filter(Boolean);
-            if (solvedAll(applyAll(s, all)) && (!best || all.length < best.n)) best = { u, a, side, v, n: all.length };
+            if (allHome(applyAll(s, all)) && (!best || all.length < best.n)) best = { u, a, side, v, n: all.length };
           }
         }
       }
@@ -266,7 +268,6 @@ export function pyraminxGuide(): Guide {
     name: 'Layer by layer',
     short: 'Beginner',
     intro: 'The beginner’s way to solve a Pyraminx: the tips, then the bottom layer, then the last three edges with one short algorithm.',
-    basics: '<code>R</code> turns the right corner’s layer a third of a turn clockwise, as you look at that corner, and <code>R\'</code> turns it back. <code>U</code> is the top corner, <code>L</code> and <code>R</code> the front-left and front-right, <code>B</code> the back; lowercase <code>r</code> turns just the tip.',
     stages: STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
@@ -274,7 +275,7 @@ export function pyraminxGuide(): Guide {
       s = centers(s, steps);
       s = bottomEdges(s, steps);
       s = topLayer(s, steps);
-      if (!s.every((c, i) => c === SOLVED[i])) throw new Error('pyraminx guide: not solved');
+      if (!allHome(s)) throw new Error('pyraminx guide: not solved');
       return steps;
     },
   };
