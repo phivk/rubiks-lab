@@ -1,7 +1,7 @@
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { COLORS, COLOR_NAMES } from '../core/colors';
 import { syncSolver } from '../core/syncSolver';
-import type { DragOption, MoveButton, Puzzle, StickerDef, Turn, Vec3 } from '../core/types';
+import type { DragOption, MoveButton, Puzzle, ScanFace, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
 import { beginnerGuide } from './beginner';
 import { cfopGuide } from './cfop';
@@ -18,7 +18,8 @@ const NET_ORIGIN = [[0, 1], [1, 2], [1, 1], [2, 1], [1, 0], [1, 3]];
 
 const btn = (move: string): MoveButton => {
   const face = FACES.indexOf(move.replace(/^\d+/, '')[0]);
-  return { move, color: face >= 0 ? COLORS[face] : undefined };
+  // looked up when drawn, since the colors follow the kind of cube last scanned
+  return { move, get color() { return face >= 0 ? COLORS[face] : undefined; } };
 };
 const rows = (letters: string[]) => ['', "'", '2'].map((suf) => letters.map((f) => btn(f + suf)));
 
@@ -171,6 +172,31 @@ function wideScramble(length: number): string[] {
 
 const rotations = ['x', "x'", 'y', "y'", 'z', "z'"].map(btn);
 
+/**
+ * Front, then turning the cube to the left (right, back, left), then tipped forwards (up)
+ * and backwards (down). Each face's stickers are stored the way a camera sees it held like
+ * that, so the scan reads straight across. An odd cube's fixed centers say which face to
+ * show; an even cube can start from any side.
+ */
+// Each step says which side ends up facing the camera, since "turn it left" is ambiguous with the
+// near and far sides moving opposite ways. The next side is on the camera's right, which is your
+// right behind a phone and your left in front of a webcam.
+const SCAN_HOW = [
+  'Hold the cube up to the camera',
+  'Turn the side on your {side} to face the camera',
+  'Again: turn the side on your {side} to the camera',
+  'Once more: the side on your {side}',
+  'Back to the start, then tip it so the top faces the camera',
+  'Keep tipping the same way until the opposite side faces the camera',
+];
+const scanFaces = (M: CubeModel): ScanFace[] => [2, 1, 5, 4, 0, 3].map((f, k) => ({
+  face: f,
+  top: f === 0 ? 5 : f === 3 ? 2 : 0,
+  how: k === 0 && M.n % 2 === 0 ? 'Hold any side of the cube up to the camera' : SCAN_HOW[k],
+  stickers: Array.from({ length: M.n ** 2 }, (_, i) => f * M.n ** 2 + i),
+  center: M.n % 2 ? (M.n ** 2 - 1) / 2 : undefined,
+}));
+
 // ---------- 2×2 ----------
 
 const model2 = new CubeModel(2);
@@ -189,6 +215,7 @@ export const cube2: Puzzle = {
   movePadExtra: rows(['x', 'y', 'z']),
   movePadExtraLabel: 'Rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
+  scan: scanFaces(model2),
 };
 
 // ---------- 3×3 ----------
@@ -207,6 +234,7 @@ export const cube3: Puzzle = {
   movePadExtra: rows(['M', 'E', 'S', 'x', 'y', 'z']),
   movePadExtraLabel: 'Slices & rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
+  scan: scanFaces(model3),
   guides: [beginnerGuide(model3), cfopGuide(model3), rouxGuide(model3), zzGuide(model3)],
 };
 
@@ -223,8 +251,10 @@ const solveBig: Pick<Puzzle, 'solve' | 'cancelSolve'> = {
   cancelSolve: () => bigSolver?.cancel(),
 };
 
+const model4 = new CubeModel(4);
+
 export const cube4: Puzzle = {
-  ...makeCube(new CubeModel(4), { wide: true }),
+  ...makeCube(model4, { wide: true }),
   id: '4x4',
   name: '4×4',
   icon: CUBE_ICON,
@@ -234,12 +264,15 @@ export const cube4: Puzzle = {
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), rotations],
   movePadExtraLabel: 'Wide turns & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 2R' F",
+  scan: scanFaces(model4),
 };
 
 // ---------- 5×5 ----------
 
+const model5 = new CubeModel(5);
+
 export const cube5: Puzzle = {
-  ...makeCube(new CubeModel(5), { wide: true }),
+  ...makeCube(model5, { wide: true }),
   id: '5x5',
   name: '5×5',
   icon: CUBE_ICON,
@@ -249,4 +282,5 @@ export const cube5: Puzzle = {
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), ['M', "M'", 'E', "E'", 'S', "S'"].map(btn), rotations],
   movePadExtraLabel: 'Wide turns, slices & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 3R' M",
+  scan: scanFaces(model5),
 };

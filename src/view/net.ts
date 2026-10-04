@@ -194,7 +194,7 @@ export class NetView extends MapView {
 
   private paint(state: State) {
     this.state = state;
-    state.forEach((c, i) => this.cells[i]?.style.setProperty('fill', this.puzzle.colors[c]));
+    this.fill(state);
   }
 
   /** Show `next`, sliding the turning stickers there. */

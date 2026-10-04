@@ -11,12 +11,10 @@
 // Each circle is labeled with its layer's name on its far side, where there are no dots.
 
 import type { RingMap } from '../core/types';
+import { ccw } from '../core/vec';
 import { FACES, type CubeModel } from './model';
 
 type P = [number, number];
-
-/** How far round from angle `from` to angle `to`, going toward growing angle: 0 to 2π. */
-export const ccw = (from: number, to: number) => (((to - from) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 
 // Where each axis's circles are centered, as angles on the triangle (SVG's y points down):
 // y (U/D) at the top, x (R/L) bottom right, z (F/B) bottom left.

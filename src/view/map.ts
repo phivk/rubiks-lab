@@ -1,4 +1,4 @@
-import type { Puzzle } from '../core/types';
+import type { Puzzle, State } from '../core/types';
 import { easeInOut } from './anim';
 
 export const SVG = 'http://www.w3.org/2000/svg';
@@ -19,11 +19,15 @@ export interface MapHandlers {
   onGrab: (index: number, pieces?: number[]) => void;
 }
 
+/** Whether a ring-map circle turns with a layer's pieces: all its stickers are on them. */
+export const turnsWith = (puzzle: Puzzle, circle: { stickers: number[] }, pieces: Set<number>) =>
+  circle.stickers.every((s) => pieces.has(puzzle.stickers[s].piece));
+
 /** The ring-map circles a sticker sits on; given the pieces of a turning layer, only that layer's. */
 export function ringsOf(puzzle: Puzzle, sticker: number, pieces?: number[]): number[] {
   const turning = pieces && new Set(pieces);
   return (puzzle.rings?.circles ?? []).flatMap((c, i) =>
-    c.stickers.includes(sticker) && (!turning || c.stickers.every((s) => turning.has(puzzle.stickers[s].piece))) ? [i] : [],
+    c.stickers.includes(sticker) && (!turning || turnsWith(puzzle, c, turning)) ? [i] : [],
   );
 }
 
@@ -54,6 +58,11 @@ export abstract class MapView {
   protected finish: (() => void) | null = null;
 
   constructor(protected container: HTMLElement, protected handlers: MapHandlers) {}
+
+  /** Color each sticker's element as `state` has it. */
+  protected fill(state: State) {
+    state.forEach((c, i) => this.cells[i]?.style.setProperty('fill', this.puzzle.colors[c]));
+  }
 
   /** Forget the last puzzle's pointer and focus state. */
   protected reset() {

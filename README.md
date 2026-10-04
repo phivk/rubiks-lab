@@ -1,6 +1,6 @@
 # Rubik's Lab
 
-A 3D twisty-puzzle playground and solver for the **2×2**, **3×3**, **4×4** and **5×5 cubes** and the **Pyraminx**. Turn the puzzle by dragging it, paint in a real puzzle's state, and step through the solution. On the 3×3, the **Learn** tab teaches a method on your own scramble, one explained step at a time: the beginner's method, **CFOP**, **Roux** or **ZZ**.
+A 3D twisty-puzzle playground and solver for the **2×2**, **3×3**, **4×4** and **5×5 cubes** and the **Pyraminx**. Turn the puzzle by dragging it, paint in a real puzzle's state (or scan a real one with your camera), and step through the solution. On the 3×3, the **Learn** tab teaches a method on your own scramble, one explained step at a time: the beginner's method, **CFOP**, **Roux** or **ZZ**.
 
 ```sh
 npm install
@@ -26,5 +26,6 @@ Each puzzle implements the `Puzzle` interface (`src/core/types.ts`): sticker geo
 - `src/pyraminx/` is the Pyraminx. Pieces and stickers come from barycentric cuts of a tetrahedron (`model.ts`). The solver (`solver.ts`) fixes the tips directly, then finds the optimal core solution with a meet-in-the-middle search (depth 6 + 5 ≥ God's number of 11), so every solution is optimal.
 - `src/view/PuzzleView.ts` is the Three.js scene; its zoom range scales with each puzzle's size. Drag-to-turn follows the pointer and snaps to the nearest quarter turn (cube) or third of a turn (Pyraminx).
 - `src/view/net.ts` draws the unfolded 2D map as SVG. Cubes also have a ring map (`src/cube/rings.ts`, drawn by `src/view/rings.ts`): each layer is a circle and each sticker a dot where its two layers' circles cross, so a turn slides the dots along their circle.
+- `src/view/scanner.ts` scans a real puzzle with the camera, face by face, guided by each puzzle's `scan` faces, whose stickers sit in square or triangular cells (`src/scan/cells.ts`). `src/scan/classify.ts` reads the colors: mostly by hue, matched to the scanned centers (or, on an even cube without fixed ones, to typical colors corrected by the whole scan's average, and then turned the way the puzzle is drawn, as the Pyraminx is), with each face's exposure evened out and every color used exactly as often as it should be.
 - The right panel has a **Solve** tab (shortest solution) and, for puzzles with `guides`, a **Learn** tab with a method picker. A lesson plays like a solution but pauses after each step, dims all but the pieces the step is about, and follows along when you make its next move yourself (a half turn may be made as two quarter turns). The **Flip** button in the top bar turns the whole cube upside down (`z2`), which dragging can't do.
 - `src/main.ts` builds the puzzle tabs from `PUZZLES` and handles UI state, a per-puzzle session, the move queue, playback, keyboard shortcuts, and share links (`#pyra:…` / `#3x3:…` / `#5x5:…` in the URL hash).
