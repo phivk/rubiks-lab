@@ -9,9 +9,11 @@
 // Stickers, pieces and move permutations are all derived from that description.
 
 import * as THREE from 'three';
+import { pickColors } from '../core/colors';
 import type { State, StickerDef, Turn, Vec3 } from '../core/types';
 
-export const COLORS = ['#14a85a', '#2166e6', '#e02a3c', '#ffd21f', '#2c313c'];
+/** green, blue, red and yellow, as the cubes draw them */
+export const COLORS = pickColors([2, 5, 1, 3], '#2c313c');
 export const COLOR_NAMES = ['Green', 'Blue', 'Red', 'Yellow', 'Eraser'];
 export const UNSET = 4;
 export const COLOR_LETTERS = 'GBRY';

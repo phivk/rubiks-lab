@@ -247,7 +247,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .net .dim { opacity: 0.4; }
 /* set from any view, so the 3D cube and the maps show the same sticker */
 .net .cell.hover { stroke: rgba(255, 255, 255, 0.7); }
-.label-row:has(.map-tools) { align-items: center; }
+.label-row:has(.map-switch) { align-items: center; }
 .map-tools { display: flex; align-items: center; gap: 10px; }
 .map-switch { display: inline-flex; gap: 2px; padding: 2px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 8px; }
 .map-switch button { background: none; border: 0; border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 11px; font-weight: 600; color: var(--text-3); cursor: pointer; }

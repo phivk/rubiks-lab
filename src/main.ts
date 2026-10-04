@@ -211,6 +211,7 @@ async function switchPuzzle(p: Puzzle) {
   $('.mode-paint .intro').innerHTML = p.paintIntroHtml;
   $('#puzzle-shortcuts').innerHTML = p.shortcutsHtml;
   $('#btn-scan').classList.toggle('hidden', !p.scan);
+  renderCubeKind();
   paintColor = p.paletteOrder[0];
   setMode(mode);
   renderHistory();
@@ -311,14 +312,28 @@ async function startScan() {
   void scanner.open(puzzle);
 }
 
+/** Draw the puzzles the way they look: a bright stickerless one in its sky blue and lime green. */
+function setCubeKind(kind: CubeKind) {
+  if (kind === cubeKind()) return;
+  useCubeColors(kind);
+  try { localStorage.setItem('cubeKind', kind); } catch { /* storage unavailable */ }
+  maps.forEach((m) => m.setPuzzle(puzzle));
+  buildMovepad();
+  renderCubeKind();
+  view.setState(session.state);
+  onStateChanged();
+}
+
+function renderCubeKind() {
+  document.querySelectorAll<HTMLButtonElement>('#cube-kind button').forEach((b) => {
+    const on = b.dataset.kind === cubeKind();
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+}
+
 function loadScan(state: State, kind: CubeKind) {
-  if (kind !== cubeKind()) {
-    // draw the cube the way it looks: a bright stickerless one in its sky blue and lime green
-    useCubeColors(kind);
-    try { localStorage.setItem('cubeKind', kind); } catch { /* storage unavailable */ }
-    maps.forEach((m) => m.setPuzzle(puzzle));
-    buildMovepad();
-  }
+  setCubeKind(kind);
   setStateDirect(state);
   const v = puzzle.validate(session.state);
   if (!v.ok) {
@@ -691,6 +706,9 @@ function bind() {
   );
   document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) =>
     b.addEventListener('click', () => setMapKind(b.dataset.map as MapKind)),
+  );
+  document.querySelectorAll<HTMLButtonElement>('#cube-kind button').forEach((b) =>
+    b.addEventListener('click', () => setCubeKind(b.dataset.kind as CubeKind)),
   );
   $('#btn-scramble').addEventListener('click', scramble);
   $('#btn-reset').addEventListener('click', () => {
