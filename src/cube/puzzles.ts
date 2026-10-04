@@ -14,7 +14,8 @@ const NET_ORIGIN = [[0, 1], [1, 2], [1, 1], [2, 1], [1, 0], [1, 3]];
 
 const btn = (move: string): MoveButton => {
   const face = FACES.indexOf(move.replace(/^\d+/, '')[0]);
-  return { move, color: face >= 0 ? COLORS[face] : undefined };
+  // looked up when drawn, since the colors follow the kind of cube last scanned
+  return { move, get color() { return face >= 0 ? COLORS[face] : undefined; } };
 };
 const rows = (letters: string[]) => ['', "'", '2'].map((suf) => letters.map((f) => btn(f + suf)));
 

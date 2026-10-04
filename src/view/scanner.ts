@@ -3,11 +3,13 @@
 // on a face's thumbnail scans it again. When every face is in, the colors are settled
 // together (see classify.ts) and handed back as a state.
 
+import { KIND_COLORS, cubeKind, type CubeKind } from '../core/colors';
 import type { Puzzle, State } from '../core/types';
-import { calibrate, calibrateBlind, medianColor, nearest, scanState, type RGB } from '../scan/classify';
+import { calibrate, calibrateBlind, medianColor, nearest, scanState, type Calibration, type RGB } from '../scan/classify';
 
 export interface ScannerEvents {
-  onDone: (state: State) => void;
+  /** `kind` is the kind of cube the colors say it is, to draw it in */
+  onDone: (state: State, kind: CubeKind) => void;
   onError: (message: string) => void;
 }
 
@@ -35,6 +37,8 @@ export class Scanner {
   private live: RGB[] = [];
   /** a camera facing the user (a webcam) shows its preview mirrored, like a mirror would */
   private mirrored = false;
+  /** the kind of cube the colors seen so far say it is, which the preview is drawn in */
+  private kind: CubeKind = 'typical';
 
   constructor(private events: ScannerEvents) {
     this.root = document.createElement('div');
@@ -92,6 +96,7 @@ export class Scanner {
     this.captured = faces.map(() => null);
     this.current = 0;
     this.live = [];
+    this.kind = cubeKind();
     this.canvas.width = this.canvas.height = this.n * CELL_PX;
     this.buildGrid();
     this.root.classList.remove('hidden');
@@ -190,7 +195,7 @@ export class Scanner {
    * Their fixed centers stand in for a typical cube's colors, and correct the rest; a cube
    * without them corrects all of a typical cube's by every sticker seen.
    */
-  private refs(except = -1, live?: RGB[]): RGB[] {
+  private refs(except = -1, live?: RGB[]): Calibration {
     const faces = this.puzzle.scan!;
     const shown = faces.map((_, k) => (k === except ? live : this.captured[k] ?? undefined));
     if (faces[0].center === undefined) return calibrateBlind(shown.flatMap((s) => s ?? []));
@@ -201,19 +206,28 @@ export class Scanner {
 
   private renderLive() {
     const face = this.puzzle.scan![this.current];
-    let refs = this.refs(this.current, this.live), seen = face.face;
+    let fit = this.refs(this.current, this.live), seen = face.face;
     if (face.center !== undefined) {
       const others = this.refs(this.current);
-      seen = nearest(this.live[face.center], others);
+      seen = nearest(this.live[face.center], others.refs);
       // the center in view is this face's color, so it shows the stickers what that looks
       // like here, unless it's plainly another face's
-      if (seen !== face.face) refs = others;
+      if (seen !== face.face) fit = others;
+    }
+    if (fit.kind !== this.kind) {
+      this.kind = fit.kind;
+      this.render();
     }
     const cells = this.grid.children as HTMLCollectionOf<HTMLElement>;
-    this.live.forEach((s, i) => cells[i].style.setProperty('--c', this.puzzle.colors[nearest(s, refs)]));
+    this.live.forEach((s, i) => cells[i].style.setProperty('--c', this.colors[nearest(s, fit.refs)]));
     const warn = this.root.querySelector('.scan-warn')!;
     warn.textContent = seen === face.face ? ''
       : `That looks like the ${this.name(seen)} center — turn the ${this.name(face.face)} one to the camera`;
+  }
+
+  /** sticker colors as the kind of cube seen so far draws them */
+  private get colors() {
+    return KIND_COLORS[this.kind];
   }
 
   private name(color: number) {
@@ -223,24 +237,24 @@ export class Scanner {
   private render() {
     const faces = this.puzzle.scan!;
     const face = faces[this.current];
-    const dot = (c: number) => `<b><i style="background:${this.puzzle.colors[c]}"></i>${this.puzzle.colorNames[c]}</b>`;
+    const dot = (c: number) => `<b><i style="background:${this.colors[c]}"></i>${this.puzzle.colorNames[c]}</b>`;
     this.root.querySelector('.scan-step')!.textContent = `Face ${this.current + 1} of ${faces.length}`;
     this.root.querySelector('.scan-prompt')!.textContent = face.how.replace('{side}', this.mirrored ? 'left' : 'right');
     // without fixed centers, the faces go by position and the colors can't say which is which
     const byColor = face.center !== undefined;
     this.root.querySelector('.scan-colors')!.innerHTML = byColor ? `${dot(face.face)} facing the camera, ${dot(face.top)} on top` : '';
     // the same two colors on the grid, to check against the cube while lining it up
-    this.grid.style.setProperty('--face', byColor ? this.puzzle.colors[face.face] : '');
-    this.grid.style.setProperty('--top', byColor ? this.puzzle.colors[face.top] : '');
+    this.grid.style.setProperty('--face', byColor ? this.colors[face.face] : '');
+    this.grid.style.setProperty('--top', byColor ? this.colors[face.top] : '');
     this.root.querySelector('.scan-warn')!.textContent = '';
-    const refs = this.refs();
+    const { refs } = this.refs();
     [...this.faces.children].forEach((b, k) => {
       b.classList.toggle('active', k === this.current);
       [...b.children].forEach((cell, i) => {
         const s = this.captured[k]?.[i];
         // before it's scanned, only a fixed center shows, to tell the faces apart
         const c = s ? nearest(s, refs) : i === faces[k].center ? faces[k].face : -1;
-        (cell as HTMLElement).style.background = c < 0 ? '' : this.puzzle.colors[c];
+        (cell as HTMLElement).style.background = c < 0 ? '' : this.colors[c];
       });
     });
     [...this.grid.children].forEach((c) => c.removeAttribute('style'));
@@ -266,8 +280,8 @@ export class Scanner {
   }
 
   private finish() {
-    const state = scanState(this.puzzle, this.captured as RGB[][]);
+    const { state, kind } = scanState(this.puzzle, this.captured as RGB[][]);
     this.close();
-    this.events.onDone(state);
+    this.events.onDone(state, kind);
   }
 }

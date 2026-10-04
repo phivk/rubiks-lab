@@ -4,7 +4,7 @@
 import type { Puzzle } from '../src/core/types';
 import { cross, dot, mean } from '../src/core/vec';
 import { CubeModel } from '../src/cube/model';
-import { TYPICAL, calibrate, calibrateBlind, nearest, scanState, type RGB } from '../src/scan/classify';
+import { BRIGHT, TYPICAL, calibrate, calibrateBlind, nearest, scanState, type RGB } from '../src/scan/classify';
 
 // the 3×3 starts its solver worker on load, which Node doesn't have
 (globalThis as { Worker?: unknown }).Worker = class { postMessage() {} addEventListener() {} terminate() {} };
@@ -28,8 +28,8 @@ Math.random = () => {
 // differently, and every sticker a little noisy. A dim webcam also sees everything darker and warmer.
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (x: number) => Math.max(0, Math.min(255, Math.round(x)));
-function photo(P: Puzzle, state: number[], webcam = false): RGB[][] {
-  const shade = TYPICAL.map((c) => c.map((x) => x + rand(-15, 15)) as RGB);
+function photo(P: Puzzle, state: number[], webcam: boolean, palette: RGB[]): RGB[][] {
+  const shade = palette.map((c) => c.map((x) => x + rand(-15, 15)) as RGB);
   const tint = webcam ? [rand(0.85, 1), rand(0.6, 0.8), rand(0.5, 0.75)] : [rand(0.9, 1.1), rand(0.9, 1.1), rand(0.85, 1.1)];
   const dim = webcam ? rand(0.6, 0.8) : 1;
   return P.scan!.map((f) => {
@@ -37,6 +37,14 @@ function photo(P: Puzzle, state: number[], webcam = false): RGB[][] {
     return f.stickers.map((s) => shade[state[s]].map((x, k) => clamp(x * light * tint[k] + rand(-12, 12))) as RGB);
   });
 }
+
+// a typical cube, and a bright stickerless one, whose sky blue is closer to its white and
+// lime green to its yellow, so it's allowed more misreads; the most each may misread, in
+// percent, in decent light and on a dim webcam, once scanned and while aiming
+const CUBES = [
+  { kind: 'typical', palette: TYPICAL, scan: [0.3, 2], aim: [1, 10] },
+  { kind: 'bright', palette: BRIGHT, scan: [0.5, 3], aim: [3, 12] },
+];
 
 for (const P of [cube2, cube3, cube4, cube5]) {
   const faces = P.scan!;
@@ -64,38 +72,43 @@ for (const P of [cube2, cube3, cube4, cube5]) {
   // Faces go by position on an even cube, so it can be held any way round: scan it turned.
   const turn = n % 2 ? [] : ['x', 'y2', "z'"];
   const TRIALS = Math.round(1500 / n);
-  for (const webcam of [false, true]) {
-    let exact = 0, misread = 0;
+  for (const { kind, palette, scan } of CUBES) for (const webcam of [false, true]) {
+    let exact = 0, misread = 0, wrongKind = 0;
     for (let t = 0; t < TRIALS; t++) {
       const state = M.applyAll(P.solved(), [...P.scramble(), ...turn]);
-      const read = scanState(P, photo(P, state, webcam));
+      const { state: read, kind: seen } = scanState(P, photo(P, state, webcam, palette));
+      if (seen !== kind) wrongKind++;
       const wrong = read.filter((c, i) => c !== state[i]).length;
       if (!wrong) exact++;
       misread += wrong;
     }
     // the simulation is harsher than a real cube in decent light; a few misreads are what paint mode is for
-    const pct = 100 * misread / (TRIALS * P.stickers.length), limit = webcam ? 2 : 0.3;
-    const what = `${exact} of ${TRIALS} ${P.name} simulated scans${webcam ? ' on a dim webcam' : ''} read back exactly, and ${pct.toFixed(2)}% of stickers misread`;
+    const pct = 100 * misread / (TRIALS * P.stickers.length), limit = scan[+webcam];
+    const what = `${exact} of ${TRIALS} ${kind} ${P.name} simulated scans${webcam ? ' on a dim webcam' : ''} read back exactly, and ${pct.toFixed(2)}% of stickers misread`;
     if (pct > limit) fail(what);
     console.log(`✓ ${what}`);
+    // a wrong kind only draws the cube in the wrong colors; without fixed centers it also reads them a little worse
+    const kinds = `${wrongKind} of them taken for the other kind of cube`;
+    if (wrongKind > TRIALS * (webcam ? 0.06 : 0.01)) fail(kinds);
+    console.log(`  ${kinds}`);
   }
 
   // While aiming, each face is read against the faces captured before it and itself,
   // before any of the later ones are known.
-  for (const webcam of [false, true]) {
+  for (const { kind, palette, aim } of CUBES) for (const webcam of [false, true]) {
     let misread = 0, total = 0;
     for (let t = 0; t < 200; t++) {
       const state = M.applyAll(P.solved(), P.scramble());
-      const pic = photo(P, state, webcam);
+      const pic = photo(P, state, webcam, palette);
       faces.forEach((f, k) => {
-        const refs = f.center === undefined ? calibrateBlind(pic.slice(0, k + 1).flat()) : calibrate(
+        const { refs } = f.center === undefined ? calibrateBlind(pic.slice(0, k + 1).flat()) : calibrate(
           faces.slice(0, k + 1).reduce<RGB[]>((seen, g, j) => { seen[g.face] = pic[j][g.center!]; return seen; }, []),
         );
         f.stickers.forEach((s, i) => { total++; if (nearest(pic[k][i], refs) !== state[s]) misread++; });
       });
     }
-    const pct = 100 * misread / total, limit = webcam ? 10 : 1;
-    const what = `the ${P.name} live preview misreads ${pct.toFixed(1)}% of stickers${webcam ? ' on a dim webcam' : ''}`;
+    const pct = 100 * misread / total, limit = aim[+webcam];
+    const what = `the ${kind} ${P.name} live preview misreads ${pct.toFixed(1)}% of stickers${webcam ? ' on a dim webcam' : ''}`;
     if (pct > limit) fail(what);
     console.log(`✓ ${what}`);
   }

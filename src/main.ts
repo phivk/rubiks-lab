@@ -1,4 +1,5 @@
 import './style.css';
+import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
 import type { Puzzle, State, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { pyraminx } from './pyraminx/puzzle';
@@ -310,7 +311,14 @@ async function startScan() {
   void scanner.open(puzzle);
 }
 
-function loadScan(state: State) {
+function loadScan(state: State, kind: CubeKind) {
+  if (kind !== cubeKind()) {
+    // draw the cube the way it looks: a bright stickerless one in its sky blue and lime green
+    useCubeColors(kind);
+    try { localStorage.setItem('cubeKind', kind); } catch { /* storage unavailable */ }
+    maps.forEach((m) => m.setPuzzle(puzzle));
+    buildMovepad();
+  }
   setStateDirect(state);
   const v = puzzle.validate(session.state);
   if (!v.ok) {
@@ -803,6 +811,7 @@ else {
     initial = PUZZLES.find((p) => p.id === localStorage.getItem('puzzle')) ?? cube3;
   } catch { /* storage unavailable */ }
 }
+try { if (localStorage.getItem('cubeKind') === 'bright') useCubeColors('bright'); } catch { /* storage unavailable */ }
 bind();
 puzzle = initial === cube3 ? pyraminx : cube3; // force switchPuzzle to run
 void switchPuzzle(initial).then(() => {
