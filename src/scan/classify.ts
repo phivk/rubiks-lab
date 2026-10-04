@@ -3,10 +3,11 @@
 // Colors are compared in CIELAB, mostly by hue, since lighting changes how bright and
 // vivid a sticker looks far more than its hue. While aiming, samples are matched against
 // a typical cube's colors; the centers seen so far stand in for those, and correct the
-// ones not yet seen, so the cube's own shades under the room's light decide. The final pass also knows how many
+// ones not yet seen, so the cube's own shades under the room's light decide (a cube
+// without fixed centers corrects them by the average of everything seen). The final pass also knows how many
 // stickers each color has, which settles the close calls (red/orange, white/yellow).
 
-import type { Puzzle, State } from '../core/types';
+import type { Puzzle, State, Vec3 } from '../core/types';
 import { mean } from '../core/vec';
 
 export type RGB = [number, number, number];
@@ -29,10 +30,16 @@ const lin = (c: number) => {
 const gamma = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
 const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
 
-function toLab([r, g, b]: RGB): Lab {
-  const R = lin(r), G = lin(g), B = lin(b);
+/** a typical cube's average color, per channel in linear light */
+const TYPICAL_MEAN = [0, 1, 2].map((k) => TYPICAL.reduce((sum, t) => sum + lin(t[k]), 0) / TYPICAL.length);
+
+const toLinear = (c: RGB) => c.map(lin) as Vec3;
+const luminance = ([R, G, B]: Vec3) => 0.2126 * R + 0.7152 * G + 0.0722 * B;
+const toLab = (c: RGB) => linearToLab(toLinear(c));
+
+function linearToLab([R, G, B]: Vec3): Lab {
   const x = f((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047);
-  const y = f(0.2126 * R + 0.7152 * G + 0.0722 * B);
+  const y = f(luminance([R, G, B]));
   const z = f((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883);
   return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
 }
@@ -68,11 +75,29 @@ export function calibrate(seen: (RGB | undefined)[]): RGB[] {
       tt[k] += t * t;
     }
   });
-  const sum = (v: number[]) => v[0] + v[1] + v[2];
-  const overall = sum(tt) ? sum(st) / sum(tt) : 1;
-  const gain = st.map((x, k) => (x + PRIOR * overall) / (tt[k] + PRIOR));
-  return TYPICAL.map((t, id) => seen[id] ?? t.map((x, k) => Math.round(255 * gamma(Math.min(1, lin(x) * gain[k])))) as RGB);
+  const gain = gains(st, tt, PRIOR);
+  return TYPICAL.map((t, id) => seen[id] ?? shift(t, gain));
 }
+
+/**
+ * Reference colors for a cube without fixed centers, where no sample is known to be any
+ * color: a whole cube has the same number of each, so its samples average out to a typical
+ * cube's average, shifted by the camera. Part of a cube is a rougher guess.
+ */
+export function calibrateBlind(samples: RGB[]): RGB[] {
+  const st = [0, 1, 2].map((k) => samples.reduce((sum, s) => sum + lin(s[k]), 0));
+  const tt = TYPICAL_MEAN.map((x) => x * samples.length);
+  // one face says little about a channel on its own, so each leans on the overall gain by a few stickers' worth
+  return TYPICAL.map((t) => shift(t, gains(st, tt, PRIOR * 6)));
+}
+
+/** One gain per channel, each leaning on the overall one by `prior` colors' worth. */
+function gains(st: number[], tt: number[], prior: number) {
+  const overall = sum(tt) ? sum(st) / sum(tt) : 1;
+  return st.map((x, k) => (x + prior * overall) / (tt[k] + prior));
+}
+
+const shift = (c: RGB, gain: number[]) => c.map((x, k) => Math.round(255 * gamma(Math.min(1, lin(x) * gain[k])))) as RGB;
 
 /** Nearest reference color id, or -1 if there are none. `refs` may have gaps. */
 export function nearest(sample: RGB, refs: (RGB | undefined)[]): number {
@@ -87,16 +112,26 @@ export function nearest(sample: RGB, refs: (RGB | undefined)[]): number {
 
 /**
  * Color ids for every sample, with `fixed` samples (the centers) pinned to theirs and each
- * id used `perColor` times. Greedy: the most confident remaining match is taken first, and
- * a color that's full stops taking stickers. Then each color's reference becomes the
- * average of the stickers it took, which is steadier than one center, and it goes again.
+ * id used `perColor` times, `perColor` samples to a face. Greedy: the most confident
+ * remaining match is taken first, and a color that's full stops taking stickers. Then each
+ * face's exposure is evened out, since one may face the light and the next be in shadow,
+ * judged by how bright the colors it took are elsewhere; each color's reference becomes the
+ * average of the stickers it took, which is steadier than one center; and it goes again.
  */
+const sum = (v: number[]) => v.reduce((a, b) => a + b, 0);
+
 function classifyAll(samples: RGB[], refs: RGB[], fixed: Map<number, number>, perColor: number): number[] {
-  const labs = samples.map(toLab);
-  let out = assign(labs, refs.map(toLab), fixed, perColor);
-  for (let round = 0; round < 3; round++) {
-    const means = refs.map((_, id) => mean(labs.filter((_, i) => out[i] === id)));
-    const next = assign(labs, means, fixed, perColor);
+  const linear = samples.map(toLinear);
+  let out = assign(samples.map(toLab), refs.map(toLab), fixed, perColor);
+  for (let round = 0; round < 4; round++) {
+    const bright = refs.map((_, id) => luminance(mean(linear.filter((_, i) => out[i] === id))));
+    const exposure: number[] = [];
+    for (let at = 0; at < linear.length; at += perColor) {
+      const seen = sum(linear.slice(at, at + perColor).map(luminance));
+      exposure.push(seen / sum(out.slice(at, at + perColor).map((id) => bright[id])));
+    }
+    const labs = linear.map((c, i) => linearToLab(c.map((x) => x / exposure[Math.floor(i / perColor)]) as Vec3));
+    const next = assign(labs, refs.map((_, id) => mean(labs.filter((_, i) => out[i] === id))), fixed, perColor);
     if (next.every((c, i) => c === out[i])) break;
     out = next;
   }
@@ -123,18 +158,23 @@ function assign(labs: Lab[], refs: Lab[], fixed: Map<number, number>, perColor: 
 
 /**
  * The state a scan shows: `captured[k]` holds the samples of `puzzle.scan[k]`, row by row.
- * Each face's center decides its color; every other sticker goes to the center it's closest to.
+ * Fixed centers decide their faces' colors, and every other sticker goes to the center
+ * it's closest to; without them, the whole scan's average sets the colors to match.
  */
 export function scanState(puzzle: Puzzle, captured: RGB[][]): State {
   const faces = puzzle.scan!;
-  const perFace = faces[0].stickers.length, middle = (perFace - 1) / 2;
+  const perFace = faces[0].stickers.length;
   const state: State = puzzle.stickers.map(() => puzzle.unset);
   const samples = captured.flat();
   const stickers = faces.flatMap((f) => f.stickers);
-  const fixed = new Map(faces.map((f, k) => [k * perFace + middle, f.center]));
+  const fixed = new Map<number, number>();
   const refs: RGB[] = [];
-  faces.forEach((f, k) => { refs[f.center] = captured[k][middle]; });
-  classifyAll(samples, refs, fixed, perFace).forEach((c, i) => { state[stickers[i]] = c; });
+  faces.forEach((f, k) => {
+    if (f.center === undefined) return;
+    fixed.set(k * perFace + f.center, f.face);
+    refs[f.face] = captured[k][f.center];
+  });
+  classifyAll(samples, fixed.size ? refs : calibrateBlind(samples), fixed, perFace).forEach((c, i) => { state[stickers[i]] = c; });
   return state;
 }
 

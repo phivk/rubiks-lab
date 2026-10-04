@@ -73,14 +73,19 @@ export interface MoveButton {
 
 /** One face to point the camera at while scanning, and how to hold the puzzle for it. */
 export interface ScanFace {
-  /** color id of the face's center */
-  center: number;
-  /** color id of the center that should be on top */
+  /** which face, by its color id when solved */
+  face: number;
+  /** the face that should be on top, likewise */
   top: number;
   /** how to get there from the face before; `{side}` is the camera's right, which is your left in front of a webcam */
   how: string;
   /** stickers as the camera sees them, row by row from the top left */
   stickers: number[];
+  /**
+   * index in `stickers` of a fixed center, whose color tells which face this is; without
+   * one (an even cube), the puzzle can be held any way round and faces go by position
+   */
+  center?: number;
 }
 
 export interface SolveHandlers {
