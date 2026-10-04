@@ -77,8 +77,8 @@ export interface ScanFace {
   center: number;
   /** color id of the center that should be on top */
   top: number;
-  /** how to get there from the face before, with the camera behind the puzzle (a phone's) or in front of it (a webcam) */
-  how: { back: string; front: string };
+  /** how to get there from the face before; `{side}` is the camera's right, which is your left in front of a webcam */
+  how: string;
   /** stickers as the camera sees them, row by row from the top left */
   stickers: number[];
 }

@@ -151,7 +151,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .row { display: flex; gap: 8px; }
 
 /* ---------- segmented control ---------- */
-.seg { display: grid; grid-template-columns: 1fr 1fr; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid var(--line); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid var(--line); }
 .seg button {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   height: 34px; border: 0; background: transparent; border-radius: 9px; color: var(--text-2);
@@ -159,8 +159,6 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 }
 .seg button svg { width: 16px; height: 16px; }
 .seg button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
-.seg.three { grid-template-columns: 1fr 1fr 1fr; }
-.seg button.hidden { display: none; }
 
 .label-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: -6px; }
 .eyebrow { font-size: 11px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
@@ -386,9 +384,9 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   display: flex; flex-direction: column; align-items: center; justify-content: space-between;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
 }
-.scanner.hidden { display: none; }
 .scanner video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.scanner.mirrored video { transform: scaleX(-1); }
+/* a webcam's view is shown mirrored, like a mirror, and so are the colors read from it */
+.scanner.mirrored video, .scanner.mirrored .scan-grid, .scanner.mirrored .scan-face { transform: scaleX(-1); }
 .scanner > div { position: relative; }
 .scan-top, .scan-bottom {
   z-index: 1;

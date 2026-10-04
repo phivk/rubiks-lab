@@ -198,12 +198,12 @@ export const cube2: Puzzle = {
 // near and far sides moving opposite ways. The next side is on the camera's right, which is your
 // right behind a phone and your left in front of a webcam.
 const SCAN_HOW = [
-  { back: 'Hold the cube up to the camera', front: 'Hold the cube up to the camera' },
-  { back: 'Turn the side on your right to face the camera', front: 'Turn the side on your left to face the camera' },
-  { back: 'Again: turn the side on your right to the camera', front: 'Again: turn the side on your left to the camera' },
-  { back: 'Once more: the side on your right', front: 'Once more: the side on your left' },
-  { back: 'Back to the start, then tip it so the top faces the camera', front: 'Back to the start, then tip it so the top faces the camera' },
-  { back: 'Keep tipping the same way until the opposite side faces the camera', front: 'Keep tipping the same way until the opposite side faces the camera' },
+  'Hold the cube up to the camera',
+  'Turn the side on your {side} to face the camera',
+  'Again: turn the side on your {side} to the camera',
+  'Once more: the side on your {side}',
+  'Back to the start, then tip it so the top faces the camera',
+  'Keep tipping the same way until the opposite side faces the camera',
 ];
 const scanFaces = (M: CubeModel): ScanFace[] => [2, 1, 5, 4, 0, 3].map((f, k) => ({
   center: f,

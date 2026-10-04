@@ -7,6 +7,7 @@
 // stickers each color has, which settles the close calls (red/orange, white/yellow).
 
 import type { Puzzle, State } from '../core/types';
+import { mean } from '../core/vec';
 
 export type RGB = [number, number, number];
 type Lab = [number, number, number];
@@ -28,7 +29,7 @@ const lin = (c: number) => {
 const gamma = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
 const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
 
-export function toLab([r, g, b]: RGB): Lab {
+function toLab([r, g, b]: RGB): Lab {
   const R = lin(r), G = lin(g), B = lin(b);
   const x = f((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047);
   const y = f(0.2126 * R + 0.7152 * G + 0.0722 * B);
@@ -46,7 +47,6 @@ function labDistance([l1, a1, b1]: Lab, [l2, a2, b2]: Lab) {
   const hue2 = Math.max(0, (a1 - a2) ** 2 + (b1 - b2) ** 2 - (c1 - c2) ** 2);
   return Math.sqrt((L_WEIGHT * (l1 - l2)) ** 2 + (C_WEIGHT * (c1 - c2)) ** 2 + hue2);
 }
-export const distance = (a: RGB, b: RGB) => labDistance(toLab(a), toLab(b));
 
 /** how much each channel's gain leans on the overall one, in seen colors' worth */
 const PRIOR = 1;
@@ -79,7 +79,7 @@ export function nearest(sample: RGB, refs: (RGB | undefined)[]): number {
   let best = -1, bestD = Infinity;
   refs.forEach((r, id) => {
     if (!r) return;
-    const d = distance(sample, r);
+    const d = labDistance(toLab(sample), toLab(r));
     if (d < bestD) { bestD = d; best = id; }
   });
   return best;
@@ -91,14 +91,11 @@ export function nearest(sample: RGB, refs: (RGB | undefined)[]): number {
  * a color that's full stops taking stickers. Then each color's reference becomes the
  * average of the stickers it took, which is steadier than one center, and it goes again.
  */
-export function classifyAll(samples: RGB[], refs: RGB[], fixed: Map<number, number>, perColor: number): number[] {
+function classifyAll(samples: RGB[], refs: RGB[], fixed: Map<number, number>, perColor: number): number[] {
   const labs = samples.map(toLab);
   let out = assign(labs, refs.map(toLab), fixed, perColor);
   for (let round = 0; round < 3; round++) {
-    const means = refs.map((_, id) => {
-      const mine = labs.filter((_, i) => out[i] === id);
-      return [0, 1, 2].map((k) => mine.reduce((a, l) => a + l[k], 0) / mine.length) as Lab;
-    });
+    const means = refs.map((_, id) => mean(labs.filter((_, i) => out[i] === id)));
     const next = assign(labs, means, fixed, perColor);
     if (next.every((c, i) => c === out[i])) break;
     out = next;

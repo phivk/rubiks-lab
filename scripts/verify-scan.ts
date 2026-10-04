@@ -1,8 +1,8 @@
 // Checks for camera scanning on the 3×3: the scan faces' sticker order matches what a
 // camera sees, and simulated photos of scrambled cubes read back as the right state.
 // Run with `npm run verify`.
-import type { Vec3 } from '../src/core/types';
-import { cross, dot } from '../src/core/vec';
+import { cross, dot, mean } from '../src/core/vec';
+import { CubeModel } from '../src/cube/model';
 import { TYPICAL, calibrate, nearest, scanState, type RGB } from '../src/scan/classify';
 
 // the 3×3 starts its solver worker on load, which Node doesn't have
@@ -16,7 +16,6 @@ function fail(msg: string): never {
 
 const P = cube3;
 const faces = P.scan!;
-const centroid = (i: number) => [0, 1, 2].map((k) => P.stickers[i].outline.reduce((a, p) => a + p[k], 0) / 4) as Vec3;
 const faceNormal = (color: number) => P.stickers.find((s) => s.color === color)!.normal;
 
 // Held as told, each face's stickers run left to right, then top to bottom, as the camera sees them.
@@ -26,7 +25,7 @@ for (const f of faces) {
   const right = cross(up, n);
   f.stickers.forEach((s, i) => {
     if (P.stickers[s].color !== f.center) fail(`scan face ${f.center}: sticker ${s} is on another face`);
-    const p = centroid(s), r = Math.floor(i / 3), c = i % 3;
+    const p = mean(P.stickers[s].outline), r = Math.floor(i / 3), c = i % 3;
     if (Math.round(dot(p, right)) !== c - 1 || Math.round(dot(p, up)) !== 1 - r) fail(`scan face ${f.center}: sticker ${s} isn't at row ${r}, column ${c}`);
   });
 }
@@ -57,11 +56,11 @@ function photo(state: number[], webcam = false): RGB[][] {
   });
 }
 
-const apply = (s: number[], moves: string[]) => moves.reduce((st, m) => P.parseMove(m)!.perm.map((src) => st[src]), s);
+const M = new CubeModel(3);
 const TRIALS = 500;
 let wrong = 0;
 for (let t = 0; t < TRIALS; t++) {
-  const state = apply(P.solved(), P.scramble());
+  const state = M.applyAll(P.solved(), P.scramble());
   const read = scanState(P, photo(state));
   if (read.some((c, i) => c !== state[i])) wrong++;
 }
@@ -74,7 +73,7 @@ console.log(`✓ ${TRIALS - wrong} of ${TRIALS} simulated scans read back exactl
 for (const webcam of [false, true]) {
   let misread = 0, total = 0;
   for (let t = 0; t < 200; t++) {
-    const state = apply(P.solved(), P.scramble());
+    const state = M.applyAll(P.solved(), P.scramble());
     const pic = photo(state, webcam);
     faces.forEach((f, k) => {
       const seen: RGB[] = [];

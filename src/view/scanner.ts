@@ -145,12 +145,13 @@ export class Scanner {
   private buildGrid() {
     this.grid.style.setProperty('--n', String(this.n));
     this.grid.innerHTML = '<span></span>'.repeat(this.n * this.n);
+    this.grid.children[this.middle()].classList.add('center');
     this.faces.innerHTML = '';
     this.puzzle.scan!.forEach((f, k) => {
       const b = document.createElement('button');
       b.className = 'scan-face';
       b.style.setProperty('--n', String(this.n));
-      b.title = `Scan the ${this.puzzle.colorNames[f.center].toLowerCase()} face`;
+      b.title = `Scan the ${this.name(f.center)} face`;
       b.innerHTML = '<i></i>'.repeat(this.n * this.n);
       b.addEventListener('click', () => { this.current = k; this.render(); });
       this.faces.append(b);
@@ -197,13 +198,6 @@ export class Scanner {
     return calibrate(seen);
   }
 
-  /** The sample shown in grid cell `i`. Samples are kept as the camera sees them, so a mirrored preview shows them flipped. */
-  private onScreen(i: number) {
-    if (!this.mirrored) return i;
-    const r = Math.floor(i / this.n), c = i % this.n;
-    return r * this.n + this.n - 1 - c;
-  }
-
   private middle() {
     return (this.n * this.n - 1) / 2;
   }
@@ -211,12 +205,13 @@ export class Scanner {
   private renderLive() {
     const face = this.puzzle.scan![this.current];
     const center = this.live[this.middle()];
-    const seen = nearest(center, this.refs(this.current));
+    const others = this.refs(this.current);
+    const seen = nearest(center, others);
     // the center in view is this face's color, so it shows the stickers what that looks like
     // here, unless it's plainly another face's
-    const refs = seen === face.center ? this.refs(this.current, center) : this.refs(this.current);
+    const refs = seen === face.center ? this.refs(this.current, center) : others;
     const cells = this.grid.children as HTMLCollectionOf<HTMLElement>;
-    this.live.forEach((_, i) => cells[i].style.setProperty('--c', this.puzzle.colors[nearest(this.live[this.onScreen(i)], refs)]));
+    this.live.forEach((s, i) => cells[i].style.setProperty('--c', this.puzzle.colors[nearest(s, refs)]));
     const warn = this.root.querySelector('.scan-warn')!;
     warn.textContent = seen === face.center ? ''
       : `That looks like the ${this.name(seen)} center — turn the ${this.name(face.center)} one to the camera`;
@@ -231,19 +226,17 @@ export class Scanner {
     const face = faces[this.current];
     const dot = (c: number) => `<b><i style="background:${this.puzzle.colors[c]}"></i>${this.puzzle.colorNames[c]}</b>`;
     this.root.querySelector('.scan-step')!.textContent = `Face ${this.current + 1} of ${faces.length}`;
-    this.root.querySelector('.scan-prompt')!.textContent = this.mirrored ? face.how.front : face.how.back;
+    this.root.querySelector('.scan-prompt')!.textContent = face.how.replace('{side}', this.mirrored ? 'left' : 'right');
     this.root.querySelector('.scan-colors')!.innerHTML = `${dot(face.center)} facing the camera, ${dot(face.top)} on top`;
     // the same two colors on the grid, to check against the cube while lining it up
     this.grid.style.setProperty('--face', this.puzzle.colors[face.center]);
     this.grid.style.setProperty('--top', this.puzzle.colors[face.top]);
-    this.grid.children[this.middle()].classList.add('center');
     this.root.querySelector('.scan-warn')!.textContent = '';
     const refs = this.refs();
     [...this.faces.children].forEach((b, k) => {
       b.classList.toggle('active', k === this.current);
-      b.classList.toggle('done', !!this.captured[k]);
       [...b.children].forEach((cell, i) => {
-        const s = this.captured[k]?.[this.onScreen(i)];
+        const s = this.captured[k]?.[i];
         // before it's scanned, only the center shows, to tell the faces apart
         const c = s ? nearest(s, refs) : i === this.middle() ? faces[k].center : -1;
         (cell as HTMLElement).style.background = c < 0 ? '' : this.puzzle.colors[c];

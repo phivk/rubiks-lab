@@ -210,7 +210,6 @@ async function switchPuzzle(p: Puzzle) {
   $('.mode-paint .intro').innerHTML = p.paintIntroHtml;
   $('#puzzle-shortcuts').innerHTML = p.shortcutsHtml;
   $('#btn-scan').classList.toggle('hidden', !p.scan);
-  $('.seg').classList.toggle('three', !!p.scan);
   paintColor = p.paletteOrder[0];
   setMode(mode);
   renderHistory();
