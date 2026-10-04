@@ -16,17 +16,17 @@
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
 import { OCLL, PLL } from './algs';
 import {
-  alg, FACE_MOVES, lessonKit, list, plural, ROTATIONS, TOP_CORNERS, turns, U_TURNS, type Macro,
+  alg, FACE_MOVES, lessonKit, list, onceOnly, plural, ROTATIONS, TOP_CORNERS, turns, U_TURNS, type Macro,
 } from './lessonKit';
 import type { CubeModel } from './model';
 
 export const ROUX_STAGES = [
   { name: 'First block', goal: 'Build a 1×2×3 block on the left: a square, then a corner–edge pair.' },
   { name: 'Second block', goal: 'Build the matching block on the right, turning only U, R, r and M.' },
-  { name: 'CMLL', goal: 'Solve the four top corners without breaking the blocks.' },
-  { name: 'Orient edges', goal: 'With M and U only, turn each of the last six edges the right way up.' },
-  { name: 'Left & right edges', goal: 'Put the top-left and top-right edges in place.' },
-  { name: 'Middle slice', goal: 'Finish the last four edges and the centers in the M slice.' },
+  { name: 'CMLL', goal: 'Corners of the Last Layer, with the M slice still free: solve the four top corners without breaking the blocks.' },
+  { name: 'LSE: orient edges', goal: 'Last Six Edges, part 1: with M and U only, turn each edge the right way up.' },
+  { name: 'LSE: left & right edges', goal: 'Last Six Edges, part 2: put the top-left and top-right edges in place.' },
+  { name: 'LSE: middle slice', goal: 'Last Six Edges, part 3: finish the four edges and the centers in the M slice.' },
 ];
 
 const LSE_EDGES = ['UF', 'UB', 'UL', 'UR', 'DF', 'DB'];
@@ -44,11 +44,15 @@ export function rouxGuide(M: CubeModel): Guide {
     id: 'roux',
     name: 'Roux',
     short: 'Roux',
-    intro: 'Two blocks on the sides, the top corners, then the last six edges with just M and U turns. Few moves and few algorithms — most of it is figured out, not memorised.',
+    intro: 'Two blocks on the sides, the top corners (CMLL: Corners of the Last Layer, M slice free), then the last six edges (LSE) with just M and U turns. Few moves and few algorithms — most of it is figured out, not memorised.',
     stages: ROUX_STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
       const white = 0;
+      const once = onceOnly();
+      const ROUX_NAME = '<p>Roux is named after its inventor, Gilles Roux. It builds two 1×2×3 blocks on the left and right, solves the top corners, then the last six edges.</p>';
+      const CMLL = '<p><b>CMLL</b> stands for <b>C</b>orners of the <b>L</b>ast <b>L</b>ayer, with the <b>M</b> slice (the middle layer between L and R) still unsolved — so these algorithms may scramble the top edges freely. Full CMLL has 42 algorithms; this is the two-look version: orient the corners, then swap them.</p>';
+      const LSE = '<p><b>LSE</b> stands for <b>L</b>ast <b>S</b>ix <b>E</b>dges: the four top edges and the two in the bottom of the M slice, plus the middle centers. Only M (the middle slice, turning like L) and U turns are needed, in three parts.</p>';
       const down = K.first(state, ['', 'x2', 'z2', 'x', "x'", 'z', "z'"], (t) => center(t, 'D') === white);
 
       // the colors each face should end up, fixed for the whole solve
@@ -96,7 +100,7 @@ export function rouxGuide(M: CubeModel): Guide {
         steps.push({
           stage: 0,
           title: 'Hold the cube',
-          html: `<p>Hold the cube with ${name(white)} on the bottom and ${name(ref.L)} on the left. The first block goes on the left; of the four sides, this one is quickest to build.</p>`,
+          html: once('roux', ROUX_NAME) + `<p>Hold the cube with ${name(white)} on the bottom and ${name(ref.L)} on the left. The first block goes on the left; of the four sides, this one is quickest to build.</p>`,
           phrases: [{ label: 'Turn the whole cube', moves: fb.setup }],
           focus: () => [at('D', 'D'), at('L', 'L')],
         });
@@ -106,7 +110,7 @@ export function rouxGuide(M: CubeModel): Guide {
         steps.push({
           stage: 0,
           title: 'The first square',
-          html: `<p>Start with a 2×2 square at the bottom-left-${fb.end === 'B' ? 'back' : 'front'}: the ${piece(b1.line)} edge, the ${piece(b1.sqCorner)} corner and the ${piece(b1.sqEdge)} edge, matching the ${name(ref.L)} center.</p>` +
+          html: once('roux', ROUX_NAME) + `<p>Start with a 2×2 square at the bottom-left-${fb.end === 'B' ? 'back' : 'front'}: the ${piece(b1.line)} edge, the ${piece(b1.sqCorner)} corner and the ${piece(b1.sqEdge)} edge, matching the ${name(ref.L)} center.</p>` +
             `<p>There’s no algorithm for this — look for pieces that are already close together and join them. Here it takes ${plural(fb.path.length, 'move')}.</p>`,
           phrases: [{ label: 'Build the square', moves: fb.path }],
           focus: K.focusOn([b1.line, b1.sqEdge, b1.sqCorner]),
@@ -128,7 +132,7 @@ export function rouxGuide(M: CubeModel): Guide {
         steps.push({
           stage,
           title: `The ${plain(edge)} pair`,
-          html: `<p>Finish the ${blockName} block with the ${piece(corner)} corner and ${piece(edge)} edge. ` +
+          html: once('roux', ROUX_NAME) + `<p>Finish the ${blockName} block with the ${piece(corner)} corner and ${piece(edge)} edge. ` +
             K.pairWhere(s, corner, [ref[side], ref[b.other]], { corner: cSlot, edge: side + b.other }, ref.D) + '</p>' +
             `<p>Pair them up, then insert the pair beside the square without breaking it. This takes ${plural(path.reduce((k, m) => k + m.moves.length, 0), 'move')}.</p>`,
           phrases,
@@ -178,7 +182,7 @@ export function rouxGuide(M: CubeModel): Guide {
         steps.push({
           stage: 2,
           title: `Orient the corners: ${best.o.name}`,
-          html: `<p>Look only at the four top corners; the edges don’t matter yet. ${up === 0 ? 'None shows' : up === 1 ? 'One shows' : `${up} show`} ${name(ref.U)} on top — the “${best.o.name}” case.</p>` +
+          html: once('cmll', CMLL) + `<p>Look only at the four top corners; the edges don’t matter yet. ${up === 0 ? 'None shows' : up === 1 ? 'One shows' : `${up} show`} ${name(ref.U)} on top — the “${best.o.name}” case.</p>` +
             `<p>${best.u ? 'Turn the top to the starting angle, then do' : 'Do'} ${code(moves)} to turn all four ${name(ref.U)}-side up. It keeps both blocks.</p>`,
           phrases: [...K.topPhrase(best.u), { label: best.o.name, moves }],
           focus: () => [at('U', 'U'), ...TOP_CORNERS.flatMap((c) => K.stickersOf(c))],
@@ -209,11 +213,11 @@ export function rouxGuide(M: CubeModel): Guide {
         steps.push({
           stage: 2,
           title: p ? 'Swap the corners' : 'Line up the corners',
-          html: !p
+          html: once('cmll', CMLL) + (!p
             ? `<p>The corners are already in order around the top; turn it to line them up with the blocks.</p>`
             : p === T_PERM
-              ? `<p>One side shows headlights — two corners with the same color there. Hold that side on the left, so the two corners on the right need to swap, and do ${code(alg(p.alg))} (the T-perm; it moves top edges too, which is fine).</p>`
-              : `<p>No side shows headlights${lights.length ? '' : ' (two matching corner colors)'}, so two opposite corners need to swap. Do ${code(alg(p.alg))} (the Y-perm; it moves top edges too, which is fine).</p>`,
+              ? `<p>One side shows headlights — two corners with the same color there. Hold that side on the left, so the two corners on the right need to swap, and do ${code(alg(p.alg))} (the T-perm, borrowed from PLL — Permute the Last Layer; it moves top edges too, which is fine).</p>`
+              : `<p>No side shows headlights${lights.length ? '' : ' (two matching corner colors)'}, so two opposite corners need to swap. Do ${code(alg(p.alg))} (the Y-perm, borrowed from PLL — Permute the Last Layer; it moves top edges too, which is fine).</p>`),
           phrases,
           focus: () => [at('U', 'U'), ...TOP_CORNERS.flatMap((c) => K.stickersOf(c))],
         });
@@ -239,7 +243,7 @@ export function rouxGuide(M: CubeModel): Guide {
         steps.push({
           stage: 3,
           title: 'Orient the edges',
-          html: `<p>From here on, only ${code(['M'])} and ${code(['U'])} turns. An edge is <b>bad</b> if its ${name(ref.U)} or ${name(ref.D)} sticker faces front, back or sideways instead of up or down. ` +
+          html: once('lse', LSE) + `<p>From here on, only ${code(['M'])} and ${code(['U'])} turns. An edge is <b>bad</b> if its ${name(ref.U)} or ${name(ref.D)} sticker faces front, back or sideways instead of up or down. ` +
             `There ${n === 1 ? 'is' : 'are'} ${plural(n, 'bad edge')}` +
             (centersOff ? `, and the centers are a quarter turn off: finish with ${name(ref.U)} or ${name(ref.D)} on top, or the edges in the slice count the other way round` : '') + '.</p>' +
             `<p>A quarter turn of M flips the four edges in the middle slice. Use U turns to bring bad edges into the slice, then flip them with ${code(["M'"])} or ${code(['M'])}. This takes ${plural(eoMoves.length, 'move')}.</p>`,
@@ -265,7 +269,7 @@ export function rouxGuide(M: CubeModel): Guide {
         steps.push({
           stage: 4,
           title: 'Place the left and right edges',
-          html: `<p>Find the ${piece(lr[0])} and ${piece(lr[1])} edges. They go on top, at the left and right, matching the corners beside them.</p>` +
+          html: once('lse', LSE) + `<p>Find the ${piece(lr[0])} and ${piece(lr[1])} edges. They go on top, at the left and right, matching the corners beside them.</p>` +
             `<p>A common way: bring one to the bottom of the M slice, line it up opposite its partner with U, and bring both up with ${code(['M2'])}. Keep the edges oriented — M quarter turns only in pairs like ${code(["M'", 'U2', "M'"])}. This takes ${plural(movesB.length, 'move')}.</p>`,
           phrases: [{ label: plural(movesB.length, 'move'), moves: movesB }],
           focus: K.focusOn(lr),
@@ -287,7 +291,7 @@ export function rouxGuide(M: CubeModel): Guide {
         steps.push({
           stage: 5,
           title: 'Finish the middle slice',
-          html: `<p>Last: the ${list(slice.map((c) => piece(c)))} edges${off ? ', and the centers, which are off by a turn' : ''}. ` +
+          html: once('lse', LSE) + `<p>Last: the ${list(slice.map((c) => piece(c)))} edges${off ? ', and the centers, which are off by a turn' : ''}. ` +
             `They all live in the M slice, so it’s ${code(['M'])} turns, with ${code(['U2'])} to swap the two top edges.</p>` +
             `<p>This takes ${plural(movesC.length, 'move')}.</p>`,
           phrases: [{ label: plural(movesC.length, 'move'), moves: movesC }],

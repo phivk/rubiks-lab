@@ -10,6 +10,17 @@ const M = new CubeModel(3);
 const MOVES = ['U', 'R', 'F', 'D', 'L', 'B'];
 const scramble = (n: number) => Array.from({ length: n }, () => MOVES[(Math.random() * 6) | 0] + ['', "'", '2'][(Math.random() * 3) | 0]);
 const RUNS = Number(process.env.RUNS ?? 300);
+// every acronym a lesson uses must be spelled out somewhere in its text
+const ACRONYMS: [RegExp, RegExp][] = [
+  [/\bCFOP\b/, /Cross, F2L/],
+  [/\bF2L\b/, /First (2|Two) Layers/],
+  [/\bOLL\b/, /Orient the Last Layer/],
+  [/\bOCLL\b/, /Orient the Corners of the Last Layer/],
+  [/\bPLL\b/, /Permute the Last Layer/],
+  [/\bCMLL\b/, /Corners of the Last Layer/],
+  [/\bLSE\b/, /Last Six Edges/],
+  [/\bEOLine\b/, /Edge Orientation/],
+];
 
 let anyFailed = false;
 for (const guide of [cfopGuide(M), rouxGuide(M), zzGuide(M)] as Guide[]) {
@@ -26,6 +37,9 @@ for (const guide of [cfopGuide(M), rouxGuide(M), zzGuide(M)] as Guide[]) {
       if (!M.isSolved(M.applyAll(start, moves))) throw new Error('not solved');
       if (steps.some((s, k) => k > 0 && s.stage < steps[k - 1].stage)) throw new Error('stages out of order');
       if (steps.some((s) => s.phrases.some((p) => p.moves.length === 0))) throw new Error('empty phrase');
+      const text = steps.map((s) => s.title + ' ' + s.html).join(' ') + ' ' + steps.map((s) => guide.stages[s.stage].name).join(' ');
+      const html = steps.map((s) => s.html).join(' ').replace(/<[^>]*>/g, '');
+      for (const [word, meaning] of ACRONYMS) if (word.test(text) && !meaning.test(html)) throw new Error(`${word.source} is never spelled out`);
       lengths.push(moves.length);
       stepCounts.push(steps.length);
     } catch (e) {

@@ -345,5 +345,14 @@ export function lessonKit(M: CubeModel) {
   };
 }
 
+/**
+ * Say something only the first time it's asked for: spells out an acronym (F2L, CMLL, …) in
+ * the first step that uses it. Make one per lesson.
+ */
+export function onceOnly() {
+  const said = new Set<string>();
+  return (key: string, text: string) => (said.has(key) ? '' : (said.add(key), text));
+}
+
 /** Moves of a step, for the next step's starting state. */
 export const stepMoves = (step: GuideStep) => step.phrases.flatMap((p) => p.moves);

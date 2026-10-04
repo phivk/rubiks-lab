@@ -25,8 +25,8 @@ function topShape(K: Kit, s: State) {
   return `${edges}, and ${corners === 0 ? 'no corner does' : corners === 4 ? 'so do all four corners' : `${corners} corner${corners === 1 ? '' : 's'} ${corners === 1 ? 'does' : 'do'}`}`;
 }
 
-/** Orient the top with one algorithm from `set`; nothing if it's already oriented. */
-export function ollStep(K: Kit, s: State, stage: number, set: OllAlg[], prefix: string): { s: State; step?: GuideStep } {
+/** Orient the top with one algorithm from `set`; `about` introduces the step (what the acronym stands for). */
+export function ollStep(K: Kit, s: State, stage: number, set: OllAlg[], prefix: string, about: string): { s: State; step?: GuideStep } {
   if (oriented(K, s)) return { s };
   let best: { u: string; o: OllAlg; t: State; n: number } | null = null;
   for (const o of set) {
@@ -45,7 +45,7 @@ export function ollStep(K: Kit, s: State, stage: number, set: OllAlg[], prefix: 
     step: {
       stage,
       title: `${prefix} ${o.n}: ${o.name}`,
-      html: `<p>Look at the top: ${topShape(K, s)}. That’s <b>${prefix} ${o.n}</b>, “${o.name}”, from the ${o.group.toLowerCase()} group.</p>` +
+      html: about + `<p>Look at the top: ${topShape(K, s)}. That’s <b>${prefix} ${o.n}</b>, “${o.name}”, from the ${o.group.toLowerCase()} group.</p>` +
         `<p>${u ? 'Turn the top to the angle the algorithm starts from, then do' : 'It’s already at the right angle. Do'} ${K.code(moves)}. Afterwards the whole top is yellow.</p>`,
       phrases: [...K.topPhrase(u), { label: `${prefix} ${o.n}`, moves }],
       focus: focusTop(K),
@@ -71,12 +71,13 @@ export function pllStep(K: Kit, s: State, stage: number, solved: (t: State) => b
       step: {
         stage,
         title: 'Line up the top',
-        html: '<p>The top is already solved relative to itself — no PLL needed. Turn it to line up with the rest.</p>',
+        html: '<p>The top is already solved relative to itself — no PLL (Permute the Last Layer) algorithm needed. Turn it to line up with the rest.</p>',
         phrases: K.topPhrase(auf),
         focus: focusTop(K),
       },
     };
   }
+  const about = '<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, move its pieces to their spots. Each case is a letter-named “perm” (short for permutation).</p>';
   let best: { u: string; v: string; p: (typeof PLL)[number]; t: State; n: number } | null = null;
   for (const p of PLL) {
     const moves = alg(p.alg);
@@ -101,7 +102,7 @@ export function pllStep(K: Kit, s: State, stage: number, solved: (t: State) => b
     step: {
       stage,
       title: `${p.name} perm`,
-      html: `<p>Every piece on top shows yellow; now they have to move to their spots. ${hint}</p>` +
+      html: about + `<p>Every piece on top shows yellow; now they have to move to their spots. ${hint}</p>` +
         `<p>Here ${p.kind}: that’s the <b>${p.name} perm</b>. ${u ? 'Turn the top to its starting angle, do' : 'Do'} ${K.code(moves)}` +
         (v ? ', then turn the top to line it up.' : '.') + '</p>',
       phrases: [...K.topPhrase(u), { label: `${p.name} perm`, moves }, ...K.topPhrase(v, 'Line up the top')],

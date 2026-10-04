@@ -14,15 +14,15 @@
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
 import { OCLL } from './algs';
 import { ollStep, pllStep } from './lastLayer';
-import { EDGES, FACE_MOVES, lessonKit, plural, ROTATIONS, turns, type Macro } from './lessonKit';
+import { EDGES, FACE_MOVES, lessonKit, onceOnly, plural, ROTATIONS, turns, type Macro } from './lessonKit';
 import type { CubeModel } from './model';
 
 export const ZZ_STAGES = [
-  { name: 'EOLine', goal: 'Orient every edge, then line up the two white edges on the bottom, front and back.' },
+  { name: 'EOLine', goal: 'Edge Orientation plus a line: orient every edge, then line up the two white edges on the bottom, front and back.' },
   { name: 'Left block', goal: 'Build a 1×2×3 block on the left, turning only L, U and R.' },
   { name: 'Right block', goal: 'Build the matching block on the right with U and R: the first two layers.' },
-  { name: 'OCLL', goal: 'The edges are oriented, so one of seven algorithms turns the top yellow.' },
-  { name: 'PLL', goal: 'One algorithm moves the top pieces to their spots.' },
+  { name: 'OCLL', goal: 'Orient the Corners of the Last Layer: the edges are oriented, so one of seven algorithms turns the top yellow.' },
+  { name: 'PLL', goal: 'Permute the Last Layer: one algorithm moves the top pieces to their spots.' },
 ];
 
 export function zzGuide(M: CubeModel): Guide {
@@ -58,6 +58,9 @@ export function zzGuide(M: CubeModel): Guide {
   const LUR = turns('LUR');
   const UR = turns('UR');
 
+  const EOLINE = '<p>ZZ is named after its inventor, Zbigniew Zborowski. It starts with the <b>EOLine</b>: <b>E</b>dge <b>O</b>rientation (every edge turned so it can go home without F or B quarter turns) plus a <b>line</b> of two edges on the bottom.</p>';
+  let once = onceOnly();
+
   function eoLine(s: State, steps: GuideStep[]) {
     const white = 0;
     const down = K.first(s, ['', 'x2', 'z2', 'x', "x'", 'z', "z'"], (t) => center(t, 'D') === white);
@@ -79,7 +82,7 @@ export function zzGuide(M: CubeModel): Guide {
       steps.push({
         stage: 0,
         title: 'Hold the cube',
-        html: `<p>Hold the cube with ${name(white)} on the bottom and ${name(center(t, 'F'))} in front. ` +
+        html: once('eoline', EOLINE) + `<p>Hold the cube with ${name(white)} on the bottom and ${name(center(t, 'F'))} in front. ` +
           `Which edges count as “bad” depends on which faces are front and back; this way round needs the fewest moves.</p>`,
         phrases: [{ label: 'Turn the whole cube', moves: setup }],
         focus: () => [at('D', 'D'), at('F', 'F')],
@@ -107,7 +110,7 @@ export function zzGuide(M: CubeModel): Guide {
       steps.push({
         stage: 0,
         title: 'Orient the edges',
-        html: `<p>An edge is <b>bad</b> if it can’t get home without a quarter turn of F or B. To spot one, look at the edge’s sticker on the top or bottom face — or, in the middle layer, on the front or back. ` +
+        html: once('eoline', EOLINE) + `<p>An edge is <b>bad</b> if it can’t get home without a quarter turn of F or B. To spot one, look at the edge’s sticker on the top or bottom face — or, in the middle layer, on the front or back. ` +
           `If that sticker is ${name(center(t, 'L'))} or ${name(center(t, 'R'))}, the edge is bad. If it’s ${name(center(t, 'F'))} or ${name(center(t, 'B'))}, the edge is bad when its other sticker is ${ud}. Otherwise it’s good.</p>` +
           `<p>There ${bad.length === 1 ? 'is' : 'are'} ${plural(bad.length, 'bad edge')} here. A quarter turn of F or B flips the four edges on that face, so gather bad ones there with the other faces and flip them in fours or twos. This takes ${plural(eo.length, 'move')}.</p>`,
         phrases,
@@ -119,7 +122,7 @@ export function zzGuide(M: CubeModel): Guide {
       steps.push({
         stage: 0,
         title: 'Place the line',
-        html: `<p>Every edge is good now — keep it that way: no more quarter turns of F or B (half turns are fine).</p>` +
+        html: once('eoline', EOLINE) + `<p>Every edge is good now — keep it that way: no more quarter turns of F or B (half turns are fine).</p>` +
           `<p>Put the ${piece(lineCols[0])} and ${piece(lineCols[1])} edges on the bottom, front and back, with white facing down. Together with the centers they make a line.</p>`,
         phrases: [{ label: plural(line.length, 'move'), moves: line }],
         focus: K.focusOn(lineCols),
@@ -196,16 +199,18 @@ export function zzGuide(M: CubeModel): Guide {
     id: 'zz',
     name: 'ZZ',
     short: 'ZZ',
-    intro: 'Orient all the edges first, and the rest of the solve needs only L, U and R turns: an edge-orienting line, two blocks, then the last layer with fewer cases.',
+    intro: 'Orient all the edges first, and the rest of the solve needs only L, U and R turns: the EOLine (Edge Orientation plus a line), two blocks, then the last layer with fewer cases (OCLL: Orient the Corners of the Last Layer, then PLL: Permute the Last Layer).',
     stages: ZZ_STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
+      once = onceOnly();
       let s = eoLine(state, steps);
       const line = [...K.stickersOf('DF'), ...K.stickersOf('DB'), at('D', 'D')];
       s = block(s, steps, 'L', line);
       const left = [...line, ...['DL', 'FL', 'BL', 'DFL', 'DLB'].flatMap((slot) => K.stickersOf(slot))];
       s = block(s, steps, 'R', left);
-      const oll = ollStep(K, s, 3, OCLL, 'OLL');
+      const oll = ollStep(K, s, 3, OCLL, 'OLL',
+        '<p><b>OCLL</b> stands for <b>O</b>rient the <b>C</b>orners of the <b>L</b>ast <b>L</b>ayer. Other methods use OLL here (Orient the Last Layer, 57 cases), but ZZ oriented the edges at the start, so only the seven corner cases — OLL 21 to 27 — can come up.</p>');
       if (oll.step) steps.push(oll.step);
       const pll = pllStep(K, oll.s, 4, (t) => M.isSolved(t));
       if (pll.step) steps.push(pll.step);
