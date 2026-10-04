@@ -44,15 +44,17 @@ export class Scanner {
       <div class="scan-top">
         <div class="scan-step"></div>
         <div class="scan-prompt"></div>
+        <div class="scan-colors"></div>
         <div class="scan-warn"></div>
       </div>
       <div class="scan-grid"></div>
       <div class="scan-bottom">
         <div class="scan-faces"></div>
+        <div class="scan-keys"><kbd>←</kbd><kbd>→</kbd> previous / next face</div>
         <div class="row">
-          <button class="btn grow" data-act="cancel">Cancel</button>
+          <button class="btn grow" data-act="cancel">Cancel<kbd>Esc</kbd></button>
           <button class="btn icon hidden" data-act="light" title="Light up the cube with the screen" aria-label="Screen light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
-          <button class="btn grow scan-capture" data-act="capture"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>Capture</button>
+          <button class="btn grow scan-capture" data-act="capture"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>Capture<kbd>Space</kbd></button>
         </div>
       </div>`;
     document.body.append(this.root);
@@ -65,9 +67,12 @@ export class Scanner {
       this.setLight(!this.root.classList.contains('light'));
       try { localStorage.setItem('scanLight', this.root.classList.contains('light') ? '1' : '0'); } catch { /* storage unavailable */ }
     });
-    this.root.addEventListener('keydown', (e) => {
+    // on the window, so the keys still work after a click on the video takes focus away
+    window.addEventListener('keydown', (e) => {
+      if (!this.isOpen) return;
       if (e.key === 'Escape') this.close();
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this.capture(); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); this.step(e.key === 'ArrowLeft' ? -1 : 1); }
     });
   }
 
@@ -218,8 +223,13 @@ export class Scanner {
     const faces = this.puzzle.scan!;
     const face = faces[this.current];
     const dot = (c: number) => `<b><i style="background:${this.puzzle.colors[c]}"></i>${this.puzzle.colorNames[c]}</b>`;
-    this.root.querySelector('.scan-step')!.textContent = `Face ${this.current + 1} of ${faces.length} · ${this.mirrored ? face.how.front : face.how.back}`;
-    this.root.querySelector('.scan-prompt')!.innerHTML = `${dot(face.center)} facing the camera, ${dot(face.top)} on top`;
+    this.root.querySelector('.scan-step')!.textContent = `Face ${this.current + 1} of ${faces.length}`;
+    this.root.querySelector('.scan-prompt')!.textContent = this.mirrored ? face.how.front : face.how.back;
+    this.root.querySelector('.scan-colors')!.innerHTML = `${dot(face.center)} facing the camera, ${dot(face.top)} on top`;
+    // the same two colors on the grid, to check against the cube while lining it up
+    this.grid.style.setProperty('--face', this.puzzle.colors[face.center]);
+    this.grid.style.setProperty('--top', this.puzzle.colors[face.top]);
+    this.grid.children[this.middle()].classList.add('center');
     this.root.querySelector('.scan-warn')!.textContent = '';
     const refs = this.refs();
     [...this.faces.children].forEach((b, k) => {
@@ -233,6 +243,14 @@ export class Scanner {
       });
     });
     [...this.grid.children].forEach((c) => c.removeAttribute('style'));
+  }
+
+  /** Go to the face before or after this one, without capturing it. */
+  private step(by: number) {
+    const k = this.current + by;
+    if (k < 0 || k >= this.puzzle.scan!.length) return;
+    this.current = k;
+    this.render();
   }
 
   private capture() {
