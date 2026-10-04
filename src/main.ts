@@ -1,5 +1,5 @@
 import './style.css';
-import type { GuideStep, Puzzle, State } from './core/types';
+import type { Guide, GuideStep, Puzzle, State } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
@@ -33,17 +33,21 @@ interface Solution {
   searching: boolean;
   elapsed: number;
   stale: boolean;
-  /** a lesson: the moves explained step by step, and the move each step starts at */
-  lesson?: { steps: GuideStep[]; starts: number[] };
+  /** a lesson: the method, its moves explained step by step, and the move each step starts at */
+  lesson?: { guide: Guide; steps: GuideStep[]; starts: number[] };
 }
 let solution: Solution | null = null;
 let playing = false;
 /** where playback last started: a lesson pauses at the end of each step */
 let playFrom = 0;
 
-/** the right panel solves the puzzle outright, or teaches how (puzzles with a guide) */
+/** the right panel solves the puzzle outright, or teaches how (puzzles with guides) */
 type Tab = 'solve' | 'learn';
 let tab: Tab = 'solve';
+/** the method the Learn tab teaches, by guide id */
+let methodId = '';
+try { methodId = localStorage.getItem('method') ?? ''; } catch { /* storage unavailable */ }
+const currentGuide = () => puzzle.guides?.find((g) => g.id === methodId) ?? puzzle.guides?.[0];
 
 const SPEEDS = [0.35, 0.6, 1, 1.7, 3];
 let speed = 1;
@@ -324,7 +328,7 @@ async function startSolve() {
     pendingSolve = true;
     return;
   }
-  if (tab === 'learn' && puzzle.guide) return startLesson();
+  if (tab === 'learn' && currentGuide()) return startLesson();
   if (!checkValid()) return;
   if (puzzle.isSolved(session.state)) {
     toast('Already solved — scramble it first', 'good');
@@ -352,14 +356,14 @@ function checkValid() {
 
 /** Walk through solving the puzzle as it is now (scrambling it first if it's solved). */
 async function startLesson() {
-  const guide = puzzle.guide!;
+  const guide = currentGuide()!;
   if (!checkValid()) return;
   if (puzzle.isSolved(session.state)) {
     const forPuzzle = puzzle;
     scramble();
     await idle();
     // the puzzle or tab may have changed while it scrambled
-    if (puzzle !== forPuzzle || tab !== 'learn') return;
+    if (puzzle !== forPuzzle || tab !== 'learn' || currentGuide() !== guide) return;
   }
   let steps: GuideStep[];
   try {
@@ -379,7 +383,7 @@ async function startLesson() {
     start: session.state.slice(),
     moves: steps.flatMap((s) => s.phrases.flatMap((p) => p.moves)),
     index: 0, optimal: false, searching: false, elapsed: 0, stale: false,
-    lesson: { steps, starts },
+    lesson: { guide, steps, starts },
   };
   renderSolution(true);
 }
@@ -387,6 +391,14 @@ async function startLesson() {
 function setTab(t: Tab) {
   if (t === tab) return;
   tab = t;
+  invalidateSolution(true);
+  renderSolution();
+}
+
+function setMethod(id: string) {
+  if (id === currentGuide()?.id) return;
+  methodId = id;
+  try { localStorage.setItem('method', id); } catch { /* storage unavailable */ }
   invalidateSolution(true);
   renderSolution();
 }
@@ -616,7 +628,7 @@ function renderStatus() {
 
 function renderSolution(fresh = false) {
   const el = $('#solution');
-  const learn = tab === 'learn' && !!puzzle.guide;
+  const learn = tab === 'learn' && !!currentGuide();
   el.classList.toggle('learn', learn);
   el.classList.toggle('empty', !solution);
   el.classList.toggle('stale', !!solution?.stale);
@@ -697,7 +709,7 @@ function renderPlayback() {
 // ---------- lessons ----------
 
 function renderTabs() {
-  $('#sol-tabs').classList.toggle('hidden', !puzzle.guide);
+  $('#sol-tabs').classList.toggle('hidden', !puzzle.guides?.length);
   document.querySelectorAll<HTMLButtonElement>('#sol-tabs button').forEach((b) => {
     const on = b.dataset.tab === tab;
     b.classList.toggle('active', on);
@@ -718,14 +730,16 @@ function currentStep(s: Solution) {
 let lessonStep = -1;
 
 function renderLearn() {
-  const guide = puzzle.guide!;
+  const guide = currentGuide()!;
   const solved = puzzle.isSolved(session.state);
+  $('#methods').innerHTML = puzzle.guides!.map((g) =>
+    `<button role="tab" data-method="${g.id}" class="${g === guide ? 'active' : ''}" aria-selected="${g === guide}">${g.short}</button>`).join('');
   $('.solve-label').textContent = solution ? 'Restart lesson' : 'Start lesson';
   $('#solve-sub').textContent = solved ? 'Scrambles it first, then teaches'
     : solution ? 'From the cube as it is now' : 'Walks you through solving this cube';
   $('#lesson-intro').innerHTML = `
     <p><b>${guide.name}.</b> ${guide.intro}</p>
-    <p class="muted small">Moves use standard notation: <code>R</code> turns the right face a quarter turn clockwise, as you look at that face, <code>R'</code> turns it back and <code>R2</code> turns it twice. <code>U</code> is the top and <code>F</code> the front; <code>y</code> turns the whole cube like <code>U</code>.</p>
+    <p class="muted small">Moves use standard notation: <code>R</code> turns the right face a quarter turn clockwise, as you look at that face, <code>R'</code> turns it back and <code>R2</code> turns it twice. <code>U</code> is the top and <code>F</code> the front; <code>y</code> turns the whole cube like <code>U</code>.${guide.id === 'beginner' ? '' : ' Lowercase <code>r</code> turns the right two layers together, <code>M</code> turns the middle slice like <code>L</code>, and <code>x</code> turns the whole cube like <code>R</code>.'}</p>
     <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along.</p>`;
   if (solution?.lesson) {
     renderLesson();
@@ -756,7 +770,7 @@ function renderLesson() {
       <div class="phrase-moves">${p.moves.map((m) => `<button class="chip" data-i="${i}" title="Jump to after this move">${m}<sub>${++i - starts[k]}</sub></button>`).join('')}</div>
     </div>`).join('');
   $('#lesson').innerHTML = stale + `
-    <div class="lesson-head"><span class="eyebrow">${puzzle.guide!.stages[step.stage].name}</span><span class="step">Step ${k + 1} of ${steps.length}</span></div>
+    <div class="lesson-head"><span class="eyebrow">${s.lesson!.guide.stages[step.stage].name}</span><span class="step">Step ${k + 1} of ${steps.length}</span></div>
     <div class="lesson-title">${step.title}</div>
     <div class="lesson-text">${step.html}</div>
     <div class="phrases">${phrases}</div>
@@ -767,8 +781,8 @@ function renderLesson() {
 }
 
 function renderStages() {
-  const guide = puzzle.guide!;
   const lesson = solution?.lesson;
+  const guide = lesson?.guide ?? currentGuide()!;
   const k = lesson ? currentStep(solution!) : -1;
   const cur = !lesson ? -1 : k < lesson.steps.length ? lesson.steps[k].stage : guide.stages.length;
   $('#stages').innerHTML = guide.stages.map((st, i) => {
@@ -942,6 +956,10 @@ function bind() {
   document.querySelectorAll<HTMLButtonElement>('#sol-tabs button').forEach((b) =>
     b.addEventListener('click', () => setTab(b.dataset.tab as Tab)),
   );
+  $('#methods').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('button');
+    if (b?.dataset.method) setMethod(b.dataset.method);
+  });
   $('#lesson').addEventListener('click', onLessonClick);
   $('#stages').addEventListener('click', onStageClick);
   $('#btn-play').addEventListener('click', togglePlay);

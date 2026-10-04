@@ -382,8 +382,16 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* the Learn tab shares the player with Solve, and swaps the rest */
 .solution.learn { display: flex; flex-direction: column; gap: 14px; }
 .solution.learn .sol-empty, .solution.learn .sol-head, .solution.learn .chips { display: none; }
-.solution:not(.learn) .lesson, .solution:not(.learn) .lesson-intro, .solution:not(.learn) .stages,
+.solution:not(.learn) .lesson, .solution:not(.learn) .lesson-intro, .solution:not(.learn) .stages, .solution:not(.learn) .methods,
 .solution.learn:not(.empty) .lesson-intro { display: none; }
+.methods { display: flex; gap: 4px; padding: 3px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; border: 1px solid var(--line); }
+.methods button {
+  flex: 1; padding: 5px 4px; border: 0; background: transparent; border-radius: 7px; cursor: pointer;
+  font-size: 12.5px; font-weight: 600; color: var(--text-2); transition: background 0.2s, color 0.2s;
+}
+.methods button:hover { color: var(--text); }
+.methods button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.methods button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .lesson-intro p { margin: 0 0 10px; color: var(--text-2); }
 .lesson-intro p:last-child { margin-bottom: 0; }
 .lesson-intro b { color: var(--text); font-weight: 600; }

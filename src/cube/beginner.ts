@@ -13,21 +13,13 @@
 // the moves, so the text always describes what's on screen. Pieces are named by colors and
 // found relative to the centers, so whole-cube turns (x, y, z) need no bookkeeping.
 
-import { COLORS, COLOR_NAMES } from '../core/colors';
-import type { Guide, GuideStep, Phrase, State, Vec3 } from '../core/types';
-import { FACES, type CubeModel } from './model';
+import { COLOR_NAMES } from '../core/colors';
+import type { Guide, GuideStep, Phrase, State } from '../core/types';
+import {
+  alg, FACE_MOVES, lessonKit, list, repeat, ROTATIONS, rounds, sameSet, SIDE_NAME, TOP_CORNERS, TOP_EDGES, U_TURNS,
+} from './lessonKit';
+import type { CubeModel } from './model';
 
-const NORMAL: Record<string, Vec3> = { U: [0, 1, 0], D: [0, -1, 0], R: [1, 0, 0], L: [-1, 0, 0], F: [0, 0, 1], B: [0, 0, -1] };
-const EDGES = ['UF', 'UR', 'UB', 'UL', 'FR', 'FL', 'BR', 'BL', 'DF', 'DR', 'DB', 'DL'];
-const CORNERS = ['UFR', 'URB', 'UBL', 'ULF', 'DRF', 'DFL', 'DLB', 'DBR'];
-const TOP_EDGES = EDGES.slice(0, 4);
-const TOP_CORNERS = CORNERS.slice(0, 4);
-const SIDE_NAME: Record<string, string> = { F: 'front', R: 'right', B: 'back', L: 'left' };
-
-const ROTATIONS = ['', 'y', "y'", 'y2'];
-const U_TURNS = ['', 'U', "U'", 'U2'];
-
-const alg = (text: string) => text.split(' ');
 const SEXY = alg("R U R' U'");
 const RIGHT = alg("U R U' R' U' F' U F");
 const LEFT = alg("U' L' U L U F U' F'");
@@ -35,11 +27,6 @@ const CROSS = alg("F R U R' U' F'");
 const SUNE = alg("R U R' U R U2 R' U");
 const NIKLAS = alg("U R U' L' U R' U' L");
 const TWIST = alg("R' D' R D");
-
-const repeat = (moves: string[], n: number) => Array.from({ length: n }, () => moves).flat();
-const rounds = (n: number) => (n === 1 ? 'one round' : `${n} rounds`);
-const list = (words: string[]) => (words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`);
-const sameSet = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 export const STAGES = [
   { name: 'White cross', goal: 'A white plus on top, each edge matching the center beside it.' },
@@ -54,76 +41,17 @@ export const STAGES = [
 export function beginnerGuide(M: CubeModel): Guide {
   if (M.n !== 3) throw new Error('The beginner method is for the 3×3');
 
-  /** the sticker of `slot` (e.g. 'UFR') on `face` */
-  const at = (slot: string, face: string) => {
-    const pos = [0, 1, 2].map((k) => [...slot].reduce((sum, f) => sum + 2 * NORMAL[f][k], 0)) as Vec3;
-    return M.faceletAt(pos, NORMAL[face])!;
-  };
-  const stickersOf = (slot: string) => [...slot].map((f) => at(slot, f));
-  const center = (s: State, face: string) => s[at(face, face)];
-  const find = (s: State, colors: number[]) =>
-    (colors.length === 2 ? EDGES : CORNERS).find((slot) => sameSet(stickersOf(slot).map((i) => s[i]), colors))!;
-  /** the face of `slot` showing color `c` */
-  const faceShowing = (s: State, slot: string, c: number) => [...slot].find((f) => s[at(slot, f)] === c)!;
-  const placed = (s: State, slot: string) => [...slot].every((f) => s[at(slot, f)] === center(s, f));
-  /** the piece's colors match the centers around its slot, in any orientation */
-  const inSpot = (s: State, slot: string) => sameSet(stickersOf(slot).map((i) => s[i]), [...slot].map((f) => center(s, f)));
-  /** apply moves, skipping '' (no move) */
-  const apply = (s: State, moves: string[]) => M.applyAll(s, moves.filter(Boolean));
-  const focusOn = (pieces: number[][]) => (s: State) => pieces.flatMap((p) => stickersOf(find(s, p)));
-
-  const name = (c: number) => `<span class="cname" style="--c:${COLORS[c]}">${COLOR_NAMES[c].toLowerCase()}</span>`;
-  const piece = (cols: number[]) => cols.map(name).join('–');
-  const code = (moves: string[]) => `<code>${moves.join(' ')}</code>`;
-
-  /** the first move in `options` (some may be '') after which `ok` holds */
-  const first = (s: State, options: string[], ok: (t: State) => boolean) => {
-    const m = options.find((o) => ok(apply(s, [o])));
-    if (m === undefined) throw new Error('beginner guide: no option fits');
-    return m;
-  };
-  const rotatePhrase = (m: string): Phrase[] => (m ? [{ label: 'Turn the whole cube', moves: [m] }] : []);
-  const topPhrase = (m: string, label = 'Turn the top'): Phrase[] => (m ? [{ label, moves: [m] }] : []);
+  const K = lessonKit(M);
+  const { at, stickersOf, center, find, faceShowing, placed, inSpot, apply, focusOn, name, piece, code, first, rotatePhrase, topPhrase } = K;
 
   // ---------- 1. white cross: a short search per edge ----------
 
-  // where each sticker goes under each face turn
-  const FACE_MOVES = [...FACES].flatMap((f) => [f, f + "'", f + '2']);
-  const dest = FACE_MOVES.map((m) => {
-    const perm = M.permutation(M.parseMove(m)!);
-    const to: number[] = [];
-    perm.forEach((src, d) => (to[src] = d));
-    return to;
-  });
-
+  const faceTurns = K.macros([], FACE_MOVES);
   /** Fewest face turns taking the stickers at `from` to `goal` (each sticker tracked on its own). */
   function search(from: number[], goal: number[]): string[] {
-    // sticker indices are < 64, so a position packs into one number
-    const key = (p: number[]) => p.reduce((k, i) => k * 64 + i, 0);
-    const target = key(goal);
-    const parent = new Map<number, [number, number] | null>([[key(from), null]]);
-    let frontier = [from];
-    while (frontier.length) {
-      const next: number[][] = [];
-      for (const p of frontier) {
-        const k = key(p);
-        if (k === target) {
-          const path: string[] = [];
-          for (let e = parent.get(k); e; e = parent.get(e[0])) path.unshift(FACE_MOVES[e[1]]);
-          return path;
-        }
-        dest.forEach((to, m) => {
-          const q = p.map((i) => to[i]);
-          const kq = key(q);
-          if (!parent.has(kq)) {
-            parent.set(kq, [k, m]);
-            next.push(q);
-          }
-        });
-      }
-      frontier = next;
-    }
-    throw new Error('beginner guide: cross search failed');
+    const path = K.route(from, goal, faceTurns);
+    if (!path) throw new Error('beginner guide: cross search failed');
+    return path.flatMap((m) => m.moves);
   }
 
   function crossStage(s: State, steps: GuideStep[]) {
@@ -442,7 +370,9 @@ export function beginnerGuide(M: CubeModel): Guide {
   }
 
   return {
+    id: 'beginner',
     name: 'Beginner method',
+    short: 'Beginner',
     intro: 'Solve the cube layer by layer, the way most people first learn it: seven stages and a handful of short algorithms.',
     stages: STAGES,
     steps: (state) => {

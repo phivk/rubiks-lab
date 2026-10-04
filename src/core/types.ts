@@ -98,7 +98,10 @@ export interface GuideStep {
 
 /** A method that solves a puzzle the way a person would, in explained steps. */
 export interface Guide {
+  id: string;
   name: string;
+  /** the name on the method picker */
+  short: string;
   intro: string;
   stages: { name: string; goal: string }[];
   /** throws if the state can't be solved this way */
@@ -154,6 +157,6 @@ export interface Puzzle {
   solveHint?: string;
   solve: (state: State, budgetMs: number, handlers: SolveHandlers) => void;
   cancelSolve: () => void;
-  /** a tutorial that walks through solving this puzzle by hand */
-  guide?: Guide;
+  /** tutorials that walk through solving this puzzle by hand, one per method */
+  guides?: Guide[];
 }
