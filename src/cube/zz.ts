@@ -14,7 +14,7 @@
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
 import { OCLL } from './algs';
 import { ollStep, pllStep } from './lastLayer';
-import { EDGES, FACE_MOVES, lessonKit, onceOnly, plural, ROTATIONS, turns, type Macro } from './lessonKit';
+import { countMoves, EDGES, FACE_MOVES, lessonKit, macroMoves, onceOnly, plural, ROTATIONS, turns, WIDE_NOTATION, type Once } from './lessonKit';
 import type { CubeModel } from './model';
 
 export const ZZ_STAGES = [
@@ -36,17 +36,22 @@ export function zzGuide(M: CubeModel): Guide {
    * back color) and each slot a key face (top or bottom, or for the middle layer front or
    * back); the edge is good when its key sticker is on the slot's key face.
    */
+  // each slot's two stickers, key face first
+  const EO_SLOTS = EDGES.map((slot) => {
+    const faces = [...slot];
+    const keyFace = faces.find((f) => 'UD'.includes(f)) ?? faces.find((f) => 'FB'.includes(f))!;
+    return [at(slot, keyFace), at(slot, faces.find((f) => f !== keyFace)!)];
+  });
   const eoKey = (s: State) => {
     const ud = [center(s, 'U'), center(s, 'D')];
     const fb = [center(s, 'F'), center(s, 'B')];
     let key = 0;
-    EDGES.forEach((slot, i) => {
-      const faces = [...slot];
-      const keyFace = faces.find((f) => 'UD'.includes(f)) ?? faces.find((f) => 'FB'.includes(f))!;
-      const cols = faces.map((f) => s[at(slot, f)]);
-      const k = cols.findIndex((c) => ud.includes(c));
-      const keySticker = k >= 0 ? k : cols.findIndex((c) => fb.includes(c));
-      if (faces[keySticker] !== keyFace) key |= 1 << i;
+    EO_SLOTS.forEach(([onKey, other], i) => {
+      const a = s[onKey];
+      const b = s[other];
+      // the key sticker is on the key face when it's showing there
+      const good = ud.includes(a) || (!ud.includes(b) && fb.includes(a));
+      if (!good) key |= 1 << i;
     });
     return key;
   };
@@ -59,11 +64,10 @@ export function zzGuide(M: CubeModel): Guide {
   const UR = turns('UR');
 
   const EOLINE = '<p>ZZ is named after its inventor, Zbigniew Zborowski. It starts with the <b>EOLine</b>: <b>E</b>dge <b>O</b>rientation (every edge turned so it can go home without F or B quarter turns) plus a <b>line</b> of two edges on the bottom.</p>';
-  let once = onceOnly();
 
-  function eoLine(s: State, steps: GuideStep[]) {
+  function eoLine(s: State, steps: GuideStep[], once: Once) {
     const white = 0;
-    const down = K.first(s, ['', 'x2', 'z2', 'x', "x'", 'z', "z'"], (t) => center(t, 'D') === white);
+    const down = K.hold(s, 'D', white);
     eoTable ??= K.keyTable(M.solved(), FACE_MOVES, eoKey);
     // which way to face: the edge orientation depends on which faces are front and back
     const options = ROTATIONS.map((y) => {
@@ -73,7 +77,7 @@ export function zzGuide(M: CubeModel): Guide {
       const u = apply(t, eo);
       const lineCols = [[white, center(u, 'F')], [white, center(u, 'B')]];
       const line = K.route(lineCols.map((c) => K.stickerOf(u, c, white)), [at('DF', 'D'), at('DB', 'D')], K.macros([], LINE_MOVES))!;
-      return { setup, t, eo, line: line.flatMap((m) => m.moves), lineCols, n: eo.length + line.length };
+      return { setup, t, eo, line: macroMoves(line), lineCols, n: eo.length + line.length };
     });
     const best = options.reduce((x, y) => (y.n < x.n ? y : x));
     const { setup, eo, line, lineCols } = best;
@@ -84,7 +88,7 @@ export function zzGuide(M: CubeModel): Guide {
         title: 'Hold the cube',
         html: once('eoline', EOLINE) + `<p>Hold the cube with ${name(white)} on the bottom and ${name(center(t, 'F'))} in front. ` +
           `Which edges count as “bad” depends on which faces are front and back; this way round needs the fewest moves.</p>`,
-        phrases: [{ label: 'Turn the whole cube', moves: setup }],
+        phrases: K.rotatePhrase(setup.join(' ')),
         focus: () => [at('D', 'D'), at('F', 'F')],
       });
     }
@@ -151,7 +155,7 @@ export function zzGuide(M: CubeModel): Guide {
       const from = [K.stickerOf(s, q.edgeD, white), K.stickerOf(s, q.edge, sc), K.stickerOf(s, q.corner, white)];
       const goal = [at('D' + side, 'D'), at(q.edge2, side), at(q.corner2, 'D')];
       const path = K.route(from, goal, K.macros(keep, moves))!;
-      return { end, q, path: path.flatMap((m) => m.moves) };
+      return { end, q, path: macroMoves(path) };
     });
     const sq = plans.reduce((x, y) => (y.path.length < x.path.length ? y : x));
     const { end, q } = sq;
@@ -179,18 +183,18 @@ export function zzGuide(M: CubeModel): Guide {
     const path = K.route([K.stickerOf(s, corner, white), K.stickerOf(s, edge, sc)], [at('D' + other + side, 'D'), at(other + side, side)], ms);
     if (!path) throw new Error('zz: no block pair route');
     if (path.length) {
-      const phrases = K.pairPhrases(s, path as Macro[], corner, edge);
+      const phrases = K.pairPhrases(s, path, corner, edge);
       steps.push({
         stage,
         title: `The ${plain(edge)} pair`,
         html: `<p>Finish the ${blockName} block with the ${piece(corner)} corner and ${piece(edge)} edge. ` +
           K.pairWhere(s, corner, [sc, center(s, other)], { corner: 'D' + other + side, edge: side + other }, white) + '</p>' +
           `<p>Pair them up in the top, then insert them with ${side === 'L' ? code(['L\'', 'U', 'L']) + '-style' : code(['R', 'U', "R'"]) + '-style'} moves that keep the square. ` +
-          `This takes ${plural(path.reduce((k, m) => k + m.moves.length, 0), 'move')}.</p>`,
+          `This takes ${plural(countMoves(phrases), 'move')}.</p>`,
         phrases,
         focus: K.focusOn([corner, edge]),
       });
-      s = apply(s, path.flatMap((m) => m.moves));
+      s = apply(s, macroMoves(path));
     }
     return s;
   }
@@ -200,11 +204,11 @@ export function zzGuide(M: CubeModel): Guide {
     name: 'ZZ',
     short: 'ZZ',
     intro: 'Orient all the edges first, and the rest of the solve needs only L, U and R turns: the EOLine (Edge Orientation plus a line), two blocks, then the last layer with fewer cases (OCLL: Orient the Corners of the Last Layer, then PLL: Permute the Last Layer).',
+    notation: WIDE_NOTATION,
     stages: ZZ_STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
-      once = onceOnly();
-      let s = eoLine(state, steps);
+      let s = eoLine(state, steps, onceOnly());
       const line = [...K.stickersOf('DF'), ...K.stickersOf('DB'), at('D', 'D')];
       s = block(s, steps, 'L', line);
       const left = [...line, ...['DL', 'FL', 'BL', 'DFL', 'DLB'].flatMap((slot) => K.stickersOf(slot))];

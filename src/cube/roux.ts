@@ -15,8 +15,9 @@
 
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
 import { OCLL, PLL } from './algs';
+import { bestAlg, focusTopCorners, headlights } from './lastLayer';
 import {
-  alg, FACE_MOVES, lessonKit, list, onceOnly, plural, ROTATIONS, TOP_CORNERS, turns, U_TURNS, type Macro,
+  alg, countMoves, FACE_MOVES, lessonKit, list, macroMoves, onceOnly, plural, ROTATIONS, TOP_CORNERS, turns, WIDE_NOTATION, type Macro,
 } from './lessonKit';
 import type { CubeModel } from './model';
 
@@ -39,12 +40,25 @@ export function rouxGuide(M: CubeModel): Guide {
   const T_PERM = PLL.find((p) => p.name === 'T')!;
   const Y_PERM = PLL.find((p) => p.name === 'Y')!;
   let eoTable: ReturnType<typeof K.keyTable> | null = null;
+  // a block's square has fixed goal positions, so each gets a distance table, built when first needed
+  const SB_MOVES = [...turns('URM'), ...turns('r')];
+  const squareTables = new Map<string, ReturnType<typeof K.table>>();
+  const squareTable = (side: 'L' | 'R', end: 'F' | 'B') => {
+    const key = side + end;
+    let t = squareTables.get(key);
+    if (!t) {
+      t = K.table([at('D' + side, 'D'), at(end + side, side), at('D' + end + side, 'D')], side === 'L' ? FACE_MOVES : SB_MOVES);
+      squareTables.set(key, t);
+    }
+    return t;
+  };
 
   return {
     id: 'roux',
     name: 'Roux',
     short: 'Roux',
     intro: 'Two blocks on the sides, the top corners (CMLL: Corners of the Last Layer, M slice free), then the last six edges (LSE) with just M and U turns. Few moves and few algorithms — most of it is figured out, not memorised.',
+    notation: WIDE_NOTATION,
     stages: ROUX_STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
@@ -53,13 +67,11 @@ export function rouxGuide(M: CubeModel): Guide {
       const ROUX_NAME = '<p>Roux is named after its inventor, Gilles Roux. It builds two 1×2×3 blocks on the left and right, solves the top corners, then the last six edges.</p>';
       const CMLL = '<p><b>CMLL</b> stands for <b>C</b>orners of the <b>L</b>ast <b>L</b>ayer, with the <b>M</b> slice (the middle layer between L and R) still unsolved — so these algorithms may scramble the top edges freely. Full CMLL has 42 algorithms; this is the two-look version: orient the corners, then swap them.</p>';
       const LSE = '<p><b>LSE</b> stands for <b>L</b>ast <b>S</b>ix <b>E</b>dges: the four top edges and the two in the bottom of the M slice, plus the middle centers. Only M (the middle slice, turning like L) and U turns are needed, in three parts.</p>';
-      const down = K.first(state, ['', 'x2', 'z2', 'x', "x'", 'z', "z'"], (t) => center(t, 'D') === white);
+      const down = K.hold(state, 'D', white);
 
       // the colors each face should end up, fixed for the whole solve
       let ref: Record<string, number> = {};
       const setRef = (t: State) => (ref = Object.fromEntries([...'URFDLB'].map((f) => [f, center(t, f)])));
-      /** where the sticker of color `c` on the piece with these colors is now */
-      const sticker = (t: State, cols: number[], c: number) => K.stickerOf(t, cols, c);
       const stickers = (slots: string[]) => slots.flatMap((slot) => K.stickersOf(slot));
 
       // ---------- 1. first block ----------
@@ -78,20 +90,17 @@ export function rouxGuide(M: CubeModel): Guide {
           other,
         };
       };
-      const squareRoute = (t: State, side: 'L' | 'R', end: 'F' | 'B', ms: Macro[]) => {
+      const squareRoute = (t: State, side: 'L' | 'R', end: 'F' | 'B') => {
         const b = blockPieces(side, end);
-        const from = [sticker(t, b.line, ref.D), sticker(t, b.sqEdge, ref[side]), sticker(t, b.sqCorner, ref.D)];
-        const goal = [at('D' + side, 'D'), at(end + side, side), at('D' + end + side, 'D')];
-        return K.route(from, goal, ms)?.flatMap((m) => m.moves) ?? null;
+        return squareTable(side, end).descend([K.stickerOf(t, b.line, ref.D), K.stickerOf(t, b.sqEdge, ref[side]), K.stickerOf(t, b.sqCorner, ref.D)]);
       };
 
       // face the side with the cheapest first-block square to the left
-      const faceMs = K.macros([], FACE_MOVES);
       const options = ROTATIONS.flatMap((y) => {
         const setup = [down, y].filter(Boolean);
         const t = apply(state, setup);
         setRef(t);
-        return (['B', 'F'] as const).map((end) => ({ setup, t, end, path: squareRoute(t, 'L', end, faceMs)! }));
+        return (['B', 'F'] as const).map((end) => ({ setup, t, end, path: squareRoute(t, 'L', end) }));
       });
       const fb = options.reduce((x, y) => (y.path.length < x.path.length ? y : x));
       let s = fb.t;
@@ -101,7 +110,7 @@ export function rouxGuide(M: CubeModel): Guide {
           stage: 0,
           title: 'Hold the cube',
           html: once('roux', ROUX_NAME) + `<p>Hold the cube with ${name(white)} on the bottom and ${name(ref.L)} on the left. The first block goes on the left; of the four sides, this one is quickest to build.</p>`,
-          phrases: [{ label: 'Turn the whole cube', moves: fb.setup }],
+          phrases: K.rotatePhrase(fb.setup.join(' ')),
           focus: () => [at('D', 'D'), at('L', 'L')],
         });
       }
@@ -124,7 +133,7 @@ export function rouxGuide(M: CubeModel): Guide {
         const edge = b.pairEdge;
         const [cSlot, eSlot] = b.pairSlots;
         const ms = K.macros(keep, singles, outer, inner);
-        const path = K.route([sticker(s, corner, ref.D), sticker(s, edge, ref[side])], [at(cSlot, 'D'), at(eSlot, side)], ms);
+        const path = K.route([K.stickerOf(s, corner, ref.D), K.stickerOf(s, edge, ref[side])], [at(cSlot, 'D'), at(eSlot, side)], ms);
         if (!path) throw new Error('roux: no pair route');
         if (!path.length) return;
         const phrases = K.pairPhrases(s, path, corner, edge);
@@ -134,11 +143,11 @@ export function rouxGuide(M: CubeModel): Guide {
           title: `The ${plain(edge)} pair`,
           html: once('roux', ROUX_NAME) + `<p>Finish the ${blockName} block with the ${piece(corner)} corner and ${piece(edge)} edge. ` +
             K.pairWhere(s, corner, [ref[side], ref[b.other]], { corner: cSlot, edge: side + b.other }, ref.D) + '</p>' +
-            `<p>Pair them up, then insert the pair beside the square without breaking it. This takes ${plural(path.reduce((k, m) => k + m.moves.length, 0), 'move')}.</p>`,
+            `<p>Pair them up, then insert the pair beside the square without breaking it. This takes ${plural(countMoves(phrases), 'move')}.</p>`,
           phrases,
           focus: K.focusOn([corner, edge]),
         });
-        s = apply(s, path.flatMap((m) => m.moves));
+        s = apply(s, macroMoves(path));
       };
 
       pairStep('L', b1, stickers(b1.sqSlots), [...FACE_MOVES, ...turns('M')], [...turns('FBDL')].filter((m) => !m.endsWith('2')), [...turns('UR'), ...turns('M')], 0);
@@ -146,9 +155,7 @@ export function rouxGuide(M: CubeModel): Guide {
 
       // ---------- 2. second block: U, R, r and M leave the first block alone ----------
 
-      const sbMoves = [...turns('URM'), ...turns('r')];
-      const sbMs = K.macros(firstBlock, sbMoves);
-      const sb = (['B', 'F'] as const).map((end) => ({ end, path: squareRoute(s, 'R', end, sbMs)! })).reduce((x, y) => (y.path.length < x.path.length ? y : x));
+      const sb = (['B', 'F'] as const).map((end) => ({ end, path: squareRoute(s, 'R', end) })).reduce((x, y) => (y.path.length < x.path.length ? y : x));
       const b2 = blockPieces('R', sb.end);
       if (sb.path.length) {
         steps.push({
@@ -169,47 +176,29 @@ export function rouxGuide(M: CubeModel): Guide {
       const cornersUp = (t: State) => TOP_CORNERS.every((c) => t[at(c, 'U')] === ref.U);
       const cornersHome = (t: State) => TOP_CORNERS.every((c) => [...c].every((f) => t[at(c, f)] === ref[f]));
       if (!cornersUp(s)) {
-        let best: { u: string; o: (typeof OCLL)[number]; n: number } | null = null;
-        for (const o of OCLL) {
-          for (const u of U_TURNS) {
-            const n = alg(o.alg).length + (u ? 1 : 0);
-            if (cornersUp(apply(s, [u, ...alg(o.alg)])) && (!best || n < best.n)) best = { u, o, n };
-          }
-        }
+        const best = bestAlg(K, s, OCLL, cornersUp);
         if (!best) throw new Error('roux: no corner orientation fits');
-        const moves = alg(best.o.alg);
+        const o = best.a!;
+        const moves = alg(o.alg);
         const up = TOP_CORNERS.filter((c) => s[at(c, 'U')] === ref.U).length;
         steps.push({
           stage: 2,
-          title: `Orient the corners: ${best.o.name}`,
-          html: once('cmll', CMLL) + `<p>Look only at the four top corners; the edges don’t matter yet. ${up === 0 ? 'None shows' : up === 1 ? 'One shows' : `${up} show`} ${name(ref.U)} on top — the “${best.o.name}” case.</p>` +
+          title: `Orient the corners: ${o.name}`,
+          html: once('cmll', CMLL) + `<p>Look only at the four top corners; the edges don’t matter yet. ${up === 0 ? 'None shows' : up === 1 ? 'One shows' : `${up} show`} ${name(ref.U)} on top — the “${o.name}” case.</p>` +
             `<p>${best.u ? 'Turn the top to the starting angle, then do' : 'Do'} ${code(moves)} to turn all four ${name(ref.U)}-side up. It keeps both blocks.</p>`,
-          phrases: [...K.topPhrase(best.u), { label: best.o.name, moves }],
-          focus: () => [at('U', 'U'), ...TOP_CORNERS.flatMap((c) => K.stickersOf(c))],
+          phrases: [...K.topPhrase(best.u), { label: o.name, moves }],
+          focus: focusTopCorners(K),
         });
-        s = apply(s, [best.u, ...moves]);
+        s = best.t;
       }
       if (!cornersHome(s)) {
-        let best: { u: string; v: string; p: typeof T_PERM | null; n: number } | null = null;
-        for (const p of [null, T_PERM, Y_PERM]) {
-          const moves = p ? alg(p.alg) : [];
-          for (const u of U_TURNS) {
-            for (const v of U_TURNS) {
-              if (!p && u) continue;
-              const n = moves.length + (u ? 1 : 0) + (v ? 1 : 0);
-              if (cornersHome(apply(s, [u, ...moves, v])) && (!best || n < best.n)) best = { u, v, p, n };
-            }
-          }
-        }
+        const best = bestAlg(K, s, [null, T_PERM, Y_PERM], cornersHome, true);
         if (!best) throw new Error('roux: no corner swap fits');
-        const { u, v, p } = best;
+        const { u, v, a: p } = best;
         const phrases: Phrase[] = p
           ? [...K.topPhrase(u), { label: p === T_PERM ? 'Swap neighbours' : 'Swap opposites', moves: alg(p.alg) }, ...K.topPhrase(v, 'Line up the corners')]
           : K.topPhrase(v, 'Line up the corners');
-        const lights = [...'FRBL'].filter((f) => {
-          const cs = TOP_CORNERS.filter((c) => c.includes(f));
-          return s[at(cs[0], f)] === s[at(cs[1], f)];
-        });
+        const lights = headlights(K, s);
         steps.push({
           stage: 2,
           title: p ? 'Swap the corners' : 'Line up the corners',
@@ -219,9 +208,9 @@ export function rouxGuide(M: CubeModel): Guide {
               ? `<p>One side shows headlights — two corners with the same color there. Hold that side on the left, so the two corners on the right need to swap, and do ${code(alg(p.alg))} (the T-perm, borrowed from PLL — Permute the Last Layer; it moves top edges too, which is fine).</p>`
               : `<p>No side shows headlights${lights.length ? '' : ' (two matching corner colors)'}, so two opposite corners need to swap. Do ${code(alg(p.alg))} (the Y-perm, borrowed from PLL — Permute the Last Layer; it moves top edges too, which is fine).</p>`),
           phrases,
-          focus: () => [at('U', 'U'), ...TOP_CORNERS.flatMap((c) => K.stickersOf(c))],
+          focus: focusTopCorners(K),
         });
-        s = apply(s, [u, ...(p ? alg(p.alg) : []), v].filter(Boolean));
+        s = best.t;
       }
 
       // ---------- 4. last six edges ----------
@@ -261,10 +250,10 @@ export function rouxGuide(M: CubeModel): Guide {
         [["M'", 'U2', "M'"], ['M', 'U2', 'M']].map((moves) => ({ moves, cost: 12 })),
       ).filter((m) => keepsEo(m.moves));
       const corner = [ref.U, ref.L, ref.F];
-      const fromB = [...lr.map((c) => sticker(s, c, ref.U)), sticker(s, corner, ref.U)];
+      const fromB = [...lr.map((c) => K.stickerOf(s, c, ref.U)), K.stickerOf(s, corner, ref.U)];
       const pathB = K.route(fromB, [at('UL', 'U'), at('UR', 'U'), at('ULF', 'U')], msB);
       if (!pathB) throw new Error('roux: no 4b route');
-      const movesB = pathB.flatMap((m) => m.moves);
+      const movesB = macroMoves(pathB);
       if (movesB.length) {
         steps.push({
           stage: 4,
@@ -281,11 +270,11 @@ export function rouxGuide(M: CubeModel): Guide {
       const slice = [[ref.U, ref.F], [ref.U, ref.B], [ref.D, ref.F], [ref.D, ref.B]];
       const msC: Macro[] = [...turns('M').map((m) => ({ moves: [m], cost: 4 })), ...turns('M').map((m) => ({ moves: ['U2', m, 'U2'], cost: 12 }))];
       const centerAt = (t: State) => [...'UFDB'].map((f) => at(f, f)).find((i) => t[i] === ref.U)!;
-      const fromC = [...slice.map((c) => sticker(s, c, c[0])), centerAt(s)];
+      const fromC = [...slice.map((c) => K.stickerOf(s, c, c[0])), centerAt(s)];
       const goalC = [at('UF', 'U'), at('UB', 'U'), at('DF', 'D'), at('DB', 'D'), at('U', 'U')];
       const pathC = K.route(fromC, goalC, msC);
       if (!pathC) throw new Error('roux: no 4c route');
-      const movesC = pathC.flatMap((m) => m.moves);
+      const movesC = macroMoves(pathC);
       if (movesC.length) {
         const off = fromC[4] !== goalC[4];
         steps.push({

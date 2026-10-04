@@ -103,6 +103,8 @@ export interface Guide {
   /** the name on the method picker */
   short: string;
   intro: string;
+  /** notation the lesson uses beyond face turns and y, explained before it starts */
+  notation?: string;
   stages: { name: string; goal: string }[];
   /** throws if the state can't be solved this way */
   steps: (s: State) => GuideStep[];

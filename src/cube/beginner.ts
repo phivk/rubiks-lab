@@ -13,10 +13,9 @@
 // the moves, so the text always describes what's on screen. Pieces are named by colors and
 // found relative to the centers, so whole-cube turns (x, y, z) need no bookkeeping.
 
-import { COLOR_NAMES } from '../core/colors';
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
 import {
-  alg, FACE_MOVES, lessonKit, list, repeat, ROTATIONS, rounds, sameSet, SIDE_NAME, TOP_CORNERS, TOP_EDGES, U_TURNS,
+  alg, countMoves, FACE_MOVES, lessonKit, list, repeat, ROTATIONS, rounds, sameSet, SIDE_NAME, TOP_CORNERS, TOP_EDGES, U_TURNS,
 } from './lessonKit';
 import type { CubeModel } from './model';
 
@@ -42,7 +41,7 @@ export function beginnerGuide(M: CubeModel): Guide {
   if (M.n !== 3) throw new Error('The beginner method is for the 3×3');
 
   const K = lessonKit(M);
-  const { at, stickersOf, center, find, faceShowing, placed, inSpot, apply, focusOn, name, piece, code, first, rotatePhrase, topPhrase } = K;
+  const { at, center, colorsAt, find, faceShowing, placed, inSpot, apply, focusOn, name, piece, plain, code, first, rotatePhrase, topPhrase } = K;
 
   // ---------- 1. white cross: a short search per edge ----------
 
@@ -56,7 +55,7 @@ export function beginnerGuide(M: CubeModel): Guide {
 
   function crossStage(s: State, steps: GuideStep[]) {
     const white = 0;
-    const setup = first(s, ['', 'x', "x'", 'z', "z'", 'x2'], (t) => center(t, 'U') === white);
+    const setup = K.hold(s, 'U', white);
     if (setup) {
       steps.push({
         stage: 0,
@@ -71,7 +70,7 @@ export function beginnerGuide(M: CubeModel): Guide {
     const colorsOf = (side: string) => [white, center(s, side)];
     let todo = [...'FRBL'];
     const done: string[] = [];
-    const whiteAt = (t: State, side: string) => at(find(t, colorsOf(side)), faceShowing(t, find(t, colorsOf(side)), white));
+    const whiteAt = (t: State, side: string) => K.stickerOf(t, colorsOf(side), white);
     while (todo.length) {
       const plans = todo.map((side) => {
         const from = [...done, side].map((f) => whiteAt(s, f));
@@ -97,7 +96,7 @@ export function beginnerGuide(M: CubeModel): Guide {
         }
         steps.push({
           stage: 0,
-          title: `The ${COLOR_NAMES[white].toLowerCase()}–${COLOR_NAMES[c].toLowerCase()} edge`,
+          title: `The ${plain([white, c])} edge`,
           html:
             `<p>Find the ${piece([white, c])} edge. ${where}</p>` +
             `<p>Bring it to the top with white facing up and ${name(c)} lined up with the ${name(c)} center.` +
@@ -154,7 +153,7 @@ export function beginnerGuide(M: CubeModel): Guide {
       text += `<p>Turn the cube so its spot, between the ${name(a)} and ${name(b)} centers, is at the front-right of the bottom${r ? '' : ' (it already is)'}` +
         (u ? ', then turn the top until the corner sits right above it' : '') + '.</p>' +
         `<p>Now repeat ${code(SEXY)} until it drops in with white facing down. This one takes ${rounds(n)}.</p>`;
-      return { s, phrases, text, length: phrases.reduce((k, p) => k + p.moves.length, 0) };
+      return { s, phrases, text, length: countMoves(phrases) };
     };
 
     let todo = corners.filter((cols) => !placed(s, find(s, cols)));
@@ -163,7 +162,7 @@ export function beginnerGuide(M: CubeModel): Guide {
       const best = plans.reduce((x, y) => (y.length < x.length ? y : x));
       steps.push({
         stage: 1,
-        title: `The ${best.cols.map((c) => COLOR_NAMES[c].toLowerCase()).join('–')} corner`,
+        title: `The ${plain(best.cols)} corner`,
         html: `<p>Find the ${piece(best.cols)} corner.</p>` + best.text,
         phrases: best.phrases,
         focus: focusOn([best.cols]),
@@ -205,7 +204,7 @@ export function beginnerGuide(M: CubeModel): Guide {
         (u ? ', then turn the top until the edge’s front sticker sits above it' : '; the edge’s front sticker is already above it') +
         ` — together they make an upside-down T.</p>` +
         `<p>Its top color, ${name(top)}, belongs on the ${right ? 'right' : 'left'}, so move it down that way with ${code(moves)}.</p>`;
-      return { s, phrases, text, length: phrases.reduce((k, p) => k + p.moves.length, 0) };
+      return { s, phrases, text, length: countMoves(phrases) };
     };
 
     const yellow = center(s, 'U');
@@ -217,7 +216,7 @@ export function beginnerGuide(M: CubeModel): Guide {
       const best = plans.reduce((x, y) => (y.length < x.length ? y : x));
       steps.push({
         stage: 2,
-        title: `The ${best.cols.map((c) => COLOR_NAMES[c].toLowerCase()).join('–')} edge`,
+        title: `The ${plain(best.cols)} edge`,
         html: `<p>Find the ${piece(best.cols)} edge${firstEdge ? ` — an edge with no ${name(yellow)} on it` : ''}.</p>` + best.text,
         phrases: best.phrases,
         focus: focusOn([best.cols]),
@@ -233,7 +232,7 @@ export function beginnerGuide(M: CubeModel): Guide {
 
   function lastLayer(s: State, steps: GuideStep[]) {
     const yellow = center(s, 'U');
-    const topPieces = focusOn([...TOP_EDGES, ...TOP_CORNERS].map((slot) => stickersOf(slot).map((i) => s[i])));
+    const topPieces = focusOn([...TOP_EDGES, ...TOP_CORNERS].map((slot) => colorsAt(s, slot)));
     const focusTop = (t: State) => [at('U', 'U'), ...topPieces(t)];
     const edgesUp = (t: State) => TOP_EDGES.filter((e) => t[at(e, 'U')] === yellow);
     const sides = (edges: string[]) => list(edges.map((e) => SIDE_NAME[e[1]]));
@@ -317,8 +316,8 @@ export function beginnerGuide(M: CubeModel): Guide {
         html = `<p>A corner is in its spot when it has the colors of the three centers around it, however it’s twisted. None is yet.</p>` +
           `<p>Do ${code(NIKLAS)} from any side; it cycles three corners, and then one will be in its spot.</p>`;
       } else {
-        const cols = stickersOf(good[0]).map((i) => s[i]).sort((a, b) => +(b === yellow) - +(a === yellow));
-        r = first(s, ROTATIONS, (t) => sameSet(stickersOf('UFR').map((i) => t[i]), cols));
+        const cols = colorsAt(s, good[0]).sort((a, b) => +(b === yellow) - +(a === yellow));
+        r = first(s, ROTATIONS, (t) => sameSet(colorsAt(t, 'UFR'), cols));
         const again = round > 0 && good.length === 1 && steps[steps.length - 1]?.stage === 5;
         html = again
           ? `<p>The other three corners moved one place, but not far enough. Do ${code(NIKLAS)} once more.</p>`
@@ -340,7 +339,7 @@ export function beginnerGuide(M: CubeModel): Guide {
         s = apply(s, TWIST);
         if (++n > 4) throw new Error('beginner guide: corner twist');
       }
-      const cols = stickersOf('UFR').map((i) => s[i]);
+      const cols = colorsAt(s, 'UFR');
       count++;
       steps.push({
         stage: 6,
@@ -373,6 +372,7 @@ export function beginnerGuide(M: CubeModel): Guide {
     id: 'beginner',
     name: 'Beginner method',
     short: 'Beginner',
+    notation: '<code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.',
     intro: 'Solve the cube layer by layer, the way most people first learn it: seven stages and a handful of short algorithms.',
     stages: STAGES,
     steps: (state) => {

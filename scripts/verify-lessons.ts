@@ -1,15 +1,16 @@
-// Checks the CFOP, Roux and ZZ lessons on random scrambles: every lesson must end solved,
-// with its stages in order and no empty move groups.
+// Checks every 3×3 lesson (beginner, CFOP, Roux, ZZ) on random scrambles: each must end
+// solved, with its stages in order, no empty move groups, and every acronym spelled out.
+import { beginnerGuide } from '../src/cube/beginner';
 import { cfopGuide } from '../src/cube/cfop';
 import { rouxGuide } from '../src/cube/roux';
 import { zzGuide } from '../src/cube/zz';
+import { stepMoves } from '../src/cube/lessonKit';
 import { CubeModel } from '../src/cube/model';
-import type { Guide } from '../src/core/types';
 
 const M = new CubeModel(3);
 const MOVES = ['U', 'R', 'F', 'D', 'L', 'B'];
 const scramble = (n: number) => Array.from({ length: n }, () => MOVES[(Math.random() * 6) | 0] + ['', "'", '2'][(Math.random() * 3) | 0]);
-const RUNS = Number(process.env.RUNS ?? 300);
+const RUNS = Number(process.env.RUNS ?? 500);
 // every acronym a lesson uses must be spelled out somewhere in its text
 const ACRONYMS: [RegExp, RegExp][] = [
   [/\bCFOP\b/, /Cross, F2L/],
@@ -23,7 +24,7 @@ const ACRONYMS: [RegExp, RegExp][] = [
 ];
 
 let anyFailed = false;
-for (const guide of [cfopGuide(M), rouxGuide(M), zzGuide(M)] as Guide[]) {
+for (const guide of [beginnerGuide(M), cfopGuide(M), rouxGuide(M), zzGuide(M)]) {
   const lengths: number[] = [];
   const stepCounts: number[] = [];
   let failed = 0;
@@ -33,7 +34,7 @@ for (const guide of [cfopGuide(M), rouxGuide(M), zzGuide(M)] as Guide[]) {
     const start = M.applyAll(M.solved(), alg);
     try {
       const steps = guide.steps(start);
-      const moves = steps.flatMap((s) => s.phrases.flatMap((p) => p.moves));
+      const moves = steps.flatMap(stepMoves);
       if (!M.isSolved(M.applyAll(start, moves))) throw new Error('not solved');
       if (steps.some((s, k) => k > 0 && s.stage < steps[k - 1].stage)) throw new Error('stages out of order');
       if (steps.some((s) => s.phrases.some((p) => p.moves.length === 0))) throw new Error('empty phrase');

@@ -8,7 +8,7 @@
 
 import { COLORS, COLOR_NAMES } from '../core/colors';
 import type { GuideStep, Phrase, State, Vec3 } from '../core/types';
-import { FACES, type CubeModel } from './model';
+import { FACES, invertMove, type CubeModel } from './model';
 
 export const NORMAL: Record<string, Vec3> = { U: [0, 1, 0], D: [0, -1, 0], R: [1, 0, 0], L: [-1, 0, 0], F: [0, 0, 1], B: [0, 0, -1] };
 export const EDGES = ['UF', 'UR', 'UB', 'UL', 'FR', 'FL', 'BR', 'BL', 'DF', 'DR', 'DB', 'DL'];
@@ -32,8 +32,14 @@ export const sameSet = (a: number[], b: number[]) => a.length === b.length && a.
 export const sameSlot = (a: string, b: string) => a.length === b.length && [...a].every((f) => b.includes(f));
 export const countMoves = (phrases: Phrase[]) => phrases.reduce((k, p) => k + p.moves.length, 0);
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-export const invert = (moves: string[]) =>
-  moves.slice().reverse().map((m) => (m.endsWith("'") ? m.slice(0, -1) : m.endsWith('2') ? m : m + "'"));
+/** the moves of a search's route */
+export const macroMoves = (path: Macro[]) => path.flatMap((m) => m.moves);
+/** a step's moves, in order */
+export const stepMoves = (step: GuideStep) => step.phrases.flatMap((p) => p.moves);
+/** the notation note for lessons with wide, slice and x turns */
+export const WIDE_NOTATION = 'Lowercase <code>r</code> turns the right two layers together, <code>M</code> turns the middle slice like <code>L</code>, and <code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.';
+/** the whole-cube turns that bring any face to any other */
+const REORIENT = ['', 'x2', 'z2', 'x', "x'", 'z', "z'"];
 
 /** A move sequence the searches treat as one step; `cost` is in quarter-moves (4 per move). */
 export interface Macro {
@@ -43,16 +49,43 @@ export interface Macro {
 
 export type Kit = ReturnType<typeof lessonKit>;
 
+// a position packs into one number, six bits per tracked sticker (there are 54 stickers)
+const pack = (p: number[]) => p.reduce((k, i) => (k << 6) | i, 0);
+/** where each macro takes a packed position */
+const stepper = (maps: number[][], n: number) => {
+  const digits = new Int32Array(n);
+  return (k: number, m: number) => {
+    const to = maps[m];
+    let out = 0;
+    for (let j = n - 1; j >= 0; j--) digits[j] = (k >> (6 * (n - 1 - j))) & 63;
+    for (let j = 0; j < n; j++) out = (out << 6) | to[digits[j]];
+    return out;
+  };
+};
+// dense scratch arrays for searches over up to three stickers, shared by every kit (one
+// search runs at a time)
+const DENSE = 64 ** 3;
+let dense: { cost: Int32Array; parent: Int32Array; via: Int16Array; seen: Int32Array } | null = null;
+let epoch = 0;
+
 export function lessonKit(M: CubeModel) {
+  const atCache = new Map<string, number>();
   /** the sticker of `slot` (e.g. 'UFR') on `face` */
   const at = (slot: string, face: string) => {
-    const pos = [0, 1, 2].map((k) => [...slot].reduce((sum, f) => sum + 2 * NORMAL[f][k], 0)) as Vec3;
-    return M.faceletAt(pos, NORMAL[face])!;
+    const k = slot + face;
+    let i = atCache.get(k);
+    if (i === undefined) {
+      const pos = [0, 1, 2].map((d) => [...slot].reduce((sum, f) => sum + 2 * NORMAL[f][d], 0)) as Vec3;
+      i = M.faceletAt(pos, NORMAL[face])!;
+      atCache.set(k, i);
+    }
+    return i;
   };
   const stickersOf = (slot: string) => [...slot].map((f) => at(slot, f));
   const center = (s: State, face: string) => s[at(face, face)];
+  const colorsAt = (s: State, slot: string) => stickersOf(slot).map((i) => s[i]);
   const find = (s: State, colors: number[]) =>
-    (colors.length === 2 ? EDGES : CORNERS).find((slot) => sameSet(stickersOf(slot).map((i) => s[i]), colors))!;
+    (colors.length === 2 ? EDGES : CORNERS).find((slot) => sameSet(colorsAt(s, slot), colors))!;
   /** the face of `slot` showing color `c` */
   const faceShowing = (s: State, slot: string, c: number) => [...slot].find((f) => s[at(slot, f)] === c)!;
   /** where the sticker of color `c` on the piece with `colors` is now */
@@ -62,11 +95,10 @@ export function lessonKit(M: CubeModel) {
   };
   const placed = (s: State, slot: string) => [...slot].every((f) => s[at(slot, f)] === center(s, f));
   /** the piece's colors match the centers around its slot, in any orientation */
-  const inSpot = (s: State, slot: string) => sameSet(stickersOf(slot).map((i) => s[i]), [...slot].map((f) => center(s, f)));
+  const inSpot = (s: State, slot: string) => sameSet(colorsAt(s, slot), [...slot].map((f) => center(s, f)));
   /** apply moves, skipping '' (no move) */
   const apply = (s: State, moves: string[]) => M.applyAll(s, moves.filter(Boolean));
   const focusOn = (pieces: number[][]) => (s: State) => pieces.flatMap((p) => stickersOf(find(s, p)));
-  const colorsAt = (s: State, slot: string) => stickersOf(slot).map((i) => s[i]);
 
   const name = (c: number) => `<span class="cname" style="--c:${COLORS[c]}">${COLOR_NAMES[c].toLowerCase()}</span>`;
   const piece = (cols: number[]) => cols.map(name).join('–');
@@ -81,6 +113,8 @@ export function lessonKit(M: CubeModel) {
   };
   const rotatePhrase = (m: string): Phrase[] => (m ? [{ label: 'Turn the whole cube', moves: m.split(' ') }] : []);
   const topPhrase = (m: string, label = 'Turn the top'): Phrase[] => (m ? [{ label, moves: [m] }] : []);
+  /** the whole-cube turn that brings the center of `color` to `face` */
+  const hold = (s: State, face: string, color: number) => first(s, REORIENT, (t) => center(t, face) === color);
 
   // ---------- where stickers go ----------
 
@@ -116,33 +150,12 @@ export function lessonKit(M: CubeModel) {
     for (const x of outer) {
       for (const y of inner) {
         if (x[0] === y[0]) continue;
-        const moves = [x, y, ...invert([x])];
+        const moves = [x, y, invertMove(x)];
         if (fixes(moves, keep)) out.push({ moves, cost: 12 + (penalized.includes(x) ? 2 : 0) });
       }
     }
     return out;
   }
-
-  // a position packs into one number, six bits per tracked sticker (there are 54 stickers)
-  const pack = (p: number[]) => p.reduce((k, i) => (k << 6) | i, 0);
-  /** where each macro takes a packed position */
-  const stepper = (maps: number[][], n: number) => {
-    const digits = new Int32Array(n);
-    return (k: number, m: number) => {
-      const to = maps[m];
-      let out = 0;
-      for (let j = n - 1; j >= 0; j--) digits[j] = (k >> (6 * (n - 1 - j))) & 63;
-      for (let j = 0; j < n; j++) out = (out << 6) | to[digits[j]];
-      return out;
-    };
-  };
-  // dense scratch arrays for searches over up to three stickers, reused between searches
-  const DENSE = 64 ** 3;
-  let denseCost: Int32Array | null = null;
-  let denseParent: Int32Array | null = null;
-  let denseVia: Int16Array | null = null;
-  let denseEpoch: Int32Array | null = null;
-  let epoch = 0;
 
   /**
    * The cheapest run of macros taking the stickers at `from` to `goal` (each tracked on its
@@ -159,14 +172,9 @@ export function lessonKit(M: CubeModel) {
     let set: (k: number, c: number, parent: number, via: number) => void;
     let back: (k: number) => [number, number];
     if (n <= 3) {
-      if (!denseCost) {
-        denseCost = new Int32Array(DENSE);
-        denseParent = new Int32Array(DENSE);
-        denseVia = new Int16Array(DENSE);
-        denseEpoch = new Int32Array(DENSE);
-      }
+      dense ??= { cost: new Int32Array(DENSE), parent: new Int32Array(DENSE), via: new Int16Array(DENSE), seen: new Int32Array(DENSE) };
       const e = ++epoch;
-      const cost = denseCost, parent = denseParent!, via = denseVia!, seen = denseEpoch!;
+      const { cost, parent, via, seen } = dense;
       getCost = (k) => (seen[k] === e ? cost[k] : -1);
       set = (k, c, p, m) => { seen[k] = e; cost[k] = c; parent[k] = p; via[k] = m; };
       back = (k) => [parent[k], via[k]];
@@ -213,16 +221,39 @@ export function lessonKit(M: CubeModel) {
   function table(goal: number[], moves: string[]) {
     const maps = moves.map((m) => dest([m]));
     const n = goal.length;
-    const step = stepper(maps, n);
-    const dist = new Map<number, number>([[pack(goal), 0]]);
-    let frontier = [pack(goal)];
+    // number each tracked sticker's reachable positions, so a position is an index into one array
+    const orbits = goal.map((g) => {
+      const seen = [g];
+      for (let j = 0; j < seen.length; j++) for (const to of maps) if (!seen.includes(to[seen[j]])) seen.push(to[seen[j]]);
+      return seen;
+    });
+    const rank = orbits.map((o) => {
+      const r = new Int32Array(64).fill(-1);
+      o.forEach((pos, i) => (r[pos] = i));
+      return r;
+    });
+    const size = orbits.reduce((k, o) => k * o.length, 1);
+    if (size > 1 << 24) throw new Error('lesson: table too big');
+    const index = (p: number[]) => p.reduce((k, pos, j) => k * orbits[j].length + rank[j][pos], 0);
+    const dist = new Int8Array(size).fill(-1);
+    dist[index(goal)] = 0;
+    let frontier = [index(goal)];
+    // the hot loop: decode into a reused array and index without allocating
+    const p = new Int32Array(n);
     for (let d = 1; frontier.length; d++) {
       const next: number[] = [];
-      for (const k of frontier) {
-        for (let m = 0; m < maps.length; m++) {
-          const kq = step(k, m);
-          if (!dist.has(kq)) {
-            dist.set(kq, d);
+      for (const k0 of frontier) {
+        let k = k0;
+        for (let j = n - 1; j >= 0; j--) {
+          const len = orbits[j].length;
+          p[j] = orbits[j][k % len];
+          k = (k - (k % len)) / len;
+        }
+        for (const to of maps) {
+          let kq = 0;
+          for (let j = 0; j < n; j++) kq = kq * orbits[j].length + rank[j][to[p[j]]];
+          if (dist[kq] < 0) {
+            dist[kq] = d;
             next.push(kq);
           }
         }
@@ -232,11 +263,11 @@ export function lessonKit(M: CubeModel) {
     return {
       descend(from: number[]) {
         let p = from;
-        let d = dist.get(pack(p));
-        if (d === undefined) throw new Error('lesson: unreachable');
+        let d = dist[index(p)];
+        if (!(d >= 0)) throw new Error('lesson: unreachable');
         const path: string[] = [];
         while (d > 0) {
-          const m = maps.findIndex((to) => dist.get(pack(p.map((i) => to[i]))) === d! - 1);
+          const m = maps.findIndex((to) => dist[index(p.map((i) => to[i]))] === d - 1);
           path.push(moves[m]);
           p = p.map((i) => maps[m][i]);
           d--;
@@ -339,9 +370,9 @@ export function lessonKit(M: CubeModel) {
   }
 
   return {
-    at, stickersOf, center, find, faceShowing, stickerOf, placed, inSpot, apply, focusOn, colorsAt,
+    at, stickersOf, center, find, faceShowing, stickerOf, placed, inSpot, apply, focusOn, colorsAt, hold,
     name, piece, plain, code, first, rotatePhrase, topPhrase,
-    dest, fixes, macros, route, table, keyTable, paired, pairPhrases, pairWhere,
+    macros, route, table, keyTable, pairPhrases, pairWhere,
   };
 }
 
@@ -349,10 +380,9 @@ export function lessonKit(M: CubeModel) {
  * Say something only the first time it's asked for: spells out an acronym (F2L, CMLL, …) in
  * the first step that uses it. Make one per lesson.
  */
+export type Once = ReturnType<typeof onceOnly>;
 export function onceOnly() {
   const said = new Set<string>();
   return (key: string, text: string) => (said.has(key) ? '' : (said.add(key), text));
 }
 
-/** Moves of a step, for the next step's starting state. */
-export const stepMoves = (step: GuideStep) => step.phrases.flatMap((p) => p.moves);

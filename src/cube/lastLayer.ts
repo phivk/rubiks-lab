@@ -1,4 +1,4 @@
-// The algorithm-driven last-layer steps shared by CFOP and ZZ: orient the top (OLL, or OCLL
+// The algorithm-driven last-layer steps shared by CFOP and ZZ (and the search Roux's CMLL uses): orient the top (OLL, or OCLL
 // when the edges are already oriented), then permute it (PLL). Each finds its case by trying
 // every algorithm after each turn of the top, and keeps the shortest that works.
 
@@ -12,6 +12,29 @@ const TOP = [...TOP_EDGES, ...TOP_CORNERS];
 export const oriented = (K: Kit, s: State) => TOP.every((slot) => s[K.at(slot, 'U')] === K.center(s, 'U'));
 /** the top layer: center, edges and corners */
 export const focusTop = (K: Kit) => () => [K.at('U', 'U'), ...TOP.flatMap((slot) => K.stickersOf(slot))];
+/** the top center and corners */
+export const focusTopCorners = (K: Kit) => () => [K.at('U', 'U'), ...TOP_CORNERS.flatMap((slot) => K.stickersOf(slot))];
+
+/**
+ * The shortest way to make `ok` hold with one algorithm from `set`, after a turn of the top
+ * and, if `after`, followed by one. An entry of null stands for no algorithm (just turns).
+ */
+export function bestAlg<A extends { alg: string }>(K: Kit, s: State, set: (A | null)[], ok: (t: State) => boolean, after = false) {
+  let best: { u: string; a: A | null; v: string; t: State; n: number } | null = null;
+  for (const a of set) {
+    const moves = a ? alg(a.alg) : [];
+    for (const u of U_TURNS) {
+      if (!a && u) continue;
+      const t0 = K.apply(s, [u, ...moves]);
+      for (const v of after ? U_TURNS : ['']) {
+        const t = K.apply(t0, [v]);
+        const n = moves.length + (u ? 1 : 0) + (v ? 1 : 0);
+        if (ok(t) && (!best || n < best.n)) best = { u, a, v, t, n };
+      }
+    }
+  }
+  return best;
+}
 
 /** What the top looks like, in the words cubers use to recognise OLL cases. */
 function topShape(K: Kit, s: State) {
@@ -28,17 +51,10 @@ function topShape(K: Kit, s: State) {
 /** Orient the top with one algorithm from `set`; `about` introduces the step (what the acronym stands for). */
 export function ollStep(K: Kit, s: State, stage: number, set: OllAlg[], prefix: string, about: string): { s: State; step?: GuideStep } {
   if (oriented(K, s)) return { s };
-  let best: { u: string; o: OllAlg; t: State; n: number } | null = null;
-  for (const o of set) {
-    const moves = alg(o.alg);
-    for (const u of U_TURNS) {
-      const t = K.apply(s, [u, ...moves]);
-      const n = moves.length + (u ? 1 : 0);
-      if (oriented(K, t) && (!best || n < best.n)) best = { u, o, t, n };
-    }
-  }
+  const best = bestAlg(K, s, set, (t) => oriented(K, t));
   if (!best) throw new Error(`lesson: no ${prefix} case fits`);
-  const { u, o, t } = best;
+  const { u, t } = best;
+  const o = best.a!;
   const moves = alg(o.alg);
   return {
     s: t,
@@ -54,7 +70,7 @@ export function ollStep(K: Kit, s: State, stage: number, set: OllAlg[], prefix: 
 }
 
 /** Sides of the top whose two corners show the same color there: "headlights". */
-function headlights(K: Kit, s: State) {
+export function headlights(K: Kit, s: State) {
   return [...'FRBL'].filter((f) => {
     const cs = TOP_CORNERS.filter((c) => c.includes(f));
     return s[K.at(cs[0], f)] === s[K.at(cs[1], f)];
@@ -78,20 +94,10 @@ export function pllStep(K: Kit, s: State, stage: number, solved: (t: State) => b
     };
   }
   const about = '<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, move its pieces to their spots. Each case is a letter-named “perm” (short for permutation).</p>';
-  let best: { u: string; v: string; p: (typeof PLL)[number]; t: State; n: number } | null = null;
-  for (const p of PLL) {
-    const moves = alg(p.alg);
-    for (const u of U_TURNS) {
-      const t0 = K.apply(s, [u, ...moves]);
-      for (const v of U_TURNS) {
-        const t = K.apply(t0, [v]);
-        const n = moves.length + (u ? 1 : 0) + (v ? 1 : 0);
-        if (solved(t) && (!best || n < best.n)) best = { u, v, p, t, n };
-      }
-    }
-  }
+  const best = bestAlg(K, s, PLL, solved, true);
   if (!best) throw new Error('lesson: no PLL case fits');
-  const { u, v, p, t } = best;
+  const { u, v, t } = best;
+  const p = best.a!;
   const moves = alg(p.alg);
   const lights = headlights(K, s);
   const hint = lights.length === 4 ? 'Every side shows headlights (both corners on a side match), so the corners are already solved relative to each other.'

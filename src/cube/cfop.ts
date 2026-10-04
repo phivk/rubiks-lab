@@ -14,7 +14,7 @@
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
 import { OLL } from './algs';
 import { ollStep, pllStep } from './lastLayer';
-import { countMoves, FACE_MOVES, lessonKit, list, onceOnly, plural, ROTATIONS, sameSet, U_TURNS, type Macro } from './lessonKit';
+import { countMoves, FACE_MOVES, lessonKit, list, macroMoves, onceOnly, plural, ROTATIONS, sameSet, U_TURNS, WIDE_NOTATION, type Once } from './lessonKit';
 import type { CubeModel } from './model';
 
 export const CFOP_STAGES = [
@@ -39,11 +39,10 @@ export function cfopGuide(M: CubeModel): Guide {
   // ---------- 1. cross ----------
 
   const CFOP_NAME = '<p><b>CFOP</b> is named after its four stages: <b>C</b>ross, <b>F</b>2L (the First Two Layers), <b>O</b>LL (Orient the Last Layer) and <b>P</b>LL (Permute the Last Layer).</p>';
-  let once = onceOnly();
 
-  function crossStage(s: State, steps: GuideStep[]) {
+  function crossStage(s: State, steps: GuideStep[], once: Once) {
     const white = 0;
-    const setup = K.first(s, ['', 'x2', 'z2', 'x', "x'", 'z', "z'"], (t) => center(t, 'D') === white);
+    const setup = K.hold(s, 'D', white);
     if (setup) {
       steps.push({
         stage: 0,
@@ -100,7 +99,7 @@ export function cfopGuide(M: CubeModel): Guide {
   // R U R' and F' U F work on the front-right slot; the rest only free pieces from other slots
   const F2L_AWAY = ["R'", 'F', 'L', "L'"];
 
-  function f2lStage(s: State, steps: GuideStep[]) {
+  function f2lStage(s: State, steps: GuideStep[], once: Once) {
     const white = center(s, 'D');
     const pairs = SLOT_PAIRS.map(([a, b]) => ({ corner: [white, center(s, a), center(s, b)], edge: [center(s, a), center(s, b)] }));
     const crossStickers = SIDES.flatMap((f) => K.stickersOf('D' + f));
@@ -118,7 +117,7 @@ export function cfopGuide(M: CubeModel): Guide {
       const from = [K.stickerOf(t, p.corner, white), K.stickerOf(t, p.edge, front)];
       const path = K.route(from, [at('DRF', 'D'), at('FR', 'F')], ms);
       if (!path) throw new Error('cfop: no F2L route');
-      return { r, t, front, right, path, n: path.reduce((k, m) => k + m.moves.length, 0) };
+      return { r, t, front, right, path, n: macroMoves(path).length };
     };
 
     let todo = pairs.filter((p) => !done(s, p));
@@ -126,7 +125,7 @@ export function cfopGuide(M: CubeModel): Guide {
       const plans = todo.map((p) => ({ p, ...plan(s, p) }));
       const best = plans.reduce((x, y) => (y.n < x.n ? y : x));
       const { p, r, t, front, right, path } = best;
-      const phrases: Phrase[] = [...K.rotatePhrase(r), ...K.pairPhrases(t, path as Macro[], p.corner, p.edge)];
+      const phrases: Phrase[] = [...K.rotatePhrase(r), ...K.pairPhrases(t, path, p.corner, p.edge)];
       const where = K.pairWhere(t, p.corner, [front, right], { corner: 'DRF', edge: 'FR' }, white);
       const left = todo.length;
       steps.push({
@@ -141,7 +140,7 @@ export function cfopGuide(M: CubeModel): Guide {
         phrases,
         focus: K.focusOn([p.corner, p.edge]),
       });
-      s = apply(t, path.flatMap((m) => m.moves));
+      s = apply(t, macroMoves(path));
       todo = todo.filter((q) => !done(s, q));
     }
     return s;
@@ -152,12 +151,13 @@ export function cfopGuide(M: CubeModel): Guide {
     name: 'CFOP',
     short: 'CFOP',
     intro: 'The speedcuber’s method, named after its stages: Cross, F2L (First Two Layers, solved in corner–edge pairs), OLL (Orient the Last Layer, 57 algorithms) and PLL (Permute the Last Layer, 21 algorithms).',
+    notation: WIDE_NOTATION,
     stages: CFOP_STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
-      once = onceOnly();
-      let s = crossStage(state, steps);
-      s = f2lStage(s, steps);
+      const once = onceOnly();
+      let s = crossStage(state, steps, once);
+      s = f2lStage(s, steps, once);
       const oll = ollStep(K, s, 2, OLL, 'OLL',
         '<p><b>OLL</b> stands for <b>O</b>rient the <b>L</b>ast <b>L</b>ayer: turn every top piece so yellow faces up, without caring yet where the pieces are. There are 57 cases, each with its own algorithm.</p>');
       if (oll.step) steps.push(oll.step);

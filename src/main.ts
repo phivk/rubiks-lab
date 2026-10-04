@@ -1,6 +1,7 @@
 import './style.css';
 import type { Guide, GuideStep, Puzzle, State } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
+import { countMoves, stepMoves } from './cube/lessonKit';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
@@ -144,13 +145,33 @@ function follow(move: string, back = false) {
 const isHalfOf = (half: string | undefined, quarter: string) =>
   !!half?.endsWith('2') && [half.slice(0, -1), half.slice(0, -1) + "'"].includes(quarter);
 
-/** Replace the solution's move at `i` with two `quarter`s, in the lesson's steps too. */
-function splitMove(s: Solution, i: number, quarter: string) {
-  s.moves.splice(i, 1, quarter, quarter);
-  if (!s.lesson) return;
-  const { steps, starts } = s.lesson;
+/** A lesson's moves in order, and the move each step starts at. */
+function flattenLesson(steps: GuideStep[]) {
+  const starts: number[] = [];
+  let total = 0;
+  for (const step of steps) {
+    starts.push(total);
+    total += countMoves(step.phrases);
+  }
+  return { moves: steps.flatMap(stepMoves), starts };
+}
+
+/** the step that move `i` belongs to */
+function stepAt(starts: number[], i: number) {
   let k = 0;
   while (k + 1 < starts.length && starts[k + 1] <= i) k++;
+  return k;
+}
+
+/** Replace the solution's move at `i` with two `quarter`s, in the lesson's steps too. */
+function splitMove(s: Solution, i: number, quarter: string) {
+  if (!s.lesson) {
+    s.moves.splice(i, 1, quarter, quarter);
+    return;
+  }
+  // the steps hold the lesson's moves; split the move there and lay them out again
+  const { steps, starts } = s.lesson;
+  const k = stepAt(starts, i);
   let at = starts[k];
   for (const p of steps[k].phrases) {
     if (i < at + p.moves.length) {
@@ -159,7 +180,9 @@ function splitMove(s: Solution, i: number, quarter: string) {
     }
     at += p.moves.length;
   }
-  for (let j = k + 1; j < starts.length; j++) starts[j]++;
+  const flat = flattenLesson(steps);
+  s.moves = flat.moves;
+  s.lesson.starts = flat.starts;
   lessonStep = -1;
 }
 
@@ -372,16 +395,11 @@ async function startLesson() {
     toast('Couldn’t build a lesson for this cube', 'bad');
     return;
   }
-  const starts: number[] = [];
-  let total = 0;
-  for (const s of steps) {
-    starts.push(total);
-    total += s.phrases.reduce((k, p) => k + p.moves.length, 0);
-  }
+  const { moves, starts } = flattenLesson(steps);
   playing = false;
   solution = {
     start: session.state.slice(),
-    moves: steps.flatMap((s) => s.phrases.flatMap((p) => p.moves)),
+    moves,
     index: 0, optimal: false, searching: false, elapsed: 0, stale: false,
     lesson: { guide, steps, starts },
   };
@@ -720,10 +738,7 @@ function renderTabs() {
 /** The step whose moves come next, or the number of steps once the lesson is done. */
 function currentStep(s: Solution) {
   const { starts } = s.lesson!;
-  if (s.index >= s.moves.length) return starts.length;
-  let k = 0;
-  while (k + 1 < starts.length && starts[k + 1] <= s.index) k++;
-  return k;
+  return s.index >= s.moves.length ? starts.length : stepAt(starts, s.index);
 }
 
 /** the step the lesson card shows */
@@ -739,7 +754,7 @@ function renderLearn() {
     : solution ? 'From the cube as it is now' : 'Walks you through solving this cube';
   $('#lesson-intro').innerHTML = `
     <p><b>${guide.name}.</b> ${guide.intro}</p>
-    <p class="muted small">Moves use standard notation: <code>R</code> turns the right face a quarter turn clockwise, as you look at that face, <code>R'</code> turns it back and <code>R2</code> turns it twice. <code>U</code> is the top and <code>F</code> the front; <code>y</code> turns the whole cube like <code>U</code>.${guide.id === 'beginner' ? '' : ' Lowercase <code>r</code> turns the right two layers together, <code>M</code> turns the middle slice like <code>L</code>, and <code>x</code> turns the whole cube like <code>R</code>.'}</p>
+    <p class="muted small">Moves use standard notation: <code>R</code> turns the right face a quarter turn clockwise, as you look at that face, <code>R'</code> turns it back and <code>R2</code> turns it twice. <code>U</code> is the top and <code>F</code> the front; <code>y</code> turns the whole cube like <code>U</code>.${guide.notation ? ' ' + guide.notation : ''}</p>
     <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along.</p>`;
   if (solution?.lesson) {
     renderLesson();
