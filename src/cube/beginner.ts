@@ -37,7 +37,12 @@ export const STAGES = [
   { name: 'Corner twists', goal: 'Twist the corners until yellow faces up.' },
 ];
 
-export function beginnerGuide(M: CubeModel): Guide {
+/**
+ * The method's stages, in order: each takes a state, adds its steps (numbered as in
+ * STAGES) and returns the state after them. The big-cube lessons reuse them for their
+ * 3×3 finish.
+ */
+export function beginnerStages(M: CubeModel) {
   if (M.n !== 3) throw new Error('The beginner method is for the 3×3');
 
   const K = lessonKit(M);
@@ -230,14 +235,18 @@ export function beginnerGuide(M: CubeModel): Guide {
 
   // ---------- 4–7. last layer ----------
 
-  function lastLayer(s: State, steps: GuideStep[]) {
+  /** the top's color, and a focus on the top layer's pieces, wherever they go */
+  function topOf(s: State) {
     const yellow = center(s, 'U');
     const topPieces = focusOn([...TOP_EDGES, ...TOP_CORNERS].map((slot) => colorsAt(s, slot)));
-    const focusTop = (t: State) => [at('U', 'U'), ...topPieces(t)];
-    const edgesUp = (t: State) => TOP_EDGES.filter((e) => t[at(e, 'U')] === yellow);
-    const sides = (edges: string[]) => list(edges.map((e) => SIDE_NAME[e[1]]));
+    return { yellow, focusTop: (t: State) => [at('U', 'U'), ...topPieces(t)] };
+  }
+  const sides = (edges: string[]) => list(edges.map((e) => SIDE_NAME[e[1]]));
 
-    // 4. yellow cross
+  // 4. yellow cross
+  function yellowCross(s: State, steps: GuideStep[]) {
+    const { yellow, focusTop } = topOf(s);
+    const edgesUp = (t: State) => TOP_EDGES.filter((e) => t[at(e, 'U')] === yellow);
     for (let round = 0; edgesUp(s).length < 4; round++) {
       if (round > 3) throw new Error('beginner guide: yellow cross');
       const up = edgesUp(s);
@@ -261,7 +270,12 @@ export function beginnerGuide(M: CubeModel): Guide {
       s = best.t;
     }
 
-    // 5. yellow edges: match the side centers
+    return s;
+  }
+
+  // 5. yellow edges: match the side centers
+  function yellowEdges(s: State, steps: GuideStep[]) {
+    const { focusTop } = topOf(s);
     const matched = (t: State) => TOP_EDGES.filter((e) => t[at(e, e[1])] === center(t, e[1]));
     const align = (t: State, score: (x: State) => number) => U_TURNS.reduce((a, u) => (score(apply(t, [u])) > score(apply(t, [a])) ? u : a));
     for (let round = 0; ; round++) {
@@ -305,8 +319,14 @@ export function beginnerGuide(M: CubeModel): Guide {
       s = best.t;
     }
 
-    // 6. corner positions
-    const spots = (t: State) => TOP_CORNERS.filter((c) => inSpot(t, c));
+    return s;
+  }
+
+  // 6. corner positions
+  /** the top corners in their spots */
+  const spots = (t: State) => TOP_CORNERS.filter((c) => inSpot(t, c));
+  function cornerSpots(s: State, steps: GuideStep[]) {
+    const { yellow, focusTop } = topOf(s);
     for (let round = 0; spots(s).length < 4; round++) {
       if (round > 3) throw new Error('beginner guide: corner spots');
       const good = spots(s);
@@ -328,7 +348,12 @@ export function beginnerGuide(M: CubeModel): Guide {
       s = apply(s, [r, ...NIKLAS]);
     }
 
-    // 7. corner twists: R' D' R D at the front-right, turning only the top in between
+    return s;
+  }
+
+  // 7. corner twists: R' D' R D at the front-right, turning only the top in between
+  function cornerTwists(s: State, steps: GuideStep[]) {
+    const { yellow, focusTop } = topOf(s);
     const twisted = (t: State) => TOP_CORNERS.filter((c) => t[at(c, 'U')] !== yellow);
     let count = 0;
     while (twisted(s).length) {
@@ -368,6 +393,12 @@ export function beginnerGuide(M: CubeModel): Guide {
     return s;
   }
 
+  return { crossStage, cornersStage, middleStage, yellowCross, yellowEdges, cornerSpots, cornerTwists, spots };
+}
+
+export function beginnerGuide(M: CubeModel): Guide {
+  const B = beginnerStages(M);
+  const STAGE_FNS = [B.crossStage, B.cornersStage, B.middleStage, B.yellowCross, B.yellowEdges, B.cornerSpots, B.cornerTwists];
   return {
     id: 'beginner',
     name: 'Beginner method',
@@ -377,10 +408,8 @@ export function beginnerGuide(M: CubeModel): Guide {
     stages: STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
-      let s = crossStage(state, steps);
-      s = cornersStage(s, steps);
-      s = middleStage(s, steps);
-      s = lastLayer(s, steps);
+      let s = state;
+      for (const stage of STAGE_FNS) s = stage(s, steps);
       if (!M.isSolved(s)) throw new Error('beginner guide: not solved');
       return steps;
     },

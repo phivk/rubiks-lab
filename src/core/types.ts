@@ -105,6 +105,8 @@ export interface Guide {
   intro: string;
   /** notation the lesson uses beyond face turns and y, explained before it starts */
   notation?: string;
+  /** replaces the explanation of cube notation, for puzzles that aren't cubes */
+  basics?: string;
   stages: { name: string; goal: string }[];
   /** throws if the state can't be solved this way */
   steps: (s: State) => GuideStep[];

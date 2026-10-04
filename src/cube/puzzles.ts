@@ -4,8 +4,10 @@ import { syncSolver } from '../core/syncSolver';
 import type { DragOption, MoveButton, Puzzle, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
 import { beginnerGuide } from './beginner';
+import { beginner2Guide } from './beginner2';
 import { cfopGuide } from './cfop';
 import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
+import { reductionGuide } from './reduction';
 import { ringMap } from './rings';
 import { rouxGuide } from './roux';
 import { Solver2 } from './solve2';
@@ -189,6 +191,7 @@ export const cube2: Puzzle = {
   movePadExtra: rows(['x', 'y', 'z']),
   movePadExtraLabel: 'Rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
+  guides: [beginner2Guide(model2)],
 };
 
 // ---------- 3×3 ----------
@@ -223,8 +226,10 @@ const solveBig: Pick<Puzzle, 'solve' | 'cancelSolve'> = {
   cancelSolve: () => bigSolver?.cancel(),
 };
 
+const model4 = new CubeModel(4);
+
 export const cube4: Puzzle = {
-  ...makeCube(new CubeModel(4), { wide: true }),
+  ...makeCube(model4, { wide: true }),
   id: '4x4',
   name: '4×4',
   icon: CUBE_ICON,
@@ -234,12 +239,15 @@ export const cube4: Puzzle = {
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), rotations],
   movePadExtraLabel: 'Wide turns & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 2R' F",
+  guides: [reductionGuide(model4)],
 };
 
 // ---------- 5×5 ----------
 
+const model5 = new CubeModel(5);
+
 export const cube5: Puzzle = {
-  ...makeCube(new CubeModel(5), { wide: true }),
+  ...makeCube(model5, { wide: true }),
   id: '5x5',
   name: '5×5',
   icon: CUBE_ICON,
@@ -249,4 +257,5 @@ export const cube5: Puzzle = {
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), ['M', "M'", 'E', "E'", 'S', "S'"].map(btn), rotations],
   movePadExtraLabel: 'Wide turns, slices & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 3R' M",
+  guides: [reductionGuide(model5)],
 };

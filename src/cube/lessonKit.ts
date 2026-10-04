@@ -70,12 +70,12 @@ let epoch = 0;
 
 export function lessonKit(M: CubeModel) {
   const atCache = new Map<string, number>();
-  /** the sticker of `slot` (e.g. 'UFR') on `face` */
+  /** the sticker of `slot` (e.g. 'UFR') on `face`; on a big cube, corners, midges and fixed centers */
   const at = (slot: string, face: string) => {
     const k = slot + face;
     let i = atCache.get(k);
     if (i === undefined) {
-      const pos = [0, 1, 2].map((d) => [...slot].reduce((sum, f) => sum + 2 * NORMAL[f][d], 0)) as Vec3;
+      const pos = [0, 1, 2].map((d) => [...slot].reduce((sum, f) => sum + (M.n - 1) * NORMAL[f][d], 0)) as Vec3;
       i = M.faceletAt(pos, NORMAL[face])!;
       atCache.set(k, i);
     }
