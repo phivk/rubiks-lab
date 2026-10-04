@@ -3,7 +3,7 @@
 // Run with `npm run verify`.
 import type { Vec3 } from '../src/core/types';
 import { cross, dot } from '../src/core/vec';
-import { TYPICAL, scanState, type RGB } from '../src/scan/classify';
+import { TYPICAL, calibrate, nearest, scanState, type RGB } from '../src/scan/classify';
 
 // the 3×3 starts its solver worker on load, which Node doesn't have
 (globalThis as { Worker?: unknown }).Worker = class { postMessage() {} addEventListener() {} terminate() {} };
@@ -46,11 +46,13 @@ Math.random = () => {
 // differently, and every sticker a little noisy.
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const clamp = (x: number) => Math.max(0, Math.min(255, Math.round(x)));
-function photo(state: number[]): RGB[][] {
+// A dim webcam also sees everything darker and warmer.
+function photo(state: number[], webcam = false): RGB[][] {
   const shade = TYPICAL.map((c) => c.map((x) => x + rand(-15, 15)) as RGB);
-  const tint = [rand(0.9, 1.1), rand(0.9, 1.1), rand(0.85, 1.1)];
+  const tint = webcam ? [rand(0.85, 1), rand(0.6, 0.8), rand(0.5, 0.75)] : [rand(0.9, 1.1), rand(0.9, 1.1), rand(0.85, 1.1)];
+  const dim = webcam ? rand(0.6, 0.8) : 1;
   return faces.map((f) => {
-    const light = rand(0.65, 1.15);
+    const light = dim * (webcam ? rand(0.85, 1.1) : rand(0.65, 1.15));
     return f.stickers.map((s) => shade[state[s]].map((x, k) => clamp(x * light * tint[k] + rand(-12, 12))) as RGB);
   });
 }
@@ -66,3 +68,22 @@ for (let t = 0; t < TRIALS; t++) {
 // the simulation is harsher than a real cube in decent light; a few misreads are what paint mode is for
 if (wrong > TRIALS * 0.06) fail(`${wrong} of ${TRIALS} simulated scans misread`);
 console.log(`✓ ${TRIALS - wrong} of ${TRIALS} simulated scans read back exactly`);
+
+// While aiming, each face is read against the centers captured before it and its own,
+// before any of the later ones are known.
+for (const webcam of [false, true]) {
+  let misread = 0, total = 0;
+  for (let t = 0; t < 200; t++) {
+    const state = apply(P.solved(), P.scramble());
+    const pic = photo(state, webcam);
+    faces.forEach((f, k) => {
+      const seen: RGB[] = [];
+      for (let j = 0; j <= k; j++) seen[faces[j].center] = pic[j][4];
+      const refs = calibrate(seen);
+      f.stickers.forEach((s, i) => { total++; if (nearest(pic[k][i], refs) !== state[s]) misread++; });
+    });
+  }
+  const pct = 100 * misread / total, limit = webcam ? 10 : 1;
+  if (pct > limit) fail(`the live preview misreads ${pct.toFixed(1)}% of stickers${webcam ? ' on a dim webcam' : ''}`);
+  console.log(`✓ the live preview misreads ${pct.toFixed(1)}% of stickers${webcam ? ' on a dim webcam' : ''}`);
+}

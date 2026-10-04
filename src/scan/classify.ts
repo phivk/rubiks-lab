@@ -2,8 +2,8 @@
 //
 // Colors are compared in CIELAB, mostly by hue, since lighting changes how bright and
 // vivid a sticker looks far more than its hue. While aiming, samples are matched against
-// a typical cube's colors; once faces are captured, their centers stand in for those, so
-// the cube's own shades under the room's light decide. The final pass also knows how many
+// a typical cube's colors; the centers seen so far stand in for those, and correct the
+// ones not yet seen, so the cube's own shades under the room's light decide. The final pass also knows how many
 // stickers each color has, which settles the close calls (red/orange, white/yellow).
 
 import type { Puzzle, State } from '../core/types';
@@ -25,6 +25,7 @@ const lin = (c: number) => {
   c /= 255;
   return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 };
+const gamma = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
 const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
 
 export function toLab([r, g, b]: RGB): Lab {
@@ -46,6 +47,32 @@ function labDistance([l1, a1, b1]: Lab, [l2, a2, b2]: Lab) {
   return Math.sqrt((L_WEIGHT * (l1 - l2)) ** 2 + (C_WEIGHT * (c1 - c2)) ** 2 + hue2);
 }
 export const distance = (a: RGB, b: RGB) => labDistance(toLab(a), toLab(b));
+
+/** how much each channel's gain leans on the overall one, in seen colors' worth */
+const PRIOR = 1;
+
+/**
+ * Reference colors while scanning: the ones seen so far as they are, and the rest a typical
+ * cube's, corrected the way the camera has shifted the seen ones. One gain per channel, in
+ * linear light, fitted to the seen colors, takes out the camera's white balance and exposure:
+ * a dim, warm webcam makes a typical orange darker and redder, so it no longer loses its
+ * stickers to the red that's already been seen. One color says little about the channels it
+ * barely has (green about red and blue), so each channel's gain leans on the overall one.
+ */
+export function calibrate(seen: (RGB | undefined)[]): RGB[] {
+  const st = [0, 0, 0], tt = [0, 0, 0];
+  seen.forEach((s, id) => {
+    if (s) for (let k = 0; k < 3; k++) {
+      const t = lin(TYPICAL[id][k]);
+      st[k] += lin(s[k]) * t;
+      tt[k] += t * t;
+    }
+  });
+  const sum = (v: number[]) => v[0] + v[1] + v[2];
+  const overall = sum(tt) ? sum(st) / sum(tt) : 1;
+  const gain = st.map((x, k) => (x + PRIOR * overall) / (tt[k] + PRIOR));
+  return TYPICAL.map((t, id) => seen[id] ?? t.map((x, k) => Math.round(255 * gamma(Math.min(1, lin(x) * gain[k])))) as RGB);
+}
 
 /** Nearest reference color id, or -1 if there are none. `refs` may have gaps. */
 export function nearest(sample: RGB, refs: (RGB | undefined)[]): number {

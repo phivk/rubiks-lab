@@ -4,7 +4,7 @@
 // together (see classify.ts) and handed back as a state.
 
 import type { Puzzle, State } from '../core/types';
-import { TYPICAL, medianColor, nearest, scanState, type RGB } from '../scan/classify';
+import { calibrate, medianColor, nearest, scanState, type RGB } from '../scan/classify';
 
 export interface ScannerEvents {
   onDone: (state: State) => void;
@@ -183,14 +183,18 @@ export class Scanner {
     this.renderLive();
   }
 
-  /** The colors to match against: captured centers where there are some, a typical cube's otherwise. */
-  private refs(except = -1): RGB[] {
-    const refs = TYPICAL.slice();
+  /**
+   * The colors to match against: the captured centers, plus `live` for the face being aimed
+   * at, with a typical cube's (corrected by those) for the rest.
+   */
+  private refs(except = -1, live?: RGB): RGB[] {
+    const seen: (RGB | undefined)[] = [];
     this.puzzle.scan!.forEach((f, k) => {
       const s = this.captured[k];
-      if (s && k !== except) refs[f.center] = s[this.middle()];
+      if (s && k !== except) seen[f.center] = s[this.middle()];
     });
-    return refs;
+    if (live) seen[this.puzzle.scan![except].center] = live;
+    return calibrate(seen);
   }
 
   /** The sample shown in grid cell `i`. Samples are kept as the camera sees them, so a mirrored preview shows them flipped. */
@@ -205,11 +209,14 @@ export class Scanner {
   }
 
   private renderLive() {
-    const refs = this.refs(this.current);
+    const face = this.puzzle.scan![this.current];
+    const center = this.live[this.middle()];
+    const seen = nearest(center, this.refs(this.current));
+    // the center in view is this face's color, so it shows the stickers what that looks like
+    // here, unless it's plainly another face's
+    const refs = seen === face.center ? this.refs(this.current, center) : this.refs(this.current);
     const cells = this.grid.children as HTMLCollectionOf<HTMLElement>;
     this.live.forEach((_, i) => cells[i].style.setProperty('--c', this.puzzle.colors[nearest(this.live[this.onScreen(i)], refs)]));
-    const face = this.puzzle.scan![this.current];
-    const seen = nearest(this.live[this.middle()], refs);
     const warn = this.root.querySelector('.scan-warn')!;
     warn.textContent = seen === face.center ? ''
       : `That looks like the ${this.name(seen)} center — turn the ${this.name(face.center)} one to the camera`;
