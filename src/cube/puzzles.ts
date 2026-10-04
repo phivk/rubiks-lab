@@ -3,6 +3,7 @@ import { COLORS, COLOR_NAMES } from '../core/colors';
 import { syncSolver } from '../core/syncSolver';
 import type { DragOption, MoveButton, Puzzle, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
+import { beginnerGuide } from './beginner';
 import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
 import { ringMap } from './rings';
 import { Solver2 } from './solve2';
@@ -189,10 +190,11 @@ export const cube2: Puzzle = {
 
 // ---------- 3×3 ----------
 
+const model3 = new CubeModel(3);
 const solver3 = new SolverClient(() => new Worker(new URL('./workers/3x3.worker.ts', import.meta.url), { type: 'module' }));
 
 export const cube3: Puzzle = {
-  ...makeCube(new CubeModel(3), { wide: false }),
+  ...makeCube(model3, { wide: false }),
   id: '3x3',
   name: '3×3',
   icon: CUBE_ICON,
@@ -202,6 +204,7 @@ export const cube3: Puzzle = {
   movePadExtra: rows(['M', 'E', 'S', 'x', 'y', 'z']),
   movePadExtraLabel: 'Slices & rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
+  guide: beginnerGuide(model3),
 };
 
 // ---------- 4×4 ----------

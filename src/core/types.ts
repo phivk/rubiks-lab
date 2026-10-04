@@ -79,6 +79,32 @@ export interface SolveHandlers {
   onError: (message: string) => void;
 }
 
+/** A run of moves in a lesson step, labelled with what it does ("Turn the top", "R U R' U' ×3"). */
+export interface Phrase {
+  label: string;
+  moves: string[];
+}
+
+export interface GuideStep {
+  /** index into the guide's stages */
+  stage: number;
+  title: string;
+  /** the explanation, as HTML */
+  html: string;
+  phrases: Phrase[];
+  /** the stickers to keep lit while this step is on screen, for any state */
+  focus: (s: State) => number[];
+}
+
+/** A method that solves a puzzle the way a person would, in explained steps. */
+export interface Guide {
+  name: string;
+  intro: string;
+  stages: { name: string; goal: string }[];
+  /** throws if the state can't be solved this way */
+  steps: (s: State) => GuideStep[];
+}
+
 export interface Puzzle {
   id: string;
   name: string;
@@ -128,4 +154,6 @@ export interface Puzzle {
   solveHint?: string;
   solve: (state: State, budgetMs: number, handlers: SolveHandlers) => void;
   cancelSolve: () => void;
+  /** a tutorial that walks through solving this puzzle by hand */
+  guide?: Guide;
 }

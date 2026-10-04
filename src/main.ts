@@ -1,5 +1,5 @@
 import './style.css';
-import type { Puzzle, State } from './core/types';
+import type { GuideStep, Puzzle, State } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
@@ -33,9 +33,17 @@ interface Solution {
   searching: boolean;
   elapsed: number;
   stale: boolean;
+  /** a lesson: the moves explained step by step, and the move each step starts at */
+  lesson?: { steps: GuideStep[]; starts: number[] };
 }
 let solution: Solution | null = null;
 let playing = false;
+/** where playback last started: a lesson pauses at the end of each step */
+let playFrom = 0;
+
+/** the right panel solves the puzzle outright, or teaches how (puzzles with a guide) */
+type Tab = 'solve' | 'learn';
+let tab: Tab = 'solve';
 
 const SPEEDS = [0.35, 0.6, 1, 1.7, 3];
 let speed = 1;
@@ -111,8 +119,18 @@ const idle = () => new Promise<void>((resolve) => {
   check();
 });
 
+/** Making the solution's next move yourself steps along it; any other move leaves it behind. */
+function follow(move: string, back = false) {
+  const s = solution;
+  // queued moves are already counted in the index, so it always describes the state after the queue
+  if (s && !s.stale && !s.searching && s.moves[back ? s.index - 1 : s.index] === move) {
+    s.index += back ? -1 : 1;
+    playing = false;
+  } else invalidateSolution();
+}
+
 function commitUserMove(move: string, animate = true) {
-  invalidateSolution();
+  follow(move);
   session.moveHistory.push(move);
   session.redoStack.length = 0;
   if (animate) enqueue({ move, duration: BASE_MS / speed, kind: 'user' });
@@ -129,8 +147,8 @@ function commitUserMove(move: string, animate = true) {
 }
 
 function doMoves(moves: string[], duration = BASE_MS / speed) {
-  invalidateSolution();
   for (const m of moves) {
+    follow(m);
     session.moveHistory.push(m);
     enqueue({ move: m, duration, kind: 'user' });
   }
@@ -141,7 +159,7 @@ function doMoves(moves: string[], duration = BASE_MS / speed) {
 function undo() {
   const m = session.moveHistory.pop();
   if (!m) return;
-  invalidateSolution();
+  follow(m, true);
   session.redoStack.push(m);
   enqueue({ move: puzzle.invertMove(m), duration: BASE_MS / speed, kind: 'user' });
   renderHistory();
@@ -149,7 +167,7 @@ function undo() {
 function redo() {
   const m = session.redoStack.pop();
   if (!m) return;
-  invalidateSolution();
+  follow(m);
   session.moveHistory.push(m);
   enqueue({ move: m, duration: BASE_MS / speed, kind: 'user' });
   renderHistory();
@@ -246,7 +264,7 @@ function paintSticker(i: number) {
 function setMode(m: Mode) {
   mode = m;
   view.setMode(m);
-  document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) => b.classList.toggle('active', b.dataset.mode === m));
+  document.querySelectorAll<HTMLButtonElement>('#mode-seg button').forEach((b) => b.classList.toggle('active', b.dataset.mode === m));
   $('.mode-play').classList.toggle('hidden', m !== 'play');
   $('.mode-paint').classList.toggle('hidden', m !== 'paint');
   $('#net').classList.toggle('editable', m === 'paint');
@@ -275,6 +293,17 @@ async function startSolve() {
     pendingSolve = true;
     return;
   }
+  if (tab === 'learn' && puzzle.guide) return startLesson();
+  if (!checkValid()) return;
+  if (puzzle.isSolved(session.state)) {
+    toast('Already solved — scramble it first', 'good');
+    return;
+  }
+  runSolver(1500);
+}
+
+/** Point out what's wrong with the puzzle, if anything. */
+function checkValid() {
   const v = puzzle.validate(session.state);
   if (!v.ok) {
     const bad = v.stickers;
@@ -285,15 +314,51 @@ async function startSolve() {
     }
     toast(v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message, 'bad');
     if (mode !== 'paint') setMode('paint');
-    return;
+    return false;
   }
-  if (puzzle.isSolved(session.state)) {
-    toast('Already solved — scramble it first', 'good');
-    return;
-  }
-  runSolver(1500);
+  return true;
 }
 
+/** Walk through solving the puzzle as it is now (scrambling it first if it's solved). */
+async function startLesson() {
+  const guide = puzzle.guide!;
+  if (!checkValid()) return;
+  if (puzzle.isSolved(session.state)) {
+    const forPuzzle = puzzle;
+    scramble();
+    await idle();
+    // the puzzle or tab may have changed while it scrambled
+    if (puzzle !== forPuzzle || tab !== 'learn') return;
+  }
+  let steps: GuideStep[];
+  try {
+    steps = guide.steps(session.state);
+  } catch {
+    toast('Couldn’t build a lesson for this cube', 'bad');
+    return;
+  }
+  const starts: number[] = [];
+  let total = 0;
+  for (const s of steps) {
+    starts.push(total);
+    total += s.phrases.reduce((k, p) => k + p.moves.length, 0);
+  }
+  playing = false;
+  solution = {
+    start: session.state.slice(),
+    moves: steps.flatMap((s) => s.phrases.flatMap((p) => p.moves)),
+    index: 0, optimal: false, searching: false, elapsed: 0, stale: false,
+    lesson: { steps, starts },
+  };
+  renderSolution(true);
+}
+
+function setTab(t: Tab) {
+  if (t === tab) return;
+  tab = t;
+  invalidateSolution(true);
+  renderSolution();
+}
 function runSolver(budgetMs: number) {
   const start = session.state.slice();
   const forPuzzle = puzzle;
@@ -369,6 +434,11 @@ function scheduleNextPlayback() {
   clearTimeout(playTimer);
   playTimer = window.setTimeout(() => {
     if (!playing || running) return;
+    if (solution?.lesson && solution.index !== playFrom && solution.lesson.starts.includes(solution.index)) {
+      playing = false;
+      renderPlayback();
+      return;
+    }
     if (!stepForward()) {
       playing = false;
       renderPlayback();
@@ -381,6 +451,7 @@ function togglePlay() {
   else {
     if (solution.index >= solution.moves.length) jumpTo(0);
     playing = true;
+    playFrom = solution.index;
     if (!running) scheduleNextPlayback();
   }
   renderPlayback();
@@ -415,6 +486,8 @@ function onStateChanged() {
   $('#solved-badge').classList.toggle('hidden', !puzzle.isSolved(session.state));
   if (mode === 'paint') renderPalette();
   if (solution && !solution.stale) renderPlayback();
+  // the lesson button's subtitle says whether it will scramble first
+  else if (!solution && tab === 'learn') renderSolution();
   view.setHighlight([]);
   renderUndo();
   saveToUrl();
@@ -512,8 +585,17 @@ function renderStatus() {
 
 function renderSolution(fresh = false) {
   const el = $('#solution');
+  const learn = tab === 'learn' && !!puzzle.guide;
+  el.classList.toggle('learn', learn);
   el.classList.toggle('empty', !solution);
   el.classList.toggle('stale', !!solution?.stale);
+  renderTabs();
+  if (!solution?.lesson || solution.stale) view.setFocus(null);
+  if (learn) {
+    renderLearn();
+    return;
+  }
+  $('.solve-label').textContent = 'Solve';
   const sub = $('#solve-sub');
   if (!solution) {
     sub.textContent = puzzle.solveHint ?? 'Finds the shortest route home';
@@ -546,6 +628,7 @@ function renderSolution(fresh = false) {
   s.moves.forEach((m, i) => {
     const c = document.createElement('button');
     c.className = 'chip';
+    c.dataset.i = String(i);
     c.innerHTML = `${m}<sub>${i + 1}</sub>`;
     if (fresh) c.style.animationDelay = `${i * 18}ms`;
     else c.style.animation = 'none';
@@ -560,7 +643,9 @@ function renderPlayback() {
   if (!solution) return;
   const s = solution;
   const n = s.moves.length;
-  document.querySelectorAll<HTMLElement>('#chips .chip').forEach((c, i) => {
+  if (s.lesson && currentStep(s) !== lessonStep) renderLesson();
+  document.querySelectorAll<HTMLElement>(s.lesson ? '#lesson .chip' : '#chips .chip').forEach((c) => {
+    const i = Number(c.dataset.i);
     c.classList.toggle('done', i < s.index);
     c.classList.toggle('current', i === s.index && !s.stale && s.index < n);
   });
@@ -571,7 +656,121 @@ function renderPlayback() {
   ($('#btn-first') as HTMLButtonElement).disabled = s.index === 0;
   ($('#btn-next') as HTMLButtonElement).disabled = s.index >= n;
   ($('#btn-last') as HTMLButtonElement).disabled = s.index >= n;
-  followCurrentChip();
+  if (s.lesson) {
+    const step = s.lesson.steps[currentStep(s)];
+    view.setFocus(step && !s.stale ? step.focus(session.state) : null);
+    renderStages();
+  } else followCurrentChip();
+}
+
+// ---------- lessons ----------
+
+function renderTabs() {
+  $('#sol-tabs').classList.toggle('hidden', !puzzle.guide);
+  document.querySelectorAll<HTMLButtonElement>('#sol-tabs button').forEach((b) => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+}
+
+/** The step whose moves come next, or the number of steps once the lesson is done. */
+function currentStep(s: Solution) {
+  const { starts } = s.lesson!;
+  if (s.index >= s.moves.length) return starts.length;
+  let k = 0;
+  while (k + 1 < starts.length && starts[k + 1] <= s.index) k++;
+  return k;
+}
+
+/** the step the lesson card shows */
+let lessonStep = -1;
+
+function renderLearn() {
+  const guide = puzzle.guide!;
+  const solved = puzzle.isSolved(session.state);
+  $('.solve-label').textContent = solution ? 'Restart lesson' : 'Start lesson';
+  $('#solve-sub').textContent = solved ? 'Scrambles it first, then teaches'
+    : solution ? 'From the cube as it is now' : 'Walks you through solving this cube';
+  $('#lesson-intro').innerHTML = `
+    <p><b>${guide.name}.</b> ${guide.intro}</p>
+    <p class="muted small">Moves use standard notation: <code>R</code> turns the right face a quarter turn clockwise, as you look at that face, <code>R'</code> turns it back and <code>R2</code> turns it twice. <code>U</code> is the top and <code>F</code> the front; <code>y</code> turns the whole cube like <code>U</code>.</p>
+    <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along.</p>`;
+  if (solution?.lesson) {
+    renderLesson();
+    renderPlayback();
+  } else renderStages();
+}
+
+function renderLesson() {
+  const s = solution!;
+  const { steps, starts } = s.lesson!;
+  const k = currentStep(s);
+  lessonStep = k;
+  const stale = s.stale
+    ? `<div class="lesson-stale">You turned the cube, so this lesson no longer fits it. <button class="link" data-act="resume">Continue from here</button></div>`
+    : '';
+  if (k >= steps.length) {
+    $('#lesson').innerHTML = stale + `
+      <div class="lesson-title">Solved!</div>
+      <div class="lesson-text"><p>That’s the whole method: ${steps.length} steps and ${s.moves.length} moves. Every lesson starts from your own scramble, so practise until the algorithms stick.</p></div>
+      <div class="lesson-nav"><button class="btn small ghost" data-act="prev"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button><button class="btn small primary-soft" data-act="again">Practise again</button></div>`;
+    return;
+  }
+  const step = steps[k];
+  let i = starts[k];
+  const phrases = step.phrases.map((p) => `
+    <div class="phrase">
+      <span class="phrase-label">${p.label}</span>
+      <div class="phrase-moves">${p.moves.map((m) => `<button class="chip" data-i="${i}" title="Jump to after this move">${m}<sub>${++i - starts[k]}</sub></button>`).join('')}</div>
+    </div>`).join('');
+  $('#lesson').innerHTML = stale + `
+    <div class="lesson-head"><span class="eyebrow">${puzzle.guide!.stages[step.stage].name}</span><span class="step">Step ${k + 1} of ${steps.length}</span></div>
+    <div class="lesson-title">${step.title}</div>
+    <div class="lesson-text">${step.html}</div>
+    <div class="phrases">${phrases}</div>
+    <div class="lesson-nav">
+      <button class="btn small ghost" data-act="prev"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button>
+      <button class="btn small ghost" data-act="next">Next step<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>`;
+}
+
+function renderStages() {
+  const guide = puzzle.guide!;
+  const lesson = solution?.lesson;
+  const k = lesson ? currentStep(solution!) : -1;
+  const cur = !lesson ? -1 : k < lesson.steps.length ? lesson.steps[k].stage : guide.stages.length;
+  $('#stages').innerHTML = guide.stages.map((st, i) => {
+    const has = !lesson || lesson.steps.some((x) => x.stage === i);
+    const state = !lesson ? '' : i < cur ? 'done' : i === cur ? 'current' : '';
+    return `<li class="${state}${has ? '' : ' skipped'}" data-stage="${i}">
+      <span class="num">${state === 'done' ? '✓' : i + 1}</span>
+      <span class="stage-text">
+        <span class="stage-name">${st.name}${lesson && !has ? '<small>already done</small>' : ''}</span>
+        ${!lesson || i === cur ? `<span class="stage-goal">${st.goal}</span>` : ''}
+      </span>
+    </li>`;
+  }).join('');
+}
+
+function onLessonClick(e: Event) {
+  const b = (e.target as HTMLElement).closest<HTMLElement>('button');
+  const s = solution;
+  if (!b || !s?.lesson) return;
+  const { starts } = s.lesson;
+  const k = currentStep(s);
+  if (b.dataset.i) jumpTo(Number(b.dataset.i) + 1);
+  else if (b.dataset.act === 'prev') jumpTo(starts[s.index > (starts[k] ?? s.moves.length) ? k : k - 1] ?? 0);
+  else if (b.dataset.act === 'next') jumpTo(starts[k + 1] ?? s.moves.length);
+  else if (b.dataset.act === 'resume' || b.dataset.act === 'again') void startSolve();
+}
+
+function onStageClick(e: Event) {
+  const li = (e.target as HTMLElement).closest<HTMLElement>('li');
+  const lesson = solution?.lesson;
+  if (!li || !lesson) return;
+  const k = lesson.steps.findIndex((x) => x.stage === Number(li.dataset.stage));
+  if (k >= 0) jumpTo(lesson.starts[k]);
 }
 
 /** Keep the current move in view by scrolling the chip list only, never the panel around it. */
@@ -649,7 +848,7 @@ function bind() {
     b.addEventListener('click', () => void switchPuzzle(p));
     $('.puzzle-switch').append(b);
   }
-  document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) =>
+  document.querySelectorAll<HTMLButtonElement>('#mode-seg button').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
   );
   document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) =>
@@ -707,6 +906,11 @@ function bind() {
     if (mode === 'paint' && puzzle.validate(session.state).ok) setMode('play');
     void startSolve();
   });
+  document.querySelectorAll<HTMLButtonElement>('#sol-tabs button').forEach((b) =>
+    b.addEventListener('click', () => setTab(b.dataset.tab as Tab)),
+  );
+  $('#lesson').addEventListener('click', onLessonClick);
+  $('#stages').addEventListener('click', onStageClick);
   $('#btn-play').addEventListener('click', togglePlay);
   $('#btn-next').addEventListener('click', () => { playing = false; stepForward(); renderPlayback(); });
   $('#btn-prev').addEventListener('click', stepBack);
