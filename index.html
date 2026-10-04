@@ -25,6 +25,7 @@
           <button class="btn ghost" id="btn-flip" title="Flip the cube upside down (z2)" aria-label="Flip the cube upside down"><svg viewBox="0 0 24 24"><path d="M7 4v16M3 8l4-4 4 4"/><path d="M17 20V4M13 16l4 4 4-4"/></svg><span class="label">Flip</span></button>
           <button class="btn ghost" id="btn-camera" title="Reset view (V)" aria-label="Reset view"><svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></svg></button>
           <button class="btn ghost" id="btn-share" title="Copy link to this cube" aria-label="Share"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg><span class="label">Share</span></button>
+          <button class="btn ghost" id="btn-about" title="About and sources" aria-label="About and sources"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></button>
           <button class="btn ghost" id="btn-help" title="Shortcuts (?)" aria-label="Shortcuts">?</button>
         </div>
       </header>
@@ -161,6 +162,45 @@
       </div>
       <p class="muted small">Drag any sticker to turn its layer. On the 3×3 and 4×4, grab an inner row to turn a slice; on the Pyraminx, grab a tip to turn just the tip. Drag empty space to look around; scroll or pinch to zoom.</p>
       <form method="dialog"><button class="btn grow">Got it</button></form>
+    </dialog>
+
+    <dialog id="about" class="about">
+      <h2>About Rubik’s Lab</h2>
+      <p>A playground for the 2×2, 3×3, 4×4 and 5×5 cubes and the Pyraminx: turn them, paint in a real puzzle, get the shortest solution, or learn to solve them yourself on the <b>Learn</b> tab.</p>
+      <h3>Where the beginner methods come from</h3>
+      <p class="muted small">Each lesson follows a well-known beginner’s method; the explanations are written for this app, and every algorithm is checked by simulation against random scrambles.</p>
+      <dl class="sources">
+        <dt>2×2 — layer by layer</dt>
+        <dd>First layer with <code>R U R' U'</code>, the top with the Sune (<code>R U R' U R U2 R'</code>), then <code>R' F R' B2 R F' R' B2 R2</code> with the headlights at the back.
+          <ul>
+            <li><a href="http://www.rubiksplace.com/cubes/2x2/" target="_blank" rel="noopener">How to Solve a 2x2 Rubik’s Cube — rubiksplace.com</a></li>
+            <li><a href="https://puzzlcrate.com/how-to-solve-a-2x2-rubiks-cube/" target="_blank" rel="noopener">Beginner’s Guide: How To Solve The 2x2 — PuzzlCrate</a></li>
+          </ul>
+        </dd>
+        <dt>4×4 — reduction</dt>
+        <dd>Centers, edge pairing, the 3×3 stage, and OLL and PLL parity.
+          <ul>
+            <li><a href="https://www.cubeskills.com/uploads/pdf/tutorials/beginners-method-for-solving-the-4x4-cube.pdf" target="_blank" rel="noopener">Beginner’s Method for Solving the 4x4 Cube — CubeSkills</a></li>
+            <li><a href="https://ruwix.com/twisty-puzzles/4x4x4-rubiks-cube-rubiks-revenge/" target="_blank" rel="noopener">How To Solve The 4x4x4 Rubik’s Cube — Ruwix</a></li>
+            <li><a href="https://ruwix.com/twisty-puzzles/4x4x4-rubiks-cube-rubiks-revenge/parity/" target="_blank" rel="noopener">4x4 Parity Cases — Ruwix</a></li>
+          </ul>
+        </dd>
+        <dt>5×5 — reduction</dt>
+        <dd>Centers, edge pairing, the last two edges and edge parity, then the 3×3 stage.
+          <ul>
+            <li><a href="https://www.cubeskills.com/uploads/pdf/tutorials/beginners-method-for-solving-the-5x5-cube.pdf" target="_blank" rel="noopener">Beginner’s Method for Solving the 5x5 Cube — CubeSkills</a></li>
+            <li><a href="https://www.cubeskills.com/uploads/pdf/tutorials/last-2-edges-algorithms-5x5.pdf" target="_blank" rel="noopener">5x5 Last Two Edges Algorithms — CubeSkills</a></li>
+          </ul>
+        </dd>
+        <dt>Pyraminx — layer by layer</dt>
+        <dd>Tips, bottom centers, bottom edges, then one of five last-layer algorithms.
+          <ul>
+            <li><a href="https://www.speedsolving.com/threads/beginners-pyraminx-tutorial-lbl.75619/" target="_blank" rel="noopener">Beginner’s Pyraminx Tutorial [LBL] — Speedsolving.com</a></li>
+            <li><a href="https://www.speedsolving.com/wiki/index.php/Pyraminx_algorithms" target="_blank" rel="noopener">Pyraminx algorithms — Speedsolving.com Wiki</a></li>
+          </ul>
+        </dd>
+      </dl>
+      <form method="dialog"><button class="btn grow">Close</button></form>
     </dialog>
 
     <script type="module" src="/src/main.ts"></script>
