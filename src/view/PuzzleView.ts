@@ -23,6 +23,7 @@ export interface PuzzleViewEvents {
 
 /** How bright the stickers outside the held rings stay. */
 const DIM = 0.4;
+const FOCUS_DIM = 0.3;
 
 /** A 3D outline laid flat around its middle, and the matrix that puts it back. */
 function flatten(outline: Vec3[], normal: Vec3) {
@@ -94,6 +95,8 @@ export class PuzzleView {
   /** the sticker pressed here or in the ring view, and the stickers of its rings */
   private held = -1;
   private lit: Set<number> | null = null;
+  /** stickers a lesson points at; the rest are dimmed */
+  private focus: Set<number> | null = null;
   private outline = new THREE.Mesh(
     new THREE.BufferGeometry(),
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
@@ -214,6 +217,7 @@ export class PuzzleView {
     this.linkedHover = -1;
     this.held = -1;
     this.lit = null;
+    this.focus = null;
     this.highlighted.clear();
     this.setState(state);
     if (first) {
@@ -245,7 +249,9 @@ export class PuzzleView {
   private refreshColors() {
     this.stickers.forEach((m, i) => {
       m.material.color.set(this.puzzle.colors[this.state[i]]);
-      if (this.lit && !this.lit.has(i)) m.material.color.multiplyScalar(DIM);
+      // a pressed sticker's rings win over a lesson's focus
+      const dim = this.lit ? !this.lit.has(i) && DIM : !!this.focus && !this.focus.has(i) && FOCUS_DIM;
+      if (dim) m.material.color.multiplyScalar(dim);
     });
   }
 
@@ -285,6 +291,12 @@ export class PuzzleView {
     }
     this.outline.geometry = band;
     this.pieces[s.piece].add(this.outline);
+  }
+
+  /** Dim every sticker but these, or none for null. */
+  setFocus(indices: number[] | null) {
+    this.focus = indices && new Set(indices);
+    this.refreshColors();
   }
 
   setHighlight(indices: number[]) {

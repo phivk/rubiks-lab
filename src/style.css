@@ -443,6 +443,68 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 }
 @media (hover: none) { .scan-keys, .scanner .btn kbd { display: none; } }
 
+/* ---------- lessons ---------- */
+/* the Learn tab shares the player with Solve, and swaps the rest */
+.solution.learn { display: flex; flex-direction: column; gap: 14px; }
+.solution.learn .sol-empty, .solution.learn .sol-head, .solution.learn .chips { display: none; }
+.solution:not(.learn) .lesson, .solution:not(.learn) .lesson-intro, .solution:not(.learn) .stages, .solution:not(.learn) .methods,
+.solution.learn:not(.empty) .lesson-intro { display: none; }
+.methods { display: flex; gap: 4px; padding: 3px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; border: 1px solid var(--line); }
+.methods button {
+  flex: 1; padding: 5px 4px; border: 0; background: transparent; border-radius: 7px; cursor: pointer;
+  font-size: 12.5px; font-weight: 600; color: var(--text-2); transition: background 0.2s, color 0.2s;
+}
+.methods button:hover { color: var(--text); }
+.methods button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.methods button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lesson-intro p { margin: 0 0 10px; color: var(--text-2); }
+.lesson-intro p:last-child { margin-bottom: 0; }
+.lesson-intro b { color: var(--text); font-weight: 600; }
+.solution code {
+  font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 1px 5px; border-radius: 5px;
+  background: var(--chip-hover); color: var(--text); white-space: nowrap;
+}
+.lesson { display: flex; flex-direction: column; gap: 10px; }
+.lesson-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.lesson-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; }
+.lesson-text { color: var(--text-2); font-size: 13px; }
+.lesson-text p { margin: 0 0 8px; }
+.lesson-text p:last-child { margin-bottom: 0; }
+.lesson-text b { color: var(--text); }
+.cname { color: var(--text); font-weight: 600; white-space: nowrap; }
+.cname::before {
+  content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 4px; border-radius: 3px;
+  background: var(--c); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4) inset;
+}
+.phrases { display: flex; flex-direction: column; gap: 8px; }
+.phrase { display: flex; flex-direction: column; gap: 5px; }
+.phrase-label { font-size: 11px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); }
+.phrase-moves { display: flex; flex-wrap: wrap; gap: 5px; }
+.phrase-moves .chip { min-width: 40px; padding: 4px 6px; font-size: 13px; animation: none; }
+.lesson-nav { display: flex; justify-content: space-between; gap: 8px; }
+.lesson-nav .btn.ghost { padding: 0 6px; }
+.lesson-stale { padding: 8px 10px; border-radius: 10px; background: rgba(255, 200, 87, 0.1); color: var(--warn); font-size: 12.5px; }
+.lesson-stale .link { color: var(--text); font-size: 12.5px; font-weight: 600; text-decoration: underline; }
+.solution.stale .lesson > :not(.lesson-stale) { opacity: 0.4; pointer-events: none; }
+
+.stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.solution:not(.empty) .stages { border-top: 1px solid var(--line); padding-top: 10px; }
+.stages li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 10px; }
+.solution:not(.empty) .stages li:not(.skipped) { cursor: pointer; }
+.solution:not(.empty) .stages li:not(.skipped):not(.current):hover { background: var(--chip); }
+.stages .num {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; background: var(--chip-hover); color: var(--text-2); font-variant-numeric: tabular-nums;
+}
+.stages .stage-text { display: flex; flex-direction: column; gap: 1px; padding-top: 1px; min-width: 0; }
+.stages .stage-name { font-weight: 600; font-size: 13px; }
+.stages .stage-name small { margin-left: 6px; font-size: 11.5px; font-weight: 500; color: var(--text-3); }
+.stages .stage-goal { font-size: 12px; color: var(--text-2); }
+.stages li.done .num { background: rgba(61, 220, 151, 0.14); color: var(--good); }
+.stages li.done .stage-name { color: var(--text-2); }
+.stages li.current { background: var(--accent-soft); }
+.stages li.current .num { background: var(--accent); color: #fff; }
+
 /* ---------- toasts ---------- */
 .toasts { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; pointer-events: none; align-items: center; }
 .toast {

@@ -3,9 +3,13 @@ import { COLORS, COLOR_NAMES } from '../core/colors';
 import { syncSolver } from '../core/syncSolver';
 import type { DragOption, MoveButton, Puzzle, ScanFace, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
+import { beginnerGuide } from './beginner';
+import { cfopGuide } from './cfop';
 import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
 import { ringMap } from './rings';
+import { rouxGuide } from './roux';
 import { Solver2 } from './solve2';
+import { zzGuide } from './zz';
 
 const unit = (axis: number): Vec3 => [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0];
 
@@ -231,6 +235,7 @@ export const cube3: Puzzle = {
   movePadExtraLabel: 'Slices & rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
   scan: scanFaces(model3),
+  guides: [beginnerGuide(model3), cfopGuide(model3), rouxGuide(model3), zzGuide(model3)],
 };
 
 // ---------- 4×4 ----------
