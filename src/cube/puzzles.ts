@@ -4,8 +4,10 @@ import { syncSolver } from '../core/syncSolver';
 import type { DragOption, MoveButton, Puzzle, ScanFace, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
 import { beginnerGuide } from './beginner';
+import { beginner2Guide } from './beginner2';
 import { cfopGuide } from './cfop';
 import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
+import { reductionGuide } from './reduction';
 import { ringMap } from './rings';
 import { rouxGuide } from './roux';
 import { Solver2 } from './solve2';
@@ -132,6 +134,7 @@ function makeCube(M: CubeModel, { wide }: { wide: boolean }): Shared {
     <div><kbd>M</kbd><kbd>E</kbd><kbd>S</kbd></div><span>Turn a middle slice</span>` : '') + `
     <div><kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd></div><span>Rotate the whole cube</span>
     <div><kbd>⇧</kbd> + key</div><span>Counter-clockwise (prime)</span>`,
+    notationHtml: "<code>R</code> turns the right face a quarter turn clockwise, as you look at that face, <code>R'</code> turns it back and <code>R2</code> turns it twice. <code>U</code> is the top and <code>F</code> the front; <code>y</code> turns the whole cube like <code>U</code>.",
     paintIntroHtml: slices
       ? 'Pick a color, then tap stickers on the cube or the map below. Hold your cube with the <b>white</b> center up and <b>green</b> facing you.'
       : 'Pick a color, then tap stickers on the cube or the map below. There are no fixed centers, so any way up is fine — the solver works out the orientation from the corners.',
@@ -215,6 +218,7 @@ export const cube2: Puzzle = {
   movePadExtra: rows(['x', 'y', 'z']),
   movePadExtraLabel: 'Rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
+  guides: [beginner2Guide(model2)],
   scan: scanFaces(model2),
 };
 
@@ -264,6 +268,7 @@ export const cube4: Puzzle = {
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), rotations],
   movePadExtraLabel: 'Wide turns & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 2R' F",
+  guides: [reductionGuide(model4)],
   scan: scanFaces(model4),
 };
 
@@ -282,5 +287,6 @@ export const cube5: Puzzle = {
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), ['M', "M'", 'E', "E'", 'S', "S'"].map(btn), rotations],
   movePadExtraLabel: 'Wide turns, slices & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 3R' M",
+  guides: [reductionGuide(model5)],
   scan: scanFaces(model5),
 };

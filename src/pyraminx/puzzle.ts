@@ -8,6 +8,7 @@ import {
   AXES, CENTER, COLORS, COLOR_LETTERS, COLOR_NAMES, CUBE_COLOR_IDS, EDGE_PAIRS, H2, N, S2, TIP, UNSET, VERTEX_NAMES,
   applyAll, bigLayer, invertMove, isSolved, parseAlg, parseMove, pieceCorners, piecesOf, rotations, shrinkToPiece, solved, stickers,
 } from './model';
+import { pyraminxGuide } from './lesson';
 import { scramble, solveOptimal } from './solver';
 
 // ---------- validation ----------
@@ -177,6 +178,7 @@ export const pyraminx: Puzzle = {
     <div><kbd>U</kbd><kbd>L</kbd><kbd>R</kbd><kbd>B</kbd></div><span>Turn a corner layer clockwise</span>
     <div><kbd>⌥</kbd> + key</div><span>Turn just the tip</span>
     <div><kbd>⇧</kbd> + key</div><span>Counter-clockwise (prime)</span>`,
+  notationHtml: "<code>R</code> turns the right corner’s layer a third of a turn clockwise, as you look at that corner, and <code>R'</code> turns it back. <code>U</code> is the top corner, <code>L</code> and <code>R</code> the front-left and front-right, <code>B</code> the back; lowercase <code>r</code> turns just the tip.",
   paintIntroHtml: 'Pick a color, then tap stickers on the puzzle or the map below. Hold it with <b>yellow</b> on the bottom and <b>green</b> facing you.',
   algPlaceholder: "Type an algorithm… R U' L r",
 
@@ -197,4 +199,5 @@ export const pyraminx: Puzzle = {
   },
 
   ...syncSolver(solveOptimal, (s, moves) => isSolved(applyAll(s, moves))),
+  guides: [pyraminxGuide()],
 };

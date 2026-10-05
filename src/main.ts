@@ -804,7 +804,7 @@ function renderLearn() {
     : solution ? 'From the cube as it is now' : 'Walks you through solving this cube';
   $('#lesson-intro').innerHTML = `
     <p><b>${guide.name}.</b> ${guide.intro}</p>
-    <p class="muted small">Moves use standard notation: <code>R</code> turns the right face a quarter turn clockwise, as you look at that face, <code>R'</code> turns it back and <code>R2</code> turns it twice. <code>U</code> is the top and <code>F</code> the front; <code>y</code> turns the whole cube like <code>U</code>.${guide.notation ? ' ' + guide.notation : ''}</p>
+    <p class="muted small">Moves use standard notation: ${puzzle.notationHtml}${guide.notation ? ' ' + guide.notation : ''}</p>
     <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along.</p>`;
   if (solution?.lesson) {
     renderLesson();
@@ -979,6 +979,11 @@ function bind() {
   // turning the whole cube by dragging isn't possible, and lessons ask for a flip
   $('#btn-flip').addEventListener('click', () => commitUserMove('z2'));
   $('#btn-help').addEventListener('click', () => ($('#help') as HTMLDialogElement).showModal());
+  const showAbout = () => ($('#about') as HTMLDialogElement).showModal();
+  $('#btn-about').addEventListener('click', showAbout);
+  $('#lesson-intro').addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('[data-about]')) showAbout();
+  });
   $('#btn-share').addEventListener('click', async () => {
     saveToUrl();
     await new Promise((r) => setTimeout(r, 220));
@@ -1056,7 +1061,7 @@ function bind() {
   window.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'text') return;
-    if (($('#help') as HTMLDialogElement).open || scanner.isOpen) return;
+    if (document.querySelector('dialog[open]') || scanner.isOpen) return;
     const k = e.key;
     if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ') {
       e.preventDefault();

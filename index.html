@@ -25,6 +25,7 @@
           <button class="btn ghost" id="btn-flip" title="Flip the cube upside down (z2)" aria-label="Flip the cube upside down"><svg viewBox="0 0 24 24"><path d="M7 4v16M3 8l4-4 4 4"/><path d="M17 20V4M13 16l4 4 4-4"/></svg><span class="label">Flip</span></button>
           <button class="btn ghost" id="btn-camera" title="Reset view (V)" aria-label="Reset view"><svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></svg></button>
           <button class="btn ghost" id="btn-share" title="Copy link to this cube" aria-label="Share"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg><span class="label">Share</span></button>
+          <button class="btn ghost" id="btn-about" title="About and sources" aria-label="About and sources"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></button>
           <button class="btn ghost" id="btn-help" title="Shortcuts (?)" aria-label="Shortcuts">?</button>
         </div>
       </header>
@@ -151,6 +152,7 @@
             </div>
           </div>
           <ol class="stages" id="stages"></ol>
+          <button class="link lesson-sources" data-about>Algorithm sources</button>
         </div>
       </aside>
     </div>
@@ -171,6 +173,40 @@
       </div>
       <p class="muted small">Drag any sticker to turn its layer. On the 3×3 and 4×4, grab an inner row to turn a slice; on the Pyraminx, grab a tip to turn just the tip. Drag empty space to look around; scroll or pinch to zoom.</p>
       <form method="dialog"><button class="btn grow">Got it</button></form>
+    </dialog>
+
+    <dialog id="about" class="about">
+      <h2>About Rubik’s Lab</h2>
+      <p>A playground for the 2×2, 3×3, 4×4 and 5×5 cubes and the Pyraminx: turn them, paint in a real puzzle, get the shortest solution, or learn to solve them yourself on the <b>Learn</b> tab.</p>
+      <h3>Sources</h3>
+      <p class="muted small">The lessons follow these well-known methods; the explanations, stage breakdowns and simplifications (such as two-look CMLL) are written for this app. Algorithms come from the lists below, and every one is checked by simulation against random scrambles.</p>
+      <h4>Beginner methods</h4>
+      <dl class="sources">
+        <dt>3×3 · layer by layer</dt>
+        <dd><a href="https://ruwix.com/the-rubiks-cube/how-to-solve-the-rubiks-cube-beginners-method/" target="_blank" rel="noopener">Ruwix</a></dd>
+        <dt>2×2 · layer by layer</dt>
+        <dd><a href="http://www.rubiksplace.com/cubes/2x2/" target="_blank" rel="noopener">rubiksplace.com</a> · <a href="https://puzzlcrate.com/how-to-solve-a-2x2-rubiks-cube/" target="_blank" rel="noopener">PuzzlCrate</a></dd>
+        <dt>4×4 · reduction</dt>
+        <dd><a href="https://www.cubeskills.com/uploads/pdf/tutorials/beginners-method-for-solving-the-4x4-cube.pdf" target="_blank" rel="noopener">CubeSkills</a> · <a href="https://ruwix.com/twisty-puzzles/4x4x4-rubiks-cube-rubiks-revenge/" target="_blank" rel="noopener">Ruwix</a> · <a href="https://ruwix.com/twisty-puzzles/4x4x4-rubiks-cube-rubiks-revenge/parity/" target="_blank" rel="noopener">Ruwix parity</a></dd>
+        <dt>5×5 · reduction</dt>
+        <dd><a href="https://www.cubeskills.com/uploads/pdf/tutorials/beginners-method-for-solving-the-5x5-cube.pdf" target="_blank" rel="noopener">CubeSkills</a> · <a href="https://www.cubeskills.com/uploads/pdf/tutorials/last-2-edges-algorithms-5x5.pdf" target="_blank" rel="noopener">CubeSkills last 2 edges</a></dd>
+        <dt>Pyraminx · layer by layer</dt>
+        <dd><a href="https://www.speedsolving.com/threads/beginners-pyraminx-tutorial-lbl.75619/" target="_blank" rel="noopener">Speedsolving tutorial</a> · <a href="https://www.speedsolving.com/wiki/index.php/Pyraminx_algorithms" target="_blank" rel="noopener">Speedsolving wiki</a></dd>
+      </dl>
+      <h4>3×3 speedcubing methods, algorithms and solver</h4>
+      <dl class="sources">
+        <dt>CFOP</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/CFOP_method" target="_blank" rel="noopener">Speedsolving wiki</a></dd>
+        <dt>Roux</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/Roux_method" target="_blank" rel="noopener">Speedsolving wiki</a> · <a href="https://www.speedsolving.com/wiki/index.php/CMLL" target="_blank" rel="noopener">CMLL</a> · <a href="https://www.speedsolving.com/wiki/index.php/LSE" target="_blank" rel="noopener">LSE</a></dd>
+        <dt>ZZ</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/ZZ_method" target="_blank" rel="noopener">Speedsolving wiki</a> · <a href="https://www.speedsolving.com/wiki/index.php/OCLL" target="_blank" rel="noopener">OCLL</a></dd>
+        <dt>OLL and PLL algorithms</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/OLL" target="_blank" rel="noopener">Speedsolving OLL</a> · <a href="https://www.speedsolving.com/wiki/index.php/PLL" target="_blank" rel="noopener">Speedsolving PLL</a> · <a href="https://speedcubedb.com/a/3x3/PLL" target="_blank" rel="noopener">SpeedCubeDB PLL</a></dd>
+        <dt>Shortest solutions</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/Kociemba%27s_Algorithm" target="_blank" rel="noopener">Kociemba’s algorithm</a> · <a href="http://kociemba.org/cube.htm" target="_blank" rel="noopener">kociemba.org</a></dd>
+      </dl>
+      <form method="dialog"><button class="btn grow">Close</button></form>
     </dialog>
 
     <script type="module" src="/src/main.ts"></script>
