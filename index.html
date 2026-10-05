@@ -38,6 +38,9 @@
           <button role="tab" data-mode="paint">
             <svg viewBox="0 0 24 24"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9 15l.2-3z"/><path d="M9 15c-3 0-4 2-4 4s-1.5 2-3 2c4 1 9 0 9-4"/></svg>Paint
           </button>
+          <button id="btn-scan" class="hidden" title="Scan your cube with the camera">
+            <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>Scan
+          </button>
         </div>
 
         <section class="mode-play">
@@ -81,6 +84,13 @@
         </div>
         <div class="net" id="net"></div>
         <div class="net rings hidden" id="rings"></div>
+        <div class="label-row">
+          <span class="eyebrow">Cube colors</span>
+          <span class="map-switch" id="cube-kind" role="tablist" aria-label="Cube colors">
+            <button role="tab" data-kind="typical" title="Navy blue and deep green">Typical</button>
+            <button role="tab" data-kind="bright" title="Sky blue and lime green, like many stickerless cubes">Bright</button>
+          </span>
+        </div>
         <div class="status" id="status"></div>
       </aside>
 
@@ -107,7 +117,7 @@
         <div class="solution empty" id="solution">
           <div class="sol-empty">
             <div class="sol-empty-art" aria-hidden="true"><i></i><i></i><i></i></div>
-            <p>Scramble the puzzle, paint your own, or turn it by hand — then hit <b>Solve</b>.</p>
+            <p>Scramble the puzzle, paint or scan your own, or turn it by hand — then hit <b>Solve</b>.</p>
           </div>
           <div class="methods" id="methods" role="tablist" aria-label="Method"></div>
           <div class="lesson-intro" id="lesson-intro"></div>

@@ -1,11 +1,13 @@
 import './style.css';
-import type { Guide, GuideStep, Puzzle, State } from './core/types';
+import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
+import type { Guide, GuideStep, Puzzle, State, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { countMoves, stepMoves } from './cube/lessonKit';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 import { RingView } from './view/rings';
+import { Scanner } from './view/scanner';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -79,6 +81,7 @@ const mapHandlers = (self: () => Linked) => ({
 const net: NetView = new NetView($('#net'), mapHandlers(() => net));
 const rings: RingView = new RingView($('#rings'), mapHandlers(() => rings));
 const maps = [net, rings];
+const scanner = new Scanner({ onDone: loadScan, onError: (message) => toast(message, 'bad') });
 type MapKind = 'net' | 'rings';
 let mapKind: MapKind = 'net';
 try { if (localStorage.getItem('map') === 'rings') mapKind = 'rings'; } catch { /* storage unavailable */ }
@@ -266,13 +269,8 @@ async function switchPuzzle(p: Puzzle) {
   puzzle.cancelSolve();
   puzzle = p;
   session = sessions.get(p.id)!;
-  document.querySelectorAll<HTMLButtonElement>('.puzzle-switch button').forEach((b) => {
-    const on = b.dataset.puzzle === p.id;
-    b.classList.toggle('active', on);
-    b.setAttribute('aria-selected', String(on));
-    // on a phone the tabs scroll sideways
-    if (on) b.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  });
+  // on a phone the tabs scroll sideways
+  selectTab('.puzzle-switch button', 'puzzle', p.id)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   document.body.dataset.puzzle = p.id;
   $('#btn-flip').classList.toggle('hidden', !p.parseMove('z2'));
   view.setPuzzle(p, session.state);
@@ -283,6 +281,8 @@ async function switchPuzzle(p: Puzzle) {
   $('#alg-error').textContent = '';
   $('.mode-paint .intro').innerHTML = p.paintIntroHtml;
   $('#puzzle-shortcuts').innerHTML = p.shortcutsHtml;
+  $('#btn-scan').classList.toggle('hidden', !p.scan);
+  renderCubeKind();
   paintColor = p.paletteOrder[0];
   setMode(mode);
   renderHistory();
@@ -364,17 +364,71 @@ async function startSolve() {
 function checkValid() {
   const v = puzzle.validate(session.state);
   if (!v.ok) {
-    const bad = v.stickers;
-    if (bad) {
-      view.setHighlight(bad);
-      view.flashHighlight();
-      maps.forEach((m) => m.flash(bad));
-    }
-    toast(v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message, 'bad');
-    if (mode !== 'paint') setMode('paint');
+    showInvalid(v);
     return false;
   }
   return true;
+}
+
+/** Point out what's wrong with the puzzle and open paint mode to fix it. */
+function showInvalid(v: Validation & { ok: false }, prefix = '') {
+  const bad = v.stickers;
+  if (bad) {
+    view.setHighlight(bad);
+    view.flashHighlight();
+    maps.forEach((m) => m.flash(bad));
+  }
+  toast(prefix + (v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message), 'bad');
+  if (mode !== 'paint') setMode('paint');
+}
+
+// ---------- scanning ----------
+
+async function startScan() {
+  queue.length = 0;
+  await idle();
+  void scanner.open(puzzle);
+}
+
+/** Draw the puzzles the way they look: a bright stickerless one in its sky blue and lime green. */
+function setCubeKind(kind: CubeKind) {
+  if (kind === cubeKind()) return;
+  useCubeColors(kind);
+  try { localStorage.setItem('cubeKind', kind); } catch { /* storage unavailable */ }
+  maps.forEach((m) => m.setPuzzle(puzzle));
+  buildMovepad();
+  renderCubeKind();
+  view.setState(session.state);
+  onStateChanged();
+}
+
+function renderCubeKind() {
+  selectTab('#cube-kind button', 'kind', cubeKind());
+}
+
+/** Mark the tab whose `data-<key>` is `value` as selected, and return it. */
+function selectTab(selector: string, key: string, value: string) {
+  let active: HTMLButtonElement | undefined;
+  document.querySelectorAll<HTMLButtonElement>(selector).forEach((b) => {
+    const on = b.dataset[key] === value;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+    if (on) active = b;
+  });
+  return active;
+}
+
+function loadScan(state: State, kind: CubeKind) {
+  setCubeKind(kind);
+  setStateDirect(state);
+  const v = puzzle.validate(session.state);
+  if (!v.ok) {
+    showInvalid(v, 'Scanned, but some colors need fixing: ');
+    return;
+  }
+  setMode('play');
+  if (puzzle.isSolved(session.state)) toast('Scanned — your cube is already solved', 'good');
+  else toast('Scanned — hit Solve to find the way home', 'good');
 }
 
 /** Walk through solving the puzzle as it is now (scrambling it first if it's solved). */
@@ -531,11 +585,7 @@ function renderMapKind() {
   const hasRings = !!puzzle.rings;
   const k = hasRings ? mapKind : 'net';
   $('#map-switch').classList.toggle('hidden', !hasRings);
-  document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) => {
-    const on = b.dataset.map === k;
-    b.classList.toggle('active', on);
-    b.setAttribute('aria-selected', String(on));
-  });
+  selectTab('#map-switch button', 'map', k);
   $('#net').classList.toggle('hidden', k !== 'net');
   $('#rings').classList.toggle('hidden', k !== 'rings');
   $('#net-hint').textContent = mode === 'paint' ? 'Tap to paint' : k === 'rings' ? 'Drag a dot to turn' : 'Drag a sticker to turn';
@@ -908,11 +958,15 @@ function bind() {
     b.addEventListener('click', () => void switchPuzzle(p));
     $('.puzzle-switch').append(b);
   }
+  $('#btn-scan').addEventListener('click', () => void startScan());
   document.querySelectorAll<HTMLButtonElement>('#mode-seg button').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
   );
   document.querySelectorAll<HTMLButtonElement>('#map-switch button').forEach((b) =>
     b.addEventListener('click', () => setMapKind(b.dataset.map as MapKind)),
+  );
+  document.querySelectorAll<HTMLButtonElement>('#cube-kind button').forEach((b) =>
+    b.addEventListener('click', () => setCubeKind(b.dataset.kind as CubeKind)),
   );
   $('#btn-scramble').addEventListener('click', scramble);
   $('#btn-reset').addEventListener('click', () => {
@@ -1007,7 +1061,7 @@ function bind() {
   window.addEventListener('keydown', (e) => {
     const target = e.target as HTMLElement;
     if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'text') return;
-    if (document.querySelector('dialog[open]')) return;
+    if (document.querySelector('dialog[open]') || scanner.isOpen) return;
     const k = e.key;
     if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ') {
       e.preventDefault();
@@ -1049,6 +1103,7 @@ else {
     initial = PUZZLES.find((p) => p.id === localStorage.getItem('puzzle')) ?? cube3;
   } catch { /* storage unavailable */ }
 }
+try { if (localStorage.getItem('cubeKind') === 'bright') useCubeColors('bright'); } catch { /* storage unavailable */ }
 bind();
 puzzle = initial === cube3 ? pyraminx : cube3; // force switchPuzzle to run
 void switchPuzzle(initial).then(() => {
