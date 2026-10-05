@@ -755,7 +755,7 @@ function renderLearn() {
   $('#lesson-intro').innerHTML = `
     <p><b>${guide.name}.</b> ${guide.intro}</p>
     <p class="muted small">Moves use standard notation: ${puzzle.notationHtml}${guide.notation ? ' ' + guide.notation : ''}</p>
-    <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along. <button class="link" data-about>Where the methods come from</button></p>`;
+    <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along.</p>`;
   if (solution?.lesson) {
     renderLesson();
     renderPlayback();

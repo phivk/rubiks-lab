@@ -142,6 +142,7 @@
             </div>
           </div>
           <ol class="stages" id="stages"></ol>
+          <button class="link lesson-sources" data-about>Algorithm sources</button>
         </div>
       </aside>
     </div>
@@ -167,38 +168,33 @@
     <dialog id="about" class="about">
       <h2>About Rubik’s Lab</h2>
       <p>A playground for the 2×2, 3×3, 4×4 and 5×5 cubes and the Pyraminx: turn them, paint in a real puzzle, get the shortest solution, or learn to solve them yourself on the <b>Learn</b> tab.</p>
-      <h3>Where the beginner methods come from</h3>
-      <p class="muted small">Each lesson follows a well-known beginner’s method; the explanations are written for this app, and every algorithm is checked by simulation against random scrambles.</p>
+      <h3>Sources</h3>
+      <p class="muted small">The lessons follow these well-known methods; the explanations, stage breakdowns and simplifications (such as two-look CMLL) are written for this app. Algorithms come from the lists below, and every one is checked by simulation against random scrambles.</p>
+      <h4>Beginner methods</h4>
       <dl class="sources">
-        <dt>2×2 — layer by layer</dt>
-        <dd>First layer with <code>R U R' U'</code>, the top with the Sune (<code>R U R' U R U2 R'</code>), then <code>R' F R' B2 R F' R' B2 R2</code> with the headlights at the back.
-          <ul>
-            <li><a href="http://www.rubiksplace.com/cubes/2x2/" target="_blank" rel="noopener">How to Solve a 2x2 Rubik’s Cube — rubiksplace.com</a></li>
-            <li><a href="https://puzzlcrate.com/how-to-solve-a-2x2-rubiks-cube/" target="_blank" rel="noopener">Beginner’s Guide: How To Solve The 2x2 — PuzzlCrate</a></li>
-          </ul>
-        </dd>
-        <dt>4×4 — reduction</dt>
-        <dd>Centers, edge pairing, the 3×3 stage, and OLL and PLL parity.
-          <ul>
-            <li><a href="https://www.cubeskills.com/uploads/pdf/tutorials/beginners-method-for-solving-the-4x4-cube.pdf" target="_blank" rel="noopener">Beginner’s Method for Solving the 4x4 Cube — CubeSkills</a></li>
-            <li><a href="https://ruwix.com/twisty-puzzles/4x4x4-rubiks-cube-rubiks-revenge/" target="_blank" rel="noopener">How To Solve The 4x4x4 Rubik’s Cube — Ruwix</a></li>
-            <li><a href="https://ruwix.com/twisty-puzzles/4x4x4-rubiks-cube-rubiks-revenge/parity/" target="_blank" rel="noopener">4x4 Parity Cases — Ruwix</a></li>
-          </ul>
-        </dd>
-        <dt>5×5 — reduction</dt>
-        <dd>Centers, edge pairing, the last two edges and edge parity, then the 3×3 stage.
-          <ul>
-            <li><a href="https://www.cubeskills.com/uploads/pdf/tutorials/beginners-method-for-solving-the-5x5-cube.pdf" target="_blank" rel="noopener">Beginner’s Method for Solving the 5x5 Cube — CubeSkills</a></li>
-            <li><a href="https://www.cubeskills.com/uploads/pdf/tutorials/last-2-edges-algorithms-5x5.pdf" target="_blank" rel="noopener">5x5 Last Two Edges Algorithms — CubeSkills</a></li>
-          </ul>
-        </dd>
-        <dt>Pyraminx — layer by layer</dt>
-        <dd>Tips, bottom centers, bottom edges, then one of five last-layer algorithms.
-          <ul>
-            <li><a href="https://www.speedsolving.com/threads/beginners-pyraminx-tutorial-lbl.75619/" target="_blank" rel="noopener">Beginner’s Pyraminx Tutorial [LBL] — Speedsolving.com</a></li>
-            <li><a href="https://www.speedsolving.com/wiki/index.php/Pyraminx_algorithms" target="_blank" rel="noopener">Pyraminx algorithms — Speedsolving.com Wiki</a></li>
-          </ul>
-        </dd>
+        <dt>3×3 · layer by layer</dt>
+        <dd><a href="https://ruwix.com/the-rubiks-cube/how-to-solve-the-rubiks-cube-beginners-method/" target="_blank" rel="noopener">Ruwix</a></dd>
+        <dt>2×2 · layer by layer</dt>
+        <dd><a href="http://www.rubiksplace.com/cubes/2x2/" target="_blank" rel="noopener">rubiksplace.com</a> · <a href="https://puzzlcrate.com/how-to-solve-a-2x2-rubiks-cube/" target="_blank" rel="noopener">PuzzlCrate</a></dd>
+        <dt>4×4 · reduction</dt>
+        <dd><a href="https://www.cubeskills.com/uploads/pdf/tutorials/beginners-method-for-solving-the-4x4-cube.pdf" target="_blank" rel="noopener">CubeSkills</a> · <a href="https://ruwix.com/twisty-puzzles/4x4x4-rubiks-cube-rubiks-revenge/" target="_blank" rel="noopener">Ruwix</a> · <a href="https://ruwix.com/twisty-puzzles/4x4x4-rubiks-cube-rubiks-revenge/parity/" target="_blank" rel="noopener">Ruwix parity</a></dd>
+        <dt>5×5 · reduction</dt>
+        <dd><a href="https://www.cubeskills.com/uploads/pdf/tutorials/beginners-method-for-solving-the-5x5-cube.pdf" target="_blank" rel="noopener">CubeSkills</a> · <a href="https://www.cubeskills.com/uploads/pdf/tutorials/last-2-edges-algorithms-5x5.pdf" target="_blank" rel="noopener">CubeSkills last 2 edges</a></dd>
+        <dt>Pyraminx · layer by layer</dt>
+        <dd><a href="https://www.speedsolving.com/threads/beginners-pyraminx-tutorial-lbl.75619/" target="_blank" rel="noopener">Speedsolving tutorial</a> · <a href="https://www.speedsolving.com/wiki/index.php/Pyraminx_algorithms" target="_blank" rel="noopener">Speedsolving wiki</a></dd>
+      </dl>
+      <h4>3×3 speedcubing methods, algorithms and solver</h4>
+      <dl class="sources">
+        <dt>CFOP</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/CFOP_method" target="_blank" rel="noopener">Speedsolving wiki</a></dd>
+        <dt>Roux</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/Roux_method" target="_blank" rel="noopener">Speedsolving wiki</a> · <a href="https://www.speedsolving.com/wiki/index.php/CMLL" target="_blank" rel="noopener">CMLL</a> · <a href="https://www.speedsolving.com/wiki/index.php/LSE" target="_blank" rel="noopener">LSE</a></dd>
+        <dt>ZZ</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/ZZ_method" target="_blank" rel="noopener">Speedsolving wiki</a> · <a href="https://www.speedsolving.com/wiki/index.php/OCLL" target="_blank" rel="noopener">OCLL</a></dd>
+        <dt>OLL and PLL algorithms</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/OLL" target="_blank" rel="noopener">Speedsolving OLL</a> · <a href="https://www.speedsolving.com/wiki/index.php/PLL" target="_blank" rel="noopener">Speedsolving PLL</a> · <a href="https://speedcubedb.com/a/3x3/PLL" target="_blank" rel="noopener">SpeedCubeDB PLL</a></dd>
+        <dt>Shortest solutions</dt>
+        <dd><a href="https://www.speedsolving.com/wiki/index.php/Kociemba%27s_Algorithm" target="_blank" rel="noopener">Kociemba’s algorithm</a> · <a href="http://kociemba.org/cube.htm" target="_blank" rel="noopener">kociemba.org</a></dd>
       </dl>
       <form method="dialog"><button class="btn grow">Close</button></form>
     </dialog>
