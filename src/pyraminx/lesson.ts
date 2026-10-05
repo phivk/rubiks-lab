@@ -13,7 +13,7 @@
 // "lift the slot, turn the top, put it back".
 
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
-import { alg } from '../cube/lessonKit';
+import { alg, lessonNotes } from '../cube/lessonKit';
 import { CENTER, COLORS, COLOR_NAMES, EDGE_PAIRS, TIP, VERTEX_NAMES, apply, applyAll, invertMove, piecesOf, solved, stickers } from './model';
 
 const SOLVED = solved();
@@ -106,6 +106,8 @@ function partner(i: number) {
 }
 
 export function pyraminxGuide(): Guide {
+  let notes = lessonNotes();
+
   // ---------- 1. tips ----------
 
   function tips(s: State, steps: GuideStep[]) {
@@ -122,18 +124,19 @@ export function pyraminxGuide(): Guide {
         s = apply(s, m);
       }
     }
+    const hold = `<p>Hold the Pyraminx with the ${name(YELLOW)} side down and the ${name(0)} side toward you, and keep holding it that way.</p>`;
     if (phrases.length) {
       steps.push({
         stage: 0,
         title: 'Turn the tips',
-        html: `<p>Hold the Pyraminx with the ${name(YELLOW)} side down and the ${name(0)} side toward you, and keep holding it that way.</p>` +
+        html: hold +
           `<p>The four tips turn on their own and never disturb anything else, so start with them: turn each one until its colors match the three-colored center piece right below it. ` +
           `Lowercase moves turn just a tip: <code>u</code>, <code>l</code>, <code>r</code> and <code>b</code>.</p>` +
           `<p>From now on the tips turn along with their centers, so they stay matched.</p>`,
         phrases,
         focus: focusPieces([0, 1, 2, 3].flatMap((v) => [TIP(v), CENTER(v)])),
       });
-    }
+    } else notes.add(steps, hold);
     return s;
   }
 
@@ -271,12 +274,13 @@ export function pyraminxGuide(): Guide {
     stages: STAGES,
     steps: (state) => {
       const steps: GuideStep[] = [];
+      notes = lessonNotes();
       let s = tips(state, steps);
       s = centers(s, steps);
       s = bottomEdges(s, steps);
       s = topLayer(s, steps);
       if (!allHome(s)) throw new Error('pyraminx guide: not solved');
-      return steps;
+      return notes.place(steps);
     },
   };
 }

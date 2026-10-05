@@ -77,7 +77,7 @@ export function beginner2Guide(M: CubeModel): Guide {
     const placed = placedFor(ref);
     const intro = `<p>A 2×2 has no centers to tell you which color goes where, so pick one white corner and build around it. ` +
         `Here that’s the ${piece(ref)} corner: hold the cube so it’s on the bottom with white facing down${start.r.length ? '' : ' (it already is)'}.</p>` +
-        (start.done > 1 ? `<p>${start.done} white corners already sit around it the right way, so that’s a head start.</p>` : '') +
+        (start.done > 1 ? `<p>${start.done - 1 === 1 ? 'Another white corner already sits' : `${start.done - 1} white corners already sit`} around it the right way, so that’s a head start.</p>` : '') +
         `<p>Every other corner goes in to match this one: its side colors decide the colors of the sides.</p>`;
     // with nothing to turn, the introduction goes on the first corner's step instead
     if (start.r.length) {
