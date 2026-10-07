@@ -55,6 +55,10 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   grid-column: 1 / -1;
   position: relative;
   min-height: 0;
+  /* long-press or drag on the 3D view shouldn't select it or open the callout */
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
 .topbar {

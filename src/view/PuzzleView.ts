@@ -157,6 +157,8 @@ export class PuzzleView {
     el.addEventListener('pointermove', this.onPointerMove);
     el.addEventListener('pointerup', this.onPointerUp);
     el.addEventListener('pointercancel', this.onPointerUp);
+    // a long press would otherwise open the context menu (Android, desktop right-click)
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('pointerleave', () => {
       this.hoverAt = null;
       this.setHover(-1);
