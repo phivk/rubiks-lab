@@ -145,8 +145,10 @@ export interface TutorialStep {
   /** the explanation, as HTML */
   html: string;
   groups: { name: string; about?: string; cases: TutorialCase[] }[];
-  /** a case's picture, as SVG markup */
-  diagram: (c: TutorialCase) => string;
+  /** how a case is pictured: the puzzle from its usual angle, or its top from above */
+  view: 'corner' | 'top';
+  /** arrows on a case's picture, from sticker to sticker */
+  arrows?: (c: TutorialCase) => [number, number][];
   /** the stickers to keep lit on the 3D cube while a case plays, for any state, if not all */
   focus?: (s: State) => number[];
 }

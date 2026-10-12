@@ -559,7 +559,7 @@ body.tutorial .panel.tutorial { display: flex; }
   font-size: 10.5px; padding: 0; background: none; color: var(--text-2); white-space: normal; line-height: 1.35;
 }
 .diagram { stroke: none; stroke-width: 0; }
-.diagram .arrows { color: #0b0d12; }
+.diagram .arrows { fill: #0b0d12; stroke: #0b0d12; stroke-width: 0.09; stroke-linecap: round; stroke-linejoin: round; }
 .case-card { display: flex; flex-direction: column; gap: 10px; }
 .case-card p { margin: 0; }
 .case-big { display: flex; justify-content: center; padding: 4px 0; }

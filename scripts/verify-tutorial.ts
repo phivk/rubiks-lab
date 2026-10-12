@@ -1,7 +1,7 @@
 // Checks the CFOP tutorial: every algorithm solves its case's setup (the stickers it shows end
 // up home, and the blanked ones are only ones it doesn't show), each stage's setups keep
 // the earlier stages solved and need this one, the F2L cases are all different and cover all
-// 41, and every picture draws.
+// 41, and the PLL arrows join top stickers.
 import { lessonKit, U_TURNS } from '../src/cube/lessonKit';
 import { CubeModel, invertAlg, UNSET } from '../src/cube/model';
 import { cfopTutorial } from '../src/cube/tutorial';
@@ -28,7 +28,9 @@ for (const step of T.steps) {
       const end = K.apply(c.setup, c.moves);
       if (end.some((x, i) => x !== UNSET && x !== home[i])) fail(`${c.name}: doesn't solve its setup`);
       if (M.isSolved(full)) fail(`${c.name}: already solved`);
-      if (!step.diagram(c).startsWith('<svg')) fail(`${c.name}: no picture`);
+      const tops = new Set(['UF', 'UR', 'UB', 'UL', 'UFR', 'URB', 'UBL', 'ULF'].map((slot) => K.at(slot, 'U')));
+      const arrows = step.arrows?.(c) ?? [];
+      if (step === pll && (!arrows.length || arrows.some(([a, b]) => a === b || !tops.has(a) || !tops.has(b)))) fail(`${c.name}: bad arrows`);
       if (step.focus && !step.focus(c.setup).length) fail(`${c.name}: nothing in focus`);
       for (const m of c.moves) if (!M.parseMove(m)) fail(`${c.name}: bad move ${m}`);
       if (step === cross && !same(full, K.stickersOf('DR').concat(K.stickersOf('DB'), K.stickersOf('DL')))) fail(`${c.name}: moves another cross edge`);

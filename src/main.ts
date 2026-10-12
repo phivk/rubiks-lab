@@ -1,6 +1,6 @@
 import './style.css';
 import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
-import type { Guide, GuideStep, Puzzle, State, Validation } from './core/types';
+import type { Guide, GuideStep, Puzzle, State, TutorialCase, TutorialStep, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { countMoves, stepMoves } from './cube/lessonKit';
 import { pyraminx } from './pyraminx/puzzle';
@@ -8,6 +8,7 @@ import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 import { RingView } from './view/rings';
 import { Scanner } from './view/scanner';
+import { snapshot } from './view/snapshot';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -932,6 +933,9 @@ let tutRendered = '';
 
 const sameCase = (a: CaseRef, b: CaseRef) => a.step === b.step && a.group === b.group && a.index === b.index;
 
+/** a case's picture, drawn as the 3D view draws the puzzle */
+const diagram = (step: TutorialStep, c: TutorialCase) => snapshot(puzzle, c.setup, step.view, step.arrows?.(c));
+
 /** every case of the tutorial in order, to go from one to the next */
 function caseOrder(): CaseRef[] {
   return puzzle.tutorial!.steps.flatMap((st, step) => st.groups.flatMap((g, group) => g.cases.map((_, index) => ({ step, group, index }))));
@@ -976,7 +980,7 @@ function renderTutorial(fresh: boolean) {
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${step.diagram(c)}<span class="case-name">${c.name}</span><code class="case-alg">${c.moves.join(' ')}</code>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span><code class="case-alg">${c.moves.join(' ')}</code>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
@@ -1015,7 +1019,7 @@ function renderCaseCard() {
   el.innerHTML = `
     <div class="lesson-head"><span class="eyebrow">${step.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
     <div class="lesson-title">${c.name}</div>
-    <div class="case-big">${step.diagram(c)}</div>
+    <div class="case-big">${diagram(step, c)}</div>
     ${c.note ? `<div class="lesson-text"><p>${c.note}</p></div>` : ''}
     ${solution!.stale ? '<div class="lesson-stale">You turned the cube, so it no longer shows this case. <button class="link" data-act="reset">Set it up again</button></div>' : ''}
     <div class="lesson-nav">

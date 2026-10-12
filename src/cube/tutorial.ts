@@ -12,7 +12,6 @@
 // cases are all different and cover all 41, and each stage's setups leave the earlier
 // stages alone.
 
-import { COLORS } from '../core/colors';
 import type { State, Tutorial, TutorialCase, TutorialStep } from '../core/types';
 import { OLL, PLL } from './algs';
 import { CFOP_STAGES } from './cfop';
@@ -51,8 +50,6 @@ const OLL_GROUPS = [
 ];
 const PLL_GROUPS = ['only edges move', 'only corners move', 'two neighbouring corners swap', 'two opposite corners swap'];
 
-const GRAY = '#3a3f4c';
-const DARK = '#0d0f14';
 
 export function cfopTutorial(M: CubeModel): Tutorial {
   if (M.n !== 3) throw new Error('the CFOP tutorial is for the 3×3');
@@ -83,93 +80,15 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   const centers = [...'UDFRBL'].map((f) => at(f, f));
   const TOP = [...TOP_EDGES, ...TOP_CORNERS];
   const focusTop = () => [at('U', 'U'), ...TOP.flatMap((slot) => stickersOf(slot))];
-  const color = (s: State, i: number) => (s[i] === UNSET ? GRAY : COLORS[s[i]]);
 
-  // ---------- diagrams ----------
-
-  const poly = (pts: [number, number][], fill: string) =>
-    `<polygon points="${pts.map(([x, y]) => `${+x.toFixed(3)},${+y.toFixed(3)}`).join(' ')}" fill="${fill}"/>`;
-
-  /**
-   * The cube from above the front-right corner: the top, front and right faces, with the back
-   * and left stickers of the top layer folded out flat.
-   */
-  function isoView(s: State) {
-    const P = ([x, y, z]: number[]): [number, number] => [(x - z) * 0.866, (x + z) * 0.5 - y];
-    const letter = (v: number, plus: string, minus: string) => (v === 1 ? plus : v === -1 ? minus : '');
-    const fill = (i: number) => color(s, i);
-    const h = 0.44;
-    const out: string[] = [];
-    // body outline
-    out.push(poly([[-1.5, 1.5, -1.5], [1.5, 1.5, -1.5], [1.5, -1.5, -1.5], [1.5, -1.5, 1.5], [-1.5, -1.5, 1.5], [-1.5, 1.5, 1.5]].map(P), DARK));
-    for (const a of [-1, 0, 1]) for (const b of [-1, 0, 1]) {
-      // top: x = a, z = b
-      out.push(poly([[a - h, 1.5, b - h], [a + h, 1.5, b - h], [a + h, 1.5, b + h], [a - h, 1.5, b + h]].map(P),
-        fill(at('U' + letter(a, 'R', 'L') + letter(b, 'F', 'B'), 'U'))));
-      // front: x = a, y = b
-      out.push(poly([[a - h, b - h, 1.5], [a + h, b - h, 1.5], [a + h, b + h, 1.5], [a - h, b + h, 1.5]].map(P),
-        fill(at('F' + letter(b, 'U', 'D') + letter(a, 'R', 'L'), 'F'))));
-      // right: y = a, z = b
-      out.push(poly([[1.5, a - h, b - h], [1.5, a + h, b - h], [1.5, a + h, b + h], [1.5, a - h, b + h]].map(P),
-        fill(at('R' + letter(a, 'U', 'D') + letter(b, 'F', 'B'), 'R'))));
-    }
-    // the top layer's back and left stickers, folded out
-    for (const a of [-1, 0, 1]) {
-      out.push(poly([[a - h, 1.5, -1.62], [a + h, 1.5, -1.62], [a + h, 1.5, -1.95], [a - h, 1.5, -1.95]].map(P),
-        fill(at('UB' + letter(a, 'R', 'L'), 'B'))));
-      out.push(poly([[-1.62, 1.5, a - h], [-1.62, 1.5, a + h], [-1.95, 1.5, a + h], [-1.95, 1.5, a - h]].map(P),
-        fill(at('UL' + letter(a, 'F', 'B'), 'L'))));
-    }
-    return `<svg class="diagram" viewBox="-3.15 -3.75 6.3 6.9" role="img">${out.join('')}</svg>`;
-  }
-
-  /** The top from above, with the top layer's side stickers around it; PLLs add arrows. */
-  function topView(s: State, kind: 'oll' | 'pll') {
-    const T = 0.36, G = 0.1, O = T + G;
-    const W = 2 * O + 3;
-    const fill = (i: number) => color(s, i);
-    const rect = (x: number, y: number, w: number, hh: number, i: number) =>
-      `<rect x="${x + 0.05}" y="${y + 0.05}" width="${w - 0.1}" height="${hh - 0.1}" rx="0.1" fill="${fill(i)}"/>`;
-    const row = (r: number) => (r === 0 ? 'B' : r === 2 ? 'F' : '');
-    const col = (c: number) => (c === 0 ? 'L' : c === 2 ? 'R' : '');
-    const out = [`<rect x="${O - 0.04}" y="${O - 0.04}" width="3.08" height="3.08" rx="0.14" fill="${DARK}"/>`];
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) out.push(rect(O + c, O + r, 1, 1, at('U' + row(r) + col(c), 'U')));
-    for (let k = 0; k < 3; k++) {
-      out.push(rect(O + k, 0, 1, T, at('UB' + col(k), 'B')));
-      out.push(rect(O + k, O + 3 + G, 1, T, at('UF' + col(k), 'F')));
-      out.push(rect(0, O + k, T, 1, at('UL' + row(k), 'L')));
-      out.push(rect(O + 3 + G, O + k, T, 1, at('UR' + row(k), 'R')));
-    }
-    if (kind === 'pll') out.push(...pllArrows(s, O));
-    return `<svg class="diagram" viewBox="0 0 ${W} ${W}" role="img">${out.join('')}</svg>`;
-  }
-
-  /** An arrow from each top piece to its spot (one with two heads for a swap). */
-  function pllArrows(s: State, O: number) {
-    const cell = (slot: string): [number, number] => [O + 1.5 + (slot.includes('R') ? 1 : slot.includes('L') ? -1 : 0), O + 1.5 + (slot.includes('F') ? 1 : slot.includes('B') ? -1 : 0)];
-    const goes = new Map<string, string>();
+  /** An arrow from each top piece to its spot, as top stickers: where it is, where it goes. */
+  function pllArrows(s: State): [number, number][] {
+    const out: [number, number][] = [];
     for (const slot of TOP) {
       const to = TOP.find((h) => h.length === slot.length && sameSet(colorsAt(s, slot), [...h].map((f) => center(s, f))))!;
-      if (to !== slot) goes.set(slot, to);
+      if (to !== slot) out.push([at(slot, 'U'), at(to, 'U')]);
     }
-    const out: string[] = [];
-    const head = (x: number, y: number, dx: number, dy: number) => {
-      const w = 0.17, l = 0.3;
-      return poly([[x, y], [x - dx * l - dy * w, y - dy * l + dx * w], [x - dx * l + dy * w, y - dy * l - dx * w]], 'currentColor');
-    };
-    for (const [from, to] of goes) {
-      const swap = goes.get(to) === from;
-      if (swap && from > to) continue;
-      const [x1, y1] = cell(from), [x2, y2] = cell(to);
-      const len = Math.hypot(x2 - x1, y2 - y1), dx = (x2 - x1) / len, dy = (y2 - y1) / len;
-      // the ends, kept off the cell centers; the line stops short of each head
-      const a = [x1 + dx * 0.2, y1 + dy * 0.2], b = [x2 - dx * 0.2, y2 - dy * 0.2];
-      const back = swap ? 0.2 : 0;
-      out.push(`<line x1="${a[0] + dx * back}" y1="${a[1] + dy * back}" x2="${b[0] - dx * 0.2}" y2="${b[1] - dy * 0.2}" stroke="currentColor" stroke-width="0.09" stroke-linecap="round"/>`);
-      out.push(head(b[0], b[1], dx, dy));
-      if (swap) out.push(head(a[0], a[1], -dx, -dy));
-    }
-    return [`<g class="arrows">`, ...out, '</g>'];
+    return out;
   }
 
   // ---------- 1. cross ----------
@@ -182,7 +101,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
       <p>There’s no algorithm to learn here: the cross takes at most eight moves, and with practice you plan all of it while you inspect the cube. These examples show the usual ways to bring one edge home, the white–green one, without disturbing the others.</p>
       <p class="muted">Tip: solve the cross on the bottom from the start, even though it’s harder to see. You’ll never have to flip the cube for the next stage.</p>`,
     groups: [{ name: 'Bringing one edge home', cases: CROSS_CASES.map(([name, a, note]) => make(name, a, (s) => [...centers, ...pieceStickers(s, crossEdges)], note)) }],
-    diagram: (c) => isoView(c.setup),
+    view: 'corner',
   };
 
   // ---------- 2. F2L ----------
@@ -219,7 +138,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
       <p>Hold the slot you’re working on at the <b>front right</b>. Find its corner and edge, turn the top until they look like one of the pictures, and do its algorithm. Every case keeps the cross and the other slots.</p>
       <p>There are 41 cases, but don’t learn them by heart: they’re all built from the same few moves (<code>R U R'</code>, <code>F' U' F</code>), which join the pair in the top layer and then insert it. Watch a few on the cube and you’ll see the idea.</p>`,
     groups: f2lGroups,
-    diagram: (c) => isoView(c.setup),
+    view: 'corner',
   };
 
   // ---------- 3. OLL ----------
@@ -237,7 +156,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
       name: g,
       cases: OLL.filter((o) => o.group === g).map((o) => make(`OLL ${o.n} · ${o.name}`, o.alg, ollShown)),
     })),
-    diagram: (c) => topView(c.setup, 'oll'),
+    view: 'top',
     focus: focusTop,
   };
 
@@ -253,7 +172,8 @@ export function cfopTutorial(M: CubeModel): Tutorial {
       name: k[0].toUpperCase() + k.slice(1),
       cases: PLL.filter((p) => p.kind === k).map((p) => make(`${p.name} perm`, p.alg)),
     })),
-    diagram: (c) => topView(c.setup, 'pll'),
+    view: 'top',
+    arrows: (c) => pllArrows(c.setup),
     focus: focusTop,
   };
 
