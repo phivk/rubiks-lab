@@ -11,6 +11,7 @@ import { reductionGuide } from './reduction';
 import { ringMap } from './rings';
 import { rouxGuide } from './roux';
 import { Solver2 } from './solve2';
+import { cfopTutorial } from './tutorial';
 import { zzGuide } from './zz';
 
 const unit = (axis: number): Vec3 => [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0];
@@ -245,6 +246,7 @@ export const cube3: Puzzle = {
   algPlaceholder: "Type an algorithm… R U R' U'",
   scan: scanFaces(model3),
   guides: [beginnerGuide(model3), cfopGuide(model3), rouxGuide(model3), zzGuide(model3)],
+  tutorial: cfopTutorial(model3),
 };
 
 // ---------- 4×4 ----------

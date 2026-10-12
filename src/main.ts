@@ -38,19 +38,26 @@ interface Solution {
   stale: boolean;
   /** a lesson: the method, its moves explained step by step, and the move each step starts at */
   lesson?: { guide: Guide; steps: GuideStep[]; starts: number[] };
+  /** a tutorial case: which one */
+  tutorial?: CaseRef;
 }
+/** a tutorial case, by its step, group and place in the group */
+interface CaseRef { step: number; group: number; index: number }
 let solution: Solution | null = null;
 let playing = false;
 /** where playback last started: a lesson pauses at the end of each step */
 let playFrom = 0;
 
-/** the right panel solves the puzzle outright, or teaches how (puzzles with guides) */
-type Tab = 'solve' | 'learn';
+/** the right panel solves the puzzle outright, teaches how (puzzles with guides), or shows every case of a method (puzzles with a tutorial) */
+type Tab = 'solve' | 'learn' | 'tutorial';
 let tab: Tab = 'solve';
 /** the method the Learn tab teaches, by guide id */
 let methodId = '';
 try { methodId = localStorage.getItem('method') ?? ''; } catch { /* storage unavailable */ }
 const currentGuide = () => puzzle.guides?.find((g) => g.id === methodId) ?? puzzle.guides?.[0];
+/** the tutorial step on screen */
+let tutStep = 0;
+try { tutStep = Number(localStorage.getItem('tutorialStep')) || 0; } catch { /* storage unavailable */ }
 
 const SPEEDS = [0.35, 0.6, 1, 1.7, 3];
 let speed = 1;
@@ -398,6 +405,7 @@ function setCubeKind(kind: CubeKind) {
   maps.forEach((m) => m.setPuzzle(puzzle));
   buildMovepad();
   renderCubeKind();
+  tutRendered = '';
   view.setState(session.state);
   onStateChanged();
 }
@@ -706,14 +714,23 @@ function renderStatus() {
 
 function renderSolution(fresh = false) {
   const el = $('#solution');
+  if (tab === 'tutorial' && !puzzle.tutorial) tab = 'solve';
   const learn = tab === 'learn' && !!currentGuide();
+  const tut = tab === 'tutorial';
   el.classList.toggle('learn', learn);
+  el.classList.toggle('tutorial', tut);
+  document.body.classList.toggle('tutorial', tut);
+  $('#btn-solve').classList.toggle('hidden', tut);
   el.classList.toggle('empty', !solution);
   el.classList.toggle('stale', !!solution?.stale);
   renderTabs();
-  if (!solution?.lesson || solution.stale) view.setFocus(null);
+  if (!(solution?.lesson || solution?.tutorial) || solution.stale) view.setFocus(null);
   if (learn) {
     renderLearn();
+    return;
+  }
+  if (tut) {
+    renderTutorial(fresh);
     return;
   }
   $('.solve-label').textContent = 'Solve';
@@ -744,6 +761,13 @@ function renderSolution(fresh = false) {
     });
   });
   sub.textContent = s.searching ? 'Searching…' : 'Solve again';
+  renderChips(fresh);
+  renderPlayback();
+}
+
+/** The solution's moves as chips; clicking one jumps to after it. */
+function renderChips(fresh: boolean) {
+  const s = solution!;
   const chips = $('#chips');
   chips.replaceChildren();
   s.moves.forEach((m, i) => {
@@ -757,7 +781,6 @@ function renderSolution(fresh = false) {
     c.addEventListener('click', () => jumpTo(i + 1));
     chips.append(c);
   });
-  renderPlayback();
 }
 
 function renderPlayback() {
@@ -781,14 +804,19 @@ function renderPlayback() {
     const step = s.lesson.steps[currentStep(s)];
     view.setFocus(step && !s.stale ? step.focus(session.state) : null);
     renderStages();
-  } else followCurrentChip();
+  } else {
+    if (s.tutorial && puzzle.tutorial) view.setFocus(s.stale ? null : puzzle.tutorial.steps[s.tutorial.step].focus(session.state));
+    followCurrentChip();
+  }
 }
 
 // ---------- lessons ----------
 
 function renderTabs() {
-  $('#sol-tabs').classList.toggle('hidden', !puzzle.guides?.length);
+  $('#sol-tabs').classList.toggle('hidden', !puzzle.guides?.length && !puzzle.tutorial);
   document.querySelectorAll<HTMLButtonElement>('#sol-tabs button').forEach((b) => {
+    if (b.dataset.tab === 'learn') b.classList.toggle('hidden', !puzzle.guides?.length);
+    if (b.dataset.tab === 'tutorial') b.classList.toggle('hidden', !puzzle.tutorial);
     const on = b.dataset.tab === tab;
     b.classList.toggle('active', on);
     b.setAttribute('aria-selected', String(on));
@@ -891,6 +919,123 @@ function onStageClick(e: Event) {
   if (!li || !lesson) return;
   const k = lesson.steps.findIndex((x) => x.stage === Number(li.dataset.stage));
   if (k >= 0) jumpTo(lesson.starts[k]);
+}
+
+// ---------- tutorial ----------
+
+/** the step and cube colors the case pictures were drawn for */
+let tutRendered = '';
+
+const sameCase = (a: CaseRef, b: CaseRef) => a.step === b.step && a.group === b.group && a.index === b.index;
+
+/** every case of the tutorial in order, to go from one to the next */
+function caseOrder(): CaseRef[] {
+  return puzzle.tutorial!.steps.flatMap((st, step) => st.groups.flatMap((g, group) => g.cases.map((_, index) => ({ step, group, index }))));
+}
+
+function setTutorialStep(k: number) {
+  tutStep = k;
+  try { localStorage.setItem('tutorialStep', String(k)); } catch { /* storage unavailable */ }
+  renderSolution();
+}
+
+/** Set a case up on the cube, ready to play its algorithm. */
+async function openCase(ref: CaseRef) {
+  const T = puzzle.tutorial;
+  if (!T) return;
+  const c = T.steps[ref.step].groups[ref.group].cases[ref.index];
+  if (mode === 'paint') setMode('play');
+  queue.length = 0;
+  await idle();
+  if (tab !== 'tutorial' || puzzle.tutorial !== T) return;
+  setStateDirect(c.setup);
+  playing = false;
+  solution = { start: c.setup.slice(), moves: c.moves.slice(), index: 0, optimal: false, searching: false, elapsed: 0, stale: false, tutorial: ref };
+  tutStep = ref.step;
+  renderSolution(true);
+}
+
+function renderTutorial(fresh: boolean) {
+  const T = puzzle.tutorial!;
+  tutStep = Math.min(tutStep, T.steps.length - 1);
+  const step = T.steps[tutStep];
+  const open = solution?.tutorial;
+  const key = `${tutStep}:${cubeKind()}`;
+  if (tutRendered !== key) {
+    tutRendered = key;
+    $('#tut-steps').innerHTML = T.steps.map((st, i) =>
+      `<button role="tab" data-step="${i}" class="${i === tutStep ? 'active' : ''}" aria-selected="${i === tutStep}"><span class="num">${i + 1}</span>${st.name}</button>`).join('');
+    $('#tut-intro').innerHTML = `<div class="lesson-title">${step.goal}</div><div class="lesson-text">${step.html}</div>`;
+    $('#tut-groups').innerHTML = step.groups.map((g, gi) => `
+      <section class="tut-group">
+        <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length}</span></div>
+        ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
+        <div class="cases">${g.cases.map((c, i) => `
+          <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
+            ${step.diagram(c)}<span class="case-name">${c.name}</span><code class="case-alg">${c.moves.join(' ')}</code>
+          </button>`).join('')}</div>
+      </section>`).join('');
+    const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
+    $('#tut-nav').innerHTML =
+      (prev ? `<button class="btn small ghost" data-step="${tutStep - 1}"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>${prev.name}</button>` : '<span></span>') +
+      (next ? `<button class="btn small primary-soft" data-step="${tutStep + 1}">Next: ${next.name}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : '');
+    $('#tutorial').scrollTop = 0;
+  }
+  document.querySelectorAll<HTMLElement>('#tut-groups .case').forEach((b) => {
+    const on = !!open && sameCase(open, { step: tutStep, group: Number(b.dataset.group), index: Number(b.dataset.index) });
+    b.classList.toggle('active', on);
+  });
+  renderCaseCard();
+  if (!solution) return;
+  $('#sol-count').textContent = String(solution.moves.length);
+  $('#sol-meta').innerHTML = '';
+  renderChips(fresh);
+  renderPlayback();
+}
+
+/** The case on the cube, or how to pick one. */
+function renderCaseCard() {
+  const T = puzzle.tutorial!;
+  const el = $('#case-card');
+  const notation = `<p class="muted small">Moves use standard notation: ${puzzle.notationHtml}${T.notation ? ' ' + T.notation : ''}</p>`;
+  const ref = solution?.tutorial;
+  if (!ref) {
+    el.innerHTML = `<div class="lesson-title">${T.name} tutorial</div><p class="lesson-text">${T.intro}</p>${notation}`;
+    return;
+  }
+  const step = T.steps[ref.step];
+  const group = step.groups[ref.group];
+  const c = group.cases[ref.index];
+  const order = caseOrder();
+  const k = order.findIndex((r) => sameCase(r, ref));
+  el.innerHTML = `
+    <div class="lesson-head"><span class="eyebrow">${step.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
+    <div class="lesson-title">${c.name}</div>
+    <div class="case-big">${step.diagram(c)}</div>
+    ${c.note ? `<div class="lesson-text"><p>${c.note}</p></div>` : ''}
+    ${solution!.stale ? '<div class="lesson-stale">You turned the cube, so it no longer shows this case. <button class="link" data-act="reset">Set it up again</button></div>' : ''}
+    <div class="lesson-nav">
+      <button class="btn small ghost" data-act="prev" ${k > 0 ? '' : 'disabled'}><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous case</button>
+      <button class="btn small ghost" data-act="next" ${k < order.length - 1 ? '' : 'disabled'}>Next case<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>`;
+}
+
+function onCaseCardClick(e: Event) {
+  const b = (e.target as HTMLElement).closest<HTMLElement>('button');
+  const ref = solution?.tutorial;
+  if (!b || !ref) return;
+  const order = caseOrder();
+  const k = order.findIndex((r) => sameCase(r, ref));
+  if (b.dataset.act === 'reset') void openCase(ref);
+  else if (b.dataset.act === 'prev' && k > 0) void openCase(order[k - 1]);
+  else if (b.dataset.act === 'next' && k < order.length - 1) void openCase(order[k + 1]);
+}
+
+function onTutorialClick(e: Event) {
+  const b = (e.target as HTMLElement).closest<HTMLElement>('button');
+  if (!b) return;
+  if (b.dataset.step) setTutorialStep(Number(b.dataset.step));
+  else if (b.dataset.group) void openCase({ step: tutStep, group: Number(b.dataset.group), index: Number(b.dataset.index) });
 }
 
 /** Keep the current move in view by scrolling the chip list only, never the panel around it. */
@@ -1045,6 +1190,8 @@ function bind() {
     if (b?.dataset.method) setMethod(b.dataset.method);
   });
   $('#lesson').addEventListener('click', onLessonClick);
+  $('#tutorial').addEventListener('click', onTutorialClick);
+  $('#case-card').addEventListener('click', onCaseCardClick);
   $('#stages').addEventListener('click', onStageClick);
   $('#btn-play').addEventListener('click', togglePlay);
   $('#btn-next').addEventListener('click', () => { playing = false; stepForward(); renderPlayback(); });

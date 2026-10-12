@@ -509,6 +509,60 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .stages li.current { background: var(--accent-soft); }
 .stages li.current .num { background: var(--accent); color: #fff; }
 
+/* ---------- tutorial ---------- */
+/* the tutorial takes the left panel's place, wider, and the cube sits between the panels */
+.panel.tutorial { grid-column: 1; display: none; }
+body.tutorial .app { grid-template-columns: minmax(400px, 1.3fr) minmax(240px, 1fr) 340px; }
+body.tutorial .stage { grid-column: 2; }
+body.tutorial .panel.left { display: none; }
+body.tutorial .panel.tutorial { display: flex; }
+.solution.tutorial { display: flex; flex-direction: column; gap: 14px; }
+.solution.tutorial .sol-empty, .solution.tutorial .sol-meta, .solution.tutorial .lesson-intro { display: none; }
+.solution:not(.tutorial) .case-card { display: none; }
+.solution.tutorial .chips { max-height: 160px; }
+.tut-steps { display: flex; gap: 4px; padding: 3px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; border: 1px solid var(--line); }
+.tut-steps button {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 4px;
+  border: 0; background: transparent; border-radius: 7px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--text-2); transition: background 0.2s, color 0.2s;
+}
+.tut-steps button:hover { color: var(--text); }
+.tut-steps button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.tut-steps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tut-steps .num {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 10.5px; font-weight: 700; background: var(--chip-hover); font-variant-numeric: tabular-nums;
+}
+.tut-steps button.active .num { background: var(--accent); color: #fff; }
+.tut-intro { display: flex; flex-direction: column; gap: 8px; }
+.panel.tutorial code, .case-card code {
+  font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 1px 5px; border-radius: 5px;
+  background: var(--chip-hover); color: var(--text); white-space: nowrap;
+}
+.tut-groups { display: flex; flex-direction: column; gap: 18px; }
+.tut-group { display: flex; flex-direction: column; gap: 8px; }
+.tut-group > p { margin: -4px 0 0; }
+.cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
+.case {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 9px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--chip); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s; text-align: center;
+}
+.case:hover { background: var(--chip-hover); border-color: var(--line-2); }
+.case.active { background: var(--accent-soft); border-color: rgba(143, 123, 255, 0.6); }
+.case:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.case .diagram { width: 84px; height: 84px; }
+.case-name { font-size: 12px; font-weight: 650; }
+.panel.tutorial .case-alg {
+  font-size: 10.5px; padding: 0; background: none; color: var(--text-2); white-space: normal; line-height: 1.35;
+}
+.diagram { stroke: none; stroke-width: 0; }
+.diagram .arrows { color: #0b0d12; }
+.case-card { display: flex; flex-direction: column; gap: 10px; }
+.case-card p { margin: 0; }
+.case-big { display: flex; justify-content: center; padding: 4px 0; }
+.case-big .diagram { width: 150px; height: 150px; }
+
 /* ---------- toasts ---------- */
 .toasts { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; pointer-events: none; align-items: center; }
 .toast {
@@ -552,6 +606,7 @@ kbd {
 /* ---------- responsive ---------- */
 @media (max-width: 1100px) {
   .app { grid-template-columns: 300px 1fr 300px; }
+  body.tutorial .app { grid-template-columns: minmax(330px, 1.2fr) minmax(200px, 1fr) 300px; }
   .panel { margin: 4px 10px 10px; }
 }
 @media (max-width: 860px) {
@@ -566,6 +621,7 @@ kbd {
   .panel { margin: 0 16px 16px; max-height: none; overflow: visible; }
   .panel.right { order: 3; }
   .panel.left { order: 4; }
+  .panel.tutorial { order: 4; }
   /* the tabs shrink and scroll sideways rather than widening the page */
   .puzzle-switch { position: static; transform: none; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .puzzle-switch::-webkit-scrollbar { display: none; }
