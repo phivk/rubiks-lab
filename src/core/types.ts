@@ -133,7 +133,7 @@ export interface Guide {
 export interface TutorialCase {
   name: string;
   moves: string[];
-  /** the state the algorithm solves, held the way it starts */
+  /** the state the algorithm solves, held the way it starts; stickers that don't matter yet are unset */
   setup: State;
   /** a sentence on how the moves work */
   note?: string;
@@ -147,8 +147,8 @@ export interface TutorialStep {
   groups: { name: string; about?: string; cases: TutorialCase[] }[];
   /** a case's picture, as SVG markup */
   diagram: (c: TutorialCase) => string;
-  /** the stickers to keep lit on the 3D cube while a case plays, for any state */
-  focus: (s: State) => number[];
+  /** the stickers to keep lit on the 3D cube while a case plays, for any state, if not all */
+  focus?: (s: State) => number[];
 }
 
 /** Every case of each stage of a method, with its algorithm, to follow along on a real puzzle. */

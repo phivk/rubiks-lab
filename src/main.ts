@@ -470,7 +470,10 @@ async function startLesson() {
 
 function setTab(t: Tab) {
   if (t === tab) return;
+  // a tutorial case blanks the stickers that don't matter yet; don't leave them behind
+  const blanked = tab === 'tutorial' && session.state.includes(puzzle.unset);
   tab = t;
+  if (blanked) setStateDirect(puzzle.solved());
   invalidateSolution(true);
   renderSolution();
 }
@@ -805,7 +808,8 @@ function renderPlayback() {
     view.setFocus(step && !s.stale ? step.focus(session.state) : null);
     renderStages();
   } else {
-    if (s.tutorial && puzzle.tutorial) view.setFocus(s.stale ? null : puzzle.tutorial.steps[s.tutorial.step].focus(session.state));
+    const focus = s.tutorial && puzzle.tutorial?.steps[s.tutorial.step].focus;
+    if (focus) view.setFocus(s.stale ? null : focus(session.state));
     followCurrentChip();
   }
 }

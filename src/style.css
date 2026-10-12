@@ -521,6 +521,8 @@ body.tutorial .panel.tutorial { display: flex; }
 .solution:not(.tutorial) .case-card { display: none; }
 .solution.tutorial .chips { max-height: 160px; }
 .tut-steps { display: flex; gap: 4px; padding: 3px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; border: 1px solid var(--line); }
+/* the stepper stays at the top of the panel while the cases scroll under it (12px below its edge: offsets count from inside the padding) */
+.tut-steps { position: sticky; top: -4px; z-index: 1; box-shadow: 0 0 0 16px var(--panel-solid); background: #0f1118; }
 .tut-steps button {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 4px;
   border: 0; background: transparent; border-radius: 7px; cursor: pointer;
@@ -622,6 +624,8 @@ kbd {
   .panel.right { order: 3; }
   .panel.left { order: 4; }
   .panel.tutorial { order: 4; }
+  /* on a phone the page scrolls, under the sticky 3D view */
+  .tut-steps { top: calc(max(46vh, 300px) + 12px); }
   /* the tabs shrink and scroll sideways rather than widening the page */
   .puzzle-switch { position: static; transform: none; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .puzzle-switch::-webkit-scrollbar { display: none; }

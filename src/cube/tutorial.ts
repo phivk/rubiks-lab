@@ -17,7 +17,7 @@ import type { State, Tutorial, TutorialCase, TutorialStep } from '../core/types'
 import { OLL, PLL } from './algs';
 import { CFOP_STAGES } from './cfop';
 import { alg, CORNERS, EDGES, lessonKit, sameSet, TOP_CORNERS, TOP_EDGES, WIDE_NOTATION } from './lessonKit';
-import { invertAlg, type CubeModel } from './model';
+import { invertAlg, UNSET, type CubeModel } from './model';
 
 /** the four corner–edge pairs' F2L algorithms, for the front-right slot (white down, green front) */
 export const F2L_ALGS = [
@@ -62,10 +62,18 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   const home = K.apply(M.solved(), ['z2']);
   const white = center(home, 'D');
   const yellow = center(home, 'U');
-  const setupFor = (moves: string[]) => K.apply(home, invertAlg(moves));
-  const make = (name: string, text: string, note?: string): TutorialCase => {
+  /**
+   * A case, set up by undoing its algorithm. Stickers outside `shown` are blanked, on the
+   * picture and the 3D cube alike: they're whatever a real cube has there at this stage.
+   */
+  const make = (name: string, text: string, shown?: (s: State) => number[], note?: string): TutorialCase => {
     const moves = alg(text);
-    return { name, moves, setup: setupFor(moves), note };
+    const setup = K.apply(home, invertAlg(moves));
+    if (shown) {
+      const keep = new Set(shown(setup));
+      setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
+    }
+    return { name, moves, setup, note };
   };
 
   const SLOTS = [...EDGES, ...CORNERS, ...'UDFRBL'];
@@ -75,6 +83,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   const centers = [...'UDFRBL'].map((f) => at(f, f));
   const TOP = [...TOP_EDGES, ...TOP_CORNERS];
   const focusTop = () => [at('U', 'U'), ...TOP.flatMap((slot) => stickersOf(slot))];
+  const color = (s: State, i: number) => (s[i] === UNSET ? GRAY : COLORS[s[i]]);
 
   // ---------- diagrams ----------
 
@@ -83,12 +92,12 @@ export function cfopTutorial(M: CubeModel): Tutorial {
 
   /**
    * The cube from above the front-right corner: the top, front and right faces, with the back
-   * and left stickers of the top layer folded out flat. Stickers not in `show` are gray.
+   * and left stickers of the top layer folded out flat.
    */
-  function isoView(s: State, show: Set<number>) {
+  function isoView(s: State) {
     const P = ([x, y, z]: number[]): [number, number] => [(x - z) * 0.866, (x + z) * 0.5 - y];
     const letter = (v: number, plus: string, minus: string) => (v === 1 ? plus : v === -1 ? minus : '');
-    const fill = (i: number) => (show.has(i) ? COLORS[s[i]] : GRAY);
+    const fill = (i: number) => color(s, i);
     const h = 0.44;
     const out: string[] = [];
     // body outline
@@ -118,7 +127,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   function topView(s: State, kind: 'oll' | 'pll') {
     const T = 0.36, G = 0.1, O = T + G;
     const W = 2 * O + 3;
-    const fill = (i: number) => (kind === 'pll' ? COLORS[s[i]] : s[i] === yellow ? COLORS[yellow] : GRAY);
+    const fill = (i: number) => color(s, i);
     const rect = (x: number, y: number, w: number, hh: number, i: number) =>
       `<rect x="${x + 0.05}" y="${y + 0.05}" width="${w - 0.1}" height="${hh - 0.1}" rx="0.1" fill="${fill(i)}"/>`;
     const row = (r: number) => (r === 0 ? 'B' : r === 2 ? 'F' : '');
@@ -172,9 +181,8 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     html: `<p>Hold the cube with the <b>white center down</b> and green in front. The cross is the four white edges on the bottom, each beside the center of its other color.</p>
       <p>There’s no algorithm to learn here: the cross takes at most eight moves, and with practice you plan all of it while you inspect the cube. These examples show the usual ways to bring one edge home, the white–green one, without disturbing the others.</p>
       <p class="muted">Tip: solve the cross on the bottom from the start, even though it’s harder to see. You’ll never have to flip the cube for the next stage.</p>`,
-    groups: [{ name: 'Bringing one edge home', cases: CROSS_CASES.map(([name, a, note]) => make(name, a, note)) }],
-    diagram: (c) => isoView(c.setup, new Set([...centers, ...pieceStickers(c.setup, crossEdges)])),
-    focus: (s) => [...centers, ...pieceStickers(s, crossEdges)],
+    groups: [{ name: 'Bringing one edge home', cases: CROSS_CASES.map(([name, a, note]) => make(name, a, (s) => [...centers, ...pieceStickers(s, crossEdges)], note)) }],
+    diagram: (c) => isoView(c.setup),
   };
 
   // ---------- 2. F2L ----------
@@ -189,7 +197,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     if (edge.includes('U')) return 4;
     return 5;
   };
-  const f2lCases = F2L_ALGS.map((a) => make('', a));
+  const f2lCases = F2L_ALGS.map((a) => make('', a, (s) => [...centers, ...pieceStickers(s, pair)]));
   const F2L_GROUP_NAMES: [string, string][] = [
     ['Basic inserts', 'The pair is joined, or one move from it: insert it straight away.'],
     ['Both on top, white facing out', 'Corner and edge in the top layer, with the corner’s white sticker on a side.'],
@@ -204,7 +212,6 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   }));
   let n = 0;
   for (const g of f2lGroups) for (const c of g.cases) c.name = `F2L ${++n}`;
-  const f2lShow = (s: State) => [...centers, ...pieceStickers(s, pair)];
   const f2l: TutorialStep = {
     name: 'F2L',
     goal: CFOP_STAGES[1].goal,
@@ -212,16 +219,13 @@ export function cfopTutorial(M: CubeModel): Tutorial {
       <p>Hold the slot you’re working on at the <b>front right</b>. Find its corner and edge, turn the top until they look like one of the pictures, and do its algorithm. Every case keeps the cross and the other slots.</p>
       <p>There are 41 cases, but don’t learn them by heart: they’re all built from the same few moves (<code>R U R'</code>, <code>F' U' F</code>), which join the pair in the top layer and then insert it. Watch a few on the cube and you’ll see the idea.</p>`,
     groups: f2lGroups,
-    diagram: (c) => isoView(c.setup, new Set(f2lShow(c.setup))),
-    // the pair, the centers, the cross and the other slots: not whatever sits in the top or the pair's slot
-    focus: (s) => {
-      const keep = new Set(pieceStickers(s, pair));
-      const other = (slot: string) => slot.length === 1 || (!slot.includes('U') && slot !== 'FR' && slot !== 'DRF');
-      return M.facelets.map((f) => f.index).filter((i) => keep.has(i) || other(slotOf[i]));
-    },
+    diagram: (c) => isoView(c.setup),
   };
 
   // ---------- 3. OLL ----------
+
+  // the first two layers, and the top layer's yellow stickers: where the rest go is for PLL
+  const ollShown = (s: State) => M.facelets.map((f) => f.index).filter((i) => !slotOf[i].includes('U') || s[i] === yellow);
 
   const oll: TutorialStep = {
     name: 'OLL',
@@ -231,7 +235,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
       <p>There are 57 cases. Start with the first group: once all four edges show yellow, these seven fix the corners. With the three edge cases in the T, I and P groups (<code>F R U R' U' F'</code> and friends) you have two-look OLL, and can learn the rest one at a time.</p>`,
     groups: OLL_GROUPS.map((g) => ({
       name: g,
-      cases: OLL.filter((o) => o.group === g).map((o) => make(`OLL ${o.n} · ${o.name}`, o.alg)),
+      cases: OLL.filter((o) => o.group === g).map((o) => make(`OLL ${o.n} · ${o.name}`, o.alg, ollShown)),
     })),
     diagram: (c) => topView(c.setup, 'oll'),
     focus: focusTop,
