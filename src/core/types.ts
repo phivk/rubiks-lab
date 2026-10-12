@@ -165,6 +165,8 @@ export interface Puzzle {
   movePad: MoveButton[][];
   movePadExtra?: MoveButton[][];
   movePadExtraLabel?: string;
+  /** a move button's color in this state, when it can change as the whole puzzle is turned */
+  moveColor?: (s: State, move: string) => string | undefined;
   /** keyboard → move, or null */
   keyToMove: (code: string, shift: boolean, alt: boolean) => string | null;
   shortcutsHtml: string;
