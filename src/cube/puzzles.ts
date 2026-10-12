@@ -119,6 +119,11 @@ function makeCube(M: CubeModel, { wide }: { wide: boolean }): Shared {
     lockedSticker: slices ? (i) => (fixed.has(i) ? 'Centers are fixed — they define which face is which' : null) : undefined,
 
     movePad: rows(['U', 'D', 'R', 'L', 'F', 'B']),
+    // an odd cube's fixed centers show which color sits on each face now, e.g. after a flip
+    moveColor: (s, move) => {
+      const f = FACES.indexOf(move.replace(/^\d+/, '')[0]);
+      return f >= 0 && M.fixedCenters.length ? COLORS[s[M.fixedCenters[f]]] : undefined;
+    },
     keyToMove: (code, shift, alt) => {
       const m = /^Key([A-Z])$/.exec(code);
       if (!m) return null;

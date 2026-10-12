@@ -593,6 +593,7 @@ function renderMapKind() {
 
 function onStateChanged() {
   maps.forEach((m) => m.update(session.state));
+  recolorMovepad();
   renderStatus();
   $('#solved-badge').classList.toggle('hidden', !puzzle.isSolved(session.state));
   if (mode === 'paint') renderPalette();
@@ -615,6 +616,15 @@ function buildMovepad() {
   const more = $('#btn-more-moves');
   more.classList.toggle('hidden', !puzzle.movePadExtra);
   more.textContent = $('#movepad-extra').classList.contains('hidden') ? puzzle.movePadExtraLabel ?? '' : 'Hide extras';
+  recolorMovepad();
+}
+
+function recolorMovepad() {
+  if (!puzzle.moveColor) return;
+  for (const b of document.querySelectorAll<HTMLElement>('#movepad .move, #movepad-extra .move')) {
+    const c = puzzle.moveColor(session.state, b.dataset.move!);
+    if (c) b.style.setProperty('--c', c);
+  }
 }
 
 function moveButton(move: string, color?: string) {
