@@ -1,6 +1,6 @@
 import './style.css';
 import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
-import type { Guide, GuideStep, Puzzle, State, TutorialCase, TutorialStep, Validation } from './core/types';
+import type { Guide, GuideStep, Puzzle, State, TutorialCase, TutorialFrames, TutorialStep, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { countMoves, stepMoves } from './cube/lessonKit';
 import { pyraminx } from './pyraminx/puzzle';
@@ -773,10 +773,13 @@ function renderSolution(fresh = false) {
 function renderChips(fresh: boolean) {
   const s = solution!;
   const chips = $('#chips');
+  const runs = s.tutorial ? triggerRuns(s.moves) : [];
   chips.replaceChildren();
   s.moves.forEach((m, i) => {
     const c = document.createElement('button');
     c.className = 'chip';
+    // in the tutorial, chips of a trigger (the sexy move) are marked, each run on its own
+    if (runs[i]) c.classList.add('trig', runs[i] % 2 ? 'odd' : 'even');
     c.dataset.i = String(i);
     c.innerHTML = `${m}<sub>${i + 1}</sub>`;
     if (fresh) c.style.animationDelay = `${i * 18}ms`;
@@ -933,6 +936,45 @@ let tutRendered = '';
 
 const sameCase = (a: CaseRef, b: CaseRef) => a.step === b.step && a.group === b.group && a.index === b.index;
 
+/**
+ * For each move, the trigger run it belongs to (counted from 1), or 0: the tutorial's
+ * triggers found in `moves`, left to right, without overlaps.
+ */
+function triggerRuns(moves: string[]) {
+  const runs = moves.map(() => 0);
+  let run = 0;
+  for (let i = 0; i < moves.length;) {
+    const t = puzzle.tutorial?.triggers?.find((tr) => tr.moves.every((m, k) => moves[i + k] === m));
+    if (!t) { i++; continue; }
+    run++;
+    for (let k = 0; k < t.moves.length; k++) runs[i + k] = run;
+    i += t.moves.length;
+  }
+  return runs;
+}
+
+/** Moves as text, with each trigger run marked. */
+function movesHtml(moves: string[]) {
+  const runs = triggerRuns(moves);
+  return moves.map((m, i) => {
+    const open = runs[i] && runs[i] !== runs[i - 1] ? '<span class="trig">' : '';
+    const close = runs[i] && runs[i] !== runs[i + 1] ? '</span>' : '';
+    return open + m + close;
+  }).join(' ');
+}
+
+/** A run of moves a frame at a time: the puzzle before each move, with its arrow, and after the last. */
+function framesHtml(step: TutorialStep, f: TutorialFrames) {
+  let s = f.start;
+  const out: string[] = [];
+  f.moves.forEach((m, k) => {
+    out.push(`<figure class="frame">${snapshot(puzzle, s, step.view, f.arrows[k])}<figcaption><code>${m}</code></figcaption></figure>`);
+    s = applyMove(s, m);
+  });
+  out.push(`<figure class="frame">${snapshot(puzzle, s, step.view)}<figcaption>after</figcaption></figure>`);
+  return `<div class="frames">${out.join('<span class="frame-sep" aria-hidden="true">›</span>')}</div>`;
+}
+
 /** a case's picture, drawn as the 3D view draws the puzzle */
 const diagram = (step: TutorialStep, c: TutorialCase) => snapshot(puzzle, c.setup, step.view, step.arrows?.(c));
 
@@ -977,10 +1019,11 @@ function renderTutorial(fresh: boolean) {
     $('#tut-groups').innerHTML = step.groups.map((g, gi) => `
       <section class="tut-group">
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length}</span></div>
-        ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
+        ${g.about ? (g.about.startsWith('<') ? `<div class="lesson-text">${g.about}</div>` : `<p class="muted small">${g.about}</p>`) : ''}
+        ${g.frames ? framesHtml(step, g.frames) : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span><code class="case-alg">${c.moves.join(' ')}</code>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span><code class="case-alg">${c.moves.length > 12 && c.demo ? `${movesHtml(c.moves.slice(0, 4))} …` : movesHtml(c.moves)}</code>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
@@ -1021,6 +1064,7 @@ function renderCaseCard() {
     <div class="lesson-title">${c.name}</div>
     <div class="case-big">${diagram(step, c)}</div>
     ${c.note ? `<div class="lesson-text"><p>${c.note}</p></div>` : ''}
+    ${triggerRuns(c.moves).some(Boolean) ? `<p class="muted small"><span class="trig-key"></span>marks each ${T.triggers!.map((t) => `${t.name} (<code>${t.moves.join(' ')}</code>)`).join(' or ')}.</p>` : ''}
     ${solution!.stale ? '<div class="lesson-stale">You turned the cube, so it no longer shows this case. <button class="link" data-act="reset">Set it up again</button></div>' : ''}
     <div class="lesson-nav">
       <button class="btn small ghost" data-act="prev" ${k > 0 ? '' : 'disabled'}><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous case</button>

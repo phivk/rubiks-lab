@@ -137,6 +137,16 @@ export interface TutorialCase {
   setup: State;
   /** a sentence on how the moves work */
   note?: string;
+  /** starts from a solved cube, to show what its moves do, rather than solving anything */
+  demo?: boolean;
+}
+
+/** A run of moves, shown a frame per move: the puzzle before each, with an arrow for the move. */
+export interface TutorialFrames {
+  start: State;
+  moves: string[];
+  /** per move, arrows from sticker to sticker showing which way it turns */
+  arrows: [number, number][][];
 }
 
 export interface TutorialStep {
@@ -144,7 +154,8 @@ export interface TutorialStep {
   goal: string;
   /** the explanation, as HTML */
   html: string;
-  groups: { name: string; about?: string; cases: TutorialCase[] }[];
+  /** `about` is HTML */
+  groups: { name: string; about?: string; frames?: TutorialFrames; cases: TutorialCase[] }[];
   /** how a case is pictured: the puzzle from its usual angle, or its top from above */
   view: 'corner' | 'top';
   /** arrows on a case's picture, from sticker to sticker */
@@ -160,6 +171,8 @@ export interface Tutorial {
   intro: string;
   /** notation beyond the puzzle's basic moves */
   notation?: string;
+  /** short move sequences worth spotting inside the algorithms, highlighted wherever they appear */
+  triggers?: { name: string; moves: string[] }[];
   steps: TutorialStep[];
 }
 
