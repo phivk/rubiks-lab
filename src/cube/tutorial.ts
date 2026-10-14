@@ -72,8 +72,6 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     }
     return { name, moves, setup, note };
   };
-  /** A demo: moves played from a solved cube, to see what they do. */
-  const demo = (name: string, text: string, note: string): TutorialCase => ({ name, moves: alg(text), setup: home.slice(), note, demo: true });
 
   const SLOTS = [...EDGES, ...CORNERS, ...'UDFRBL'];
   const slotOf: string[] = [];
@@ -133,25 +131,8 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   }));
   let n = 0;
   for (const g of f2lGroups) for (const c of g.cases) c.name = `F2L ${++n}`;
-  // the sexy move, R U R' U': the trigger most F2L and OLL algorithms are built from
+  // the sexy move, R U R' U': the trigger most F2L and OLL algorithms are built from, highlighted wherever it appears
   const SEXY = "R U R' U'";
-  // which way each of its moves turns, as an arrow across the front face
-  const front = (a: string, b: string): [number, number] => [at(a, 'F'), at(b, 'F')];
-  const sexy = {
-    name: 'The sexy move',
-    about: `<p><code>${SEXY}</code> is the <b>sexy move</b>: right side up, top to the left, right side down, top back. It’s the most common <b>trigger</b> — a short run of moves your fingers learn as one — and it’s inside most F2L and OLL algorithms, highlighted wherever it appears.</p>
-      <p>Hold the cube in both hands; your right hand turns R, your right index finger pushes U from the back. Do it six times in a row and the cube is back where it started, so it’s safe to practise until it’s one smooth motion.</p>`,
-    frames: {
-      start: home,
-      moves: alg(SEXY),
-      arrows: [[front('FDR', 'FUR')], [front('FUR', 'FUL')], [front('FUR', 'FDR')], [front('FUL', 'FUR')]],
-    },
-    cases: [
-      demo('Sexy move', SEXY, 'Watch the front-right corner: it goes up, around and back down, swapping places with the corner on top.'),
-      demo('Six sexy moves', Array(6).fill(SEXY).join(' '), 'Six in a row bring every piece home: a good way to drill it.'),
-      demo('Left sexy move', "L' U' L U", 'The mirror image, for the left hand: left side up, top to the right, left side down, top back.'),
-    ],
-  };
 
   const f2l: TutorialStep = {
     name: 'F2L',
@@ -159,7 +140,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     html: `<p><b>F2L</b> stands for <b>F</b>irst <b>2</b> <b>L</b>ayers. Each white corner and the middle edge beside it go in together, as a pair, into the slot between their two centers.</p>
       <p>Hold the slot you’re working on at the <b>front right</b>. Find its corner and edge, turn the top until they look like one of the pictures, and do its algorithm. Every case keeps the cross and the other slots.</p>
       <p>There are 41 cases, but don’t learn them by heart: they’re all built from the same few moves (<code>R U R'</code>, <code>F' U' F</code>), which join the pair in the top layer and then insert it. Watch a few on the cube and you’ll see the idea.</p>`,
-    groups: [sexy, ...f2lGroups],
+    groups: f2lGroups,
     view: 'corner',
   };
 

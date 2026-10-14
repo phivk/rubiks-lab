@@ -1,6 +1,6 @@
 import './style.css';
 import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
-import type { Guide, GuideStep, Puzzle, State, TutorialCase, TutorialFrames, TutorialStep, Validation } from './core/types';
+import type { Guide, GuideStep, Puzzle, State, TutorialCase, TutorialStep, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { countMoves, stepMoves } from './cube/lessonKit';
 import { pyraminx } from './pyraminx/puzzle';
@@ -963,17 +963,8 @@ function movesHtml(moves: string[]) {
   }).join(' ');
 }
 
-/** A run of moves a frame at a time: the puzzle before each move, with its arrow, and after the last. */
-function framesHtml(step: TutorialStep, f: TutorialFrames) {
-  let s = f.start;
-  const out: string[] = [];
-  f.moves.forEach((m, k) => {
-    out.push(`<figure class="frame">${snapshot(puzzle, s, step.view, f.arrows[k])}<figcaption><code>${m}</code></figcaption></figure>`);
-    s = applyMove(s, m);
-  });
-  out.push(`<figure class="frame">${snapshot(puzzle, s, step.view)}<figcaption>after</figcaption></figure>`);
-  return `<div class="frames">${out.join('<span class="frame-sep" aria-hidden="true">›</span>')}</div>`;
-}
+/** HTML with the moves inside each <code> marked where they hold a trigger. */
+const markCode = (html: string) => html.replace(/<code>([^<]*)<\/code>/g, (_, text: string) => `<code>${movesHtml(text.split(' ').filter(Boolean))}</code>`);
 
 /** a case's picture, drawn as the 3D view draws the puzzle */
 const diagram = (step: TutorialStep, c: TutorialCase) => snapshot(puzzle, c.setup, step.view, step.arrows?.(c));
@@ -1015,15 +1006,14 @@ function renderTutorial(fresh: boolean) {
     tutRendered = key;
     $('#tut-steps').innerHTML = T.steps.map((st, i) =>
       `<button role="tab" data-step="${i}" class="${i === tutStep ? 'active' : ''}" aria-selected="${i === tutStep}"><span class="num">${i + 1}</span>${st.name}</button>`).join('');
-    $('#tut-intro').innerHTML = `<div class="lesson-title">${step.goal}</div><div class="lesson-text">${step.html}</div>`;
+    $('#tut-intro').innerHTML = `<div class="lesson-title">${step.goal}</div><div class="lesson-text">${markCode(step.html)}</div>`;
     $('#tut-groups').innerHTML = step.groups.map((g, gi) => `
       <section class="tut-group">
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length}</span></div>
-        ${g.about ? (g.about.startsWith('<') ? `<div class="lesson-text">${g.about}</div>` : `<p class="muted small">${g.about}</p>`) : ''}
-        ${g.frames ? framesHtml(step, g.frames) : ''}
+        ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span><code class="case-alg">${c.moves.length > 12 && c.demo ? `${movesHtml(c.moves.slice(0, 4))} …` : movesHtml(c.moves)}</code>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span><code class="case-alg">${movesHtml(c.moves)}</code>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];

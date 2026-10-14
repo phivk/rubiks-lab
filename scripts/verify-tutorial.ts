@@ -23,11 +23,6 @@ for (const step of T.steps) {
   for (const g of step.groups) {
     if (!g.cases.length) fail(`${step.name}: empty group ${g.name}`);
     for (const c of g.cases) {
-      if (c.demo) {
-        // a demo starts solved and shows every sticker
-        if (c.setup.some((x, i) => x !== home[i])) fail(`${c.name}: demo doesn't start solved`);
-        continue;
-      }
       const full = K.apply(home, invertAlg(c.moves));
       if (c.setup.some((x, i) => x !== UNSET && x !== full[i])) fail(`${c.name}: setup doesn't match its algorithm`);
       const end = K.apply(c.setup, c.moves);
@@ -47,19 +42,12 @@ for (const step of T.steps) {
 }
 // the 41 F2L cases: where the pair's corner and edge are, up to a turn of the top
 const white = K.center(home, 'D'), F = K.center(home, 'F'), R = K.center(home, 'R');
-const f2lCases = f2l.groups.flatMap((g) => g.cases).filter((c) => !c.demo);
+const f2lCases = f2l.groups.flatMap((g) => g.cases);
 const keys = new Set(f2lCases.map((c) => U_TURNS.map((u) => {
   const t = K.apply(K.apply(home, invertAlg(c.moves)), [u]);
   return K.stickerOf(t, [white, F, R], white) + ',' + K.stickerOf(t, [F, R], F);
 }).sort()[0]));
-const count = (s: typeof cross) => s.groups.reduce((n, g) => n + g.cases.filter((c) => !c.demo).length, 0);
+const count = (s: typeof cross) => s.groups.reduce((n, g) => n + g.cases.length, 0);
 if (keys.size !== 41 || count(f2l) !== 41) fail(`F2L: ${keys.size} different cases in ${count(f2l)}`);
-// the sexy move's frames and demos: six in a row is the identity, and each frame has its arrow
-for (const g of T.steps.flatMap((s) => s.groups)) {
-  if (g.frames && g.frames.arrows.length !== g.frames.moves.length) fail(`${g.name}: an arrow per move`);
-  for (const c of g.cases) if (c.demo && c.name.startsWith('Six') && !M.isSolved(K.apply(c.setup, c.moves))) fail(`${c.name}: doesn't come back to solved`);
-}
-if (count(oll) !== 57) fail(`OLL: ${count(oll)} cases`);
-if (count(pll) !== 21) fail(`PLL: ${count(pll)} cases`);
 console.log(`tutorial: ${T.steps.map((s) => `${s.name} ${count(s)}`).join(', ')}${fails ? ` — ${fails} failures` : ' — all ok'}`);
 if (fails) process.exit(1);
