@@ -643,14 +643,14 @@ kbd {
   .stage { height: 46vh; min-height: 300px; flex: none; position: sticky; top: 0; z-index: 3; background: radial-gradient(600px 400px at 50% 50%, #1a1e2b, var(--bg) 70%); border-bottom: 1px solid var(--line); margin-bottom: 16px; }
   .stage-hint { bottom: 10px; font-size: 11.5px; }
   .solved-badge { top: 12px; }
-  .panel { margin: 0 16px 16px; max-height: none; overflow: visible; }
+  .panel { margin: 0 16px 16px; max-height: none; overflow: visible; align-self: stretch; }
   .panel.right { order: 3; }
   .panel.left { order: 4; }
   .panel.tutorial { order: 4; }
   /* on a phone the page scrolls, under the sticky 3D view */
   .tut-steps { top: calc(max(46vh, 300px) + 12px); }
   /* in the tutorial the case card in the list is the controller: no second copy, chips or player */
-  .solution.tutorial .case-card, .solution.tutorial .sol-body { display: none; }
+  .solution.tutorial { display: none; }
   .case .case-note { display: block; }
   .case.active .case-ctl { display: contents; }
   /* readable from the table */
