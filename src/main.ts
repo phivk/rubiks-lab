@@ -829,6 +829,11 @@ function renderDrilling() {
   const s = solution;
   const on = tab === 'tutorial' && !!s?.tutorial;
   document.body.classList.toggle('drilling', on);
+  if (on && !s!.stale) {
+    const k = s!.index;
+    if (k > 0 && k < s!.moves.length) caseProgress.set(caseKey(s!.tutorial!), k);
+    else caseProgress.delete(caseKey(s!.tutorial!));
+  }
   keepAwake(on);
   document.querySelectorAll<HTMLElement>('#tut-groups .case').forEach((card) => {
     const open = on && !!s && s.tutorial!.step === tutStep && sameCase(s.tutorial!, { step: tutStep, group: Number(card.dataset.group), index: Number(card.dataset.index) });
@@ -838,6 +843,8 @@ function renderDrilling() {
       m.classList.toggle('next', open && !s!.stale && i === s!.index);
     });
     card.classList.toggle('playing', open && playing);
+    // partway through, ▶ would start over: say so with a replay icon
+    card.classList.toggle('midway', open && !playing && !s!.stale && s!.index > 0 && s!.index < s!.moves.length);
     const status = card.querySelector<HTMLElement>('.case-status');
     if (status) status.innerHTML = !open ? '' : s!.stale ? '<b>Cube turned</b>tap to set up'
       : s!.index >= s!.moves.length && !playing ? '<b>Done ✓</b>tap to repeat' : '';
@@ -1034,7 +1041,11 @@ function setTutorialStep(k: number) {
 }
 
 /** Set a case up on the cube, ready to play its algorithm. */
-async function openCase(ref: CaseRef) {
+/** how far into each tutorial case you got this session, so coming back to one resumes it */
+const caseProgress = new Map<string, number>();
+const caseKey = (r: CaseRef) => `${r.step}:${r.group}:${r.index}`;
+
+async function openCase(ref: CaseRef, resume = false) {
   const T = puzzle.tutorial;
   if (!T) return;
   const c = T.steps[ref.step].groups[ref.group].cases[ref.index];
@@ -1042,9 +1053,10 @@ async function openCase(ref: CaseRef) {
   queue.length = 0;
   await idle();
   if (tab !== 'tutorial' || puzzle.tutorial !== T) return;
-  setStateDirect(c.setup);
+  const k = resume ? caseProgress.get(caseKey(ref)) ?? 0 : 0;
+  setStateDirect(c.moves.slice(0, k).reduce(applyMove, c.setup));
   playing = false;
-  solution = { start: c.setup.slice(), moves: c.moves.slice(), index: 0, optimal: false, searching: false, elapsed: 0, stale: false, tutorial: ref };
+  solution = { start: c.setup.slice(), moves: c.moves.slice(), index: k, optimal: false, searching: false, elapsed: 0, stale: false, tutorial: ref };
   tutStep = ref.step;
   renderSolution(true);
   // on a phone, keep the tapped card in view below the pinned cube
@@ -1066,14 +1078,15 @@ function renderTutorial(fresh: boolean) {
     // a long explanation shows just its first paragraph on a phone, with a button for the rest
     const long = (step.html.match(/<p[ >]/g) ?? []).length > 1;
     $('#tut-intro').innerHTML = `<div class="lesson-title">${step.goal}</div><div class="lesson-text${long ? ' collapsible' : ''}">${markCode(step.html)}</div>` +
-      (long ? '<button class="link more" data-act="more" aria-expanded="false">Show more</button>' : '');
+      (long ? '<button class="link more" data-act="more" aria-expanded="false">Show more</button>' : '') +
+      `<details class="notation"><summary>How to read the moves</summary><p class="muted small">${puzzle.notationHtml}${T.notation ? ' ' + T.notation : ''}</p></details>`;
     $('#tut-groups').innerHTML = step.groups.map((g, gi) => `
       <section class="tut-group">
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length}</span></div>
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><span class="case-back" data-ctl="back" role="button" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><span class="case-play" data-ctl="play" role="button" aria-label="Play all moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></span></span>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><span class="case-back" data-ctl="back" role="button" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><span class="case-play" data-ctl="play" role="button" aria-label="Play all moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg class="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span></span>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
@@ -1145,7 +1158,7 @@ function onTutorialClick(e: Event) {
         togglePlay();
       } else if (s.index < s.moves.length) { playing = false; stepForward(); renderPlayback(); }
       else void openCase(ref);
-    } else void openCase(ref);
+    } else void openCase(ref, true);
   }
 }
 
