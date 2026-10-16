@@ -339,7 +339,7 @@ function setMode(m: Mode) {
   renderMapKind();
   $('#stage-hint').textContent = m === 'paint'
     ? 'Tap a sticker to paint it · Drag to look around'
-    : 'Drag a face to turn it · Drag the background to orbit';
+    : 'Drag a face to turn it · Drag the background to turn the view';
   $('#stage-hint').classList.remove('fade');
   if (m === 'paint') {
     playing = false;
@@ -869,6 +869,14 @@ function keepAwake(on: boolean) {
     wakeLock = null;
   }
 }
+// the stepper fades out what scrolls under it, but only once something does
+for (const scroller of [window, document.getElementById('tutorial')!]) {
+  scroller.addEventListener('scroll', () => {
+    const steps = document.getElementById('tut-steps')!;
+    steps.classList.toggle('stuck', document.getElementById('tut-intro')!.getBoundingClientRect().top < steps.getBoundingClientRect().bottom + 8);
+  }, { passive: true });
+}
+
 // the browser drops the lock when the page is hidden; take it again on return
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && wantAwake) {
@@ -1082,7 +1090,7 @@ function renderTutorial(fresh: boolean) {
       `<details class="notation"><summary>How to read the moves</summary><p class="muted small">${puzzle.notationHtml}${T.notation ? ' ' + T.notation : ''}</p></details>`;
     $('#tut-groups').innerHTML = step.groups.map((g, gi) => `
       <section class="tut-group">
-        <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length}</span></div>
+        <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length} ${g.cases.length === 1 ? 'case' : 'cases'}</span></div>
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">

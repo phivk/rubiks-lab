@@ -18,44 +18,44 @@ import { alg, CORNERS, EDGES, lessonKit, sameSet, TOP_CORNERS, TOP_EDGES, WIDE_N
 import { invertAlg, UNSET, type CubeModel } from './model';
 
 /** F2L, for the front-right slot (white down, green front): [algorithm, note], by group */
-const F2L_GROUPS: { name: string; about: string; cases: [string, string][] }[] = [
+const F2L_GROUPS: { name: string; about: string; cases: [string, string, string][] }[] = [
   {
     name: 'Ready to go in',
     about: 'Three moves, or four with a turn of the top. Every other case ends with one of these.',
     cases: [
-      ["R U R'", 'Already a block, above the slot.'],
-      ["F' U' F", 'The mirror image, on the F side.'],
-      ["U R U' R'", 'Not a block yet, but the edge meets the corner on the way down.'],
-      ["U' F' U F", 'The mirror image, on the F side.'],
+      ['White right, edge back', "R U R'", 'Already a block, above the slot.'],
+      ['White front, edge left', "F' U' F", 'The mirror image, on the F side.'],
+      ['White front, edge right', "U R U' R'", 'Not a block yet, but the edge meets the corner on the way down.'],
+      ['White right, edge front', "U' F' U F", 'The mirror image, on the F side.'],
     ],
   },
   {
     name: 'Build the block first',
     about: 'Corner and edge are both on top but apart. Bring them together, then it’s a case from above.',
     cases: [
-      ["R U2 R' U R U' R'", 'R U2 R′ builds the block, U R U′ R′ puts it in.'],
-      ["U' R U R' U2 R U' R'", 'U′ R U R′ U2 builds the block, R U′ R′ puts it in.'],
-      ["U F' U' F U2 F' U F", 'The mirror image, on the F side.'],
+      ['White up, far apart', "R U2 R' U R U' R'", 'R U2 R′ builds the block, U R U′ R′ puts it in.'],
+      ['White front, edge back', "U' R U R' U2 R U' R'", 'U′ R U R′ U2 builds the block, R U′ R′ puts it in.'],
+      ['White right, edge left', "U F' U' F U2 F' U F", 'The mirror image, on the F side.'],
     ],
   },
   {
     name: 'Get a piece out of the slot',
     about: 'One piece is down in the slot but wrong. Lift it to the top first.',
     cases: [
-      ["R U' R' F' U' F", 'R U′ R′ lifts the corner and builds the block, F′ U′ F puts it in.'],
-      ["R U R' U' R U R'", 'R U R′ U′ lifts the corner and builds the block, R U R′ puts it in.'],
-      ["U' R U R' U F' U' F", 'U′ R U R′ lifts the edge, U F′ U′ F joins it to the corner on the way in.'],
+      ['Corner in slot, edge back', "R U' R' F' U' F", 'R U′ R′ lifts the corner and builds the block, F′ U′ F puts it in.'],
+      ['Corner in slot, edge right', "R U R' U' R U R'", 'R U R′ U′ lifts the corner and builds the block, R U R′ puts it in.'],
+      ['Edge in slot, flipped', "U' R U R' U F' U' F", 'U′ R U R′ lifts the edge, U F′ U′ F joins it to the corner on the way in.'],
     ],
   },
   {
     name: 'Faster as an algorithm',
     about: 'Building the block by hand is slow here. These repeat a few moves, so they’re quick to learn.',
     cases: [
-      ["R U R' U' R U R' U' R U R'", 'White on top, edge in the slot.'],
-      ["R U R' U' U' R U R' U' R U R'", 'White on top, edge in front.'],
-      ["F' U' F U U F' U' F U F' U' F", 'White on top, edge on the right.'],
-      ["R U R' U' R U' R' U2 F' U' F", 'Both in the slot, edge flipped and white facing right.'],
-      ["R U' R' U F' U' F U' F' U' F", 'Both in the slot, edge flipped and white facing front.'],
+      ['White up, edge in slot', "R U R' U' R U R' U' R U R'", ''],
+      ['White up, edge front', "R U R' U' U' R U R' U' R U R'", ''],
+      ['White up, edge right', "F' U' F U U F' U' F U F' U' F", ''],
+      ['Both in slot, white right', "R U R' U' R U' R' U2 F' U' F", 'The edge is flipped.'],
+      ['Both in slot, white front', "R U' R' U F' U' F U' F' U' F", 'The edge is flipped.'],
     ],
   },
 ];
@@ -132,10 +132,8 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   const pair = [[white, center(home, 'F'), center(home, 'R')], [center(home, 'F'), center(home, 'R')]];
   const f2lGroups = F2L_GROUPS.map(({ name, about, cases }) => ({
     name, about,
-    cases: cases.map(([a, note]) => make('', a, (s) => [...centers, ...pieceStickers(s, pair)], note)),
+    cases: cases.map(([name, a, note]) => make(name, a, (s) => [...centers, ...pieceStickers(s, pair)], note)),
   }));
-  let n = 0;
-  for (const g of f2lGroups) for (const c of g.cases) c.name = `F2L ${++n}`;
   // the sexy move, R U R' U': the trigger most F2L and OLL algorithms are built from, highlighted wherever it appears
   const SEXY = "R U R' U'";
 

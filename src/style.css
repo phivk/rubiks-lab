@@ -520,9 +520,14 @@ body.tutorial .panel.tutorial { display: flex; }
 .solution.tutorial .sol-empty, .solution.tutorial .sol-meta, .solution.tutorial .lesson-intro { display: none; }
 .solution:not(.tutorial) .case-card { display: none; }
 .solution.tutorial .chips { max-height: 160px; }
-.tut-steps { display: flex; gap: 4px; padding: 3px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; border: 1px solid var(--line); }
+/* the stages read as a sequence, ‹ one › after another, not as a second set of tabs */
+.tut-steps { display: flex; gap: 12px; padding: 3px 0; }
+.tut-steps button { position: relative; }
+.tut-steps button + button::before { content: '›'; position: absolute; left: -9px; color: var(--text-3); font-weight: 400; pointer-events: none; }
+/* cases scrolling under the stuck stepper fade out instead of being cut */
+.tut-steps.stuck::after { content: ''; position: absolute; left: -16px; right: -16px; top: calc(100% + 16px); height: 18px; background: linear-gradient(var(--panel-solid), transparent); pointer-events: none; }
 /* the stepper stays at the top of the panel while the cases scroll under it (12px below its edge: offsets count from inside the padding) */
-.tut-steps { position: sticky; top: -4px; z-index: 1; box-shadow: 0 0 0 16px var(--panel-solid); background: #0f1118; }
+.tut-steps { position: sticky; top: -4px; z-index: 1; box-shadow: 0 0 0 16px var(--panel-solid); background: var(--panel-solid); }
 .tut-steps button {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 4px;
   border: 0; background: transparent; border-radius: 7px; cursor: pointer;
