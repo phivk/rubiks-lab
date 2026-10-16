@@ -729,7 +729,7 @@ function renderSolution(fresh = false) {
   el.classList.toggle('stale', !!solution?.stale);
   renderTabs();
   if (!(solution?.lesson || solution?.tutorial) || solution.stale) view.setFocus(null);
-  renderHud();
+  renderDrilling();
   if (learn) {
     renderLearn();
     return;
@@ -817,35 +817,28 @@ function renderPlayback() {
     if (focus) view.setFocus(s.stale ? null : focus(session.state));
     followCurrentChip();
   }
-  renderHud();
+  renderDrilling();
 }
 
-/** On a phone, the open tutorial case's move and step buttons, on the pinned cube. */
-function renderHud() {
+const phone = () => matchMedia('(max-width: 860px)').matches;
+
+/** The open tutorial case's card shows where its algorithm is: played moves fade, the next one stands out. */
+function renderDrilling() {
   const s = solution;
   const on = tab === 'tutorial' && !!s?.tutorial;
   document.body.classList.toggle('drilling', on);
   keepAwake(on);
-  if (!on) return;
-  const n = s.moves.length;
-  const now = $('#hud-now'), sub = $('#hud-sub');
-  const runs = triggerRuns(s.moves);
-  const c = puzzle.tutorial!.steps[s.tutorial!.step].groups[s.tutorial!.group].cases[s.tutorial!.index];
-  if (s.stale) {
-    now.textContent = 'Set up again';
-    now.className = 'hud-now done';
-    sub.textContent = `${c.name} · you turned the cube`;
-  } else if (s.index >= n) {
-    now.textContent = 'Done ✓';
-    now.className = 'hud-now done';
-    sub.textContent = `${c.name} · ◀ to step back`;
-  } else {
-    now.textContent = s.moves[s.index];
-    now.className = 'hud-now' + (runs[s.index] ? ' trig' : '');
-    sub.textContent = `${c.name} · ${s.index + 1} of ${n}` + (s.moves[s.index + 1] ? ` · then ${s.moves[s.index + 1]}` : '');
-  }
-  ($('#hud-prev') as HTMLButtonElement).disabled = s.stale || s.index === 0;
-  ($('#hud-next') as HTMLButtonElement).disabled = !s.stale && s.index >= n;
+  document.querySelectorAll<HTMLElement>('#tut-groups .case').forEach((card) => {
+    const open = on && !!s && s.tutorial!.step === tutStep && sameCase(s.tutorial!, { step: tutStep, group: Number(card.dataset.group), index: Number(card.dataset.index) });
+    card.querySelectorAll<HTMLElement>('.mv').forEach((m) => {
+      const i = Number(m.dataset.mv);
+      m.classList.toggle('done', open && !s!.stale && i < s!.index);
+      m.classList.toggle('next', open && !s!.stale && i === s!.index);
+    });
+    const hint = card.querySelector<HTMLElement>('.case-hint');
+    if (hint) hint.textContent = !open ? '' : s!.stale ? 'You turned the cube · tap to set it up again'
+      : s!.index === 0 ? 'Tap again for each move' : s!.index >= s!.moves.length ? 'Done · tap to start over' : '';
+  });
 }
 
 /** Keep a phone's screen on while a case is open: both hands are on the real cube. */
@@ -1013,7 +1006,7 @@ function movesHtml(moves: string[], breakAfter?: number) {
   return moves.map((m, i) => {
     const open = runs[i] && runs[i] !== runs[i - 1] ? '<span class="trig">' : '';
     const close = runs[i] && runs[i] !== runs[i + 1] ? '</span>' : '';
-    return (i === breakAfter ? '<br>' : i ? ' ' : '') + open + m + close;
+    return (i === breakAfter ? '<br>' : i ? ' ' : '') + open + `<span class="mv" data-mv="${i}">${m}</span>` + close;
   }).join('');
 }
 
@@ -1044,7 +1037,7 @@ async function openCase(ref: CaseRef) {
   tutStep = ref.step;
   renderSolution(true);
   // on a phone, keep the tapped card in view below the pinned cube
-  if (document.body.classList.contains('drilling') && matchMedia('(max-width: 860px)').matches) {
+  if (phone()) {
     document.querySelector(`#tut-groups .case[data-group="${ref.group}"][data-index="${ref.index}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
 }
@@ -1069,7 +1062,7 @@ function renderTutorial(fresh: boolean) {
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span><code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-hint"></span>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
@@ -1124,7 +1117,17 @@ function onTutorialClick(e: Event) {
     b.setAttribute('aria-expanded', String(open));
     b.textContent = open ? 'Show less' : 'Show more';
   } else if (b.dataset.step) setTutorialStep(Number(b.dataset.step));
-  else if (b.dataset.group) void openCase({ step: tutStep, group: Number(b.dataset.group), index: Number(b.dataset.index) });
+  else if (b.dataset.group) {
+    const ref = { step: tutStep, group: Number(b.dataset.group), index: Number(b.dataset.index) };
+    const s = solution;
+    // on a phone the open case's card is the controller: tap it for the next move, tap a move to go back to it
+    if (phone() && s?.tutorial && sameCase(s.tutorial, ref) && !s.stale) {
+      const mv = (e.target as HTMLElement).closest<HTMLElement>('.mv');
+      if (mv) jumpTo(Number(mv.dataset.mv));
+      else if (s.index < s.moves.length) { playing = false; stepForward(); renderPlayback(); }
+      else void openCase(ref);
+    } else void openCase(ref);
+  }
 }
 
 /** Keep the current move in view by scrolling the chip list only, never the panel around it. */
@@ -1284,11 +1287,6 @@ function bind() {
   $('#stages').addEventListener('click', onStageClick);
   $('#btn-play').addEventListener('click', togglePlay);
   $('#btn-next').addEventListener('click', () => { playing = false; stepForward(); renderPlayback(); });
-  $('#hud-next').addEventListener('click', () => {
-    if (solution?.stale && solution.tutorial) void openCase(solution.tutorial);
-    else { playing = false; stepForward(); renderPlayback(); }
-  });
-  $('#hud-prev').addEventListener('click', stepBack);
   $('#btn-prev').addEventListener('click', stepBack);
   $('#btn-first').addEventListener('click', () => jumpTo(0));
   $('#btn-last').addEventListener('click', () => solution && jumpTo(solution.moves.length));

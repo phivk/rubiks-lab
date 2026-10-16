@@ -301,23 +301,6 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .solved-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); }
 @keyframes pop { from { transform: translateX(-50%) scale(0.7); opacity: 0; } }
 
-/* ---------- phone step controls on the cube ---------- */
-.stage-hud {
-  display: none; position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2;
-  align-items: center; gap: 10px; padding: 6px;
-  background: rgba(11, 13, 18, 0.72); border: 1px solid var(--line-2); border-radius: 18px;
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  touch-action: manipulation;
-}
-.stage-hud .hud-btn { width: 56px; height: 56px; border-radius: 14px; flex: none; }
-.stage-hud .hud-btn svg { width: 26px; height: 26px; }
-.stage-hud .hud-btn.primary { background: var(--accent-soft); border-color: rgba(143, 123, 255, 0.45); color: #fff; }
-.hud-move { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
-.hud-now { font-family: var(--mono); font-weight: 700; font-size: 34px; color: #fff; letter-spacing: -0.02em; }
-.hud-now.trig { color: var(--accent-2); }
-.hud-now.done { font-family: inherit; font-size: 20px; color: var(--good); }
-.hud-sub { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-
 /* ---------- solve button ---------- */
 .btn.solve {
   height: auto; flex-direction: column; gap: 2px; padding: 16px;
@@ -583,6 +566,12 @@ body.tutorial .panel.tutorial { display: flex; }
 .chip.trig { box-shadow: inset 0 -2px 0 var(--accent-2); }
 .chip.trig.even { box-shadow: inset 0 -2px 0 var(--accent); }
 .chip.trig.current { box-shadow: inset 0 -2px 0 var(--accent-2), 0 0 0 3px rgba(143, 123, 255, 0.15); }
+/* a case's moves: in the open case, the ones played fade and the next one stands out */
+.case { touch-action: manipulation; }
+.case-note, .case-hint { display: none; font-size: 11px; line-height: 1.35; color: var(--text-3); }
+.case-hint { color: var(--accent-2); font-weight: 600; }
+.case.active .mv.done { opacity: 0.35; }
+.case.active .mv.next { color: #fff; font-weight: 800; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .diagram .arrows { fill: #0b0d12; stroke: #0b0d12; stroke-width: 0.09; stroke-linecap: round; stroke-linejoin: round; }
 .case-card { display: flex; flex-direction: column; gap: 10px; }
 .case-card p { margin: 0; }
@@ -650,8 +639,12 @@ kbd {
   .panel.tutorial { order: 4; }
   /* on a phone the page scrolls, under the sticky 3D view */
   .tut-steps { top: calc(max(46vh, 300px) + 12px); }
-  /* while a tutorial case is open, its step controls sit on the pinned cube */
-  body.drilling .stage-hud { display: flex; }
+  /* in the tutorial the case card in the list is the controller: no second copy, chips or player */
+  .solution.tutorial .case-card, .solution.tutorial .sol-body { display: none; }
+  .case .case-note { display: block; }
+  .case.active .case-hint { display: block; }
+  /* readable from the table: the open case's moves are bigger */
+  .panel.tutorial .case.active .case-alg { font-size: 15px; line-height: 1.5; }
   body.drilling .stage-hint { display: none; }
   /* scrolling a tapped card into view leaves it clear of the pinned cube and stepper */
   .case { scroll-margin-top: calc(max(46vh, 300px) + 64px); scroll-margin-bottom: 16px; }
