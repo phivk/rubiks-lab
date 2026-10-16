@@ -75,7 +75,8 @@ const link = (self: () => Linked) => ({
 const view: PuzzleView = new PuzzleView($('#stage'), {
   onDragTurn: (move) => commitUserMove(move, false),
   onStickerClick: (i) => paintSticker(i),
-  canDragTurn: () => queue.length === 0 && !running,
+  // on a phone, with a case open, a swipe on the cube (often meant to scroll) only turns the view
+  canDragTurn: () => queue.length === 0 && !running && !(phone() && document.body.classList.contains('drilling')),
   ...link(() => view),
   onDrag: (move, steps) => maps.forEach((m) => m.showDrag(move, steps)),
 });
@@ -474,6 +475,7 @@ function setTab(t: Tab) {
   // a tutorial case blanks the stickers that don't matter yet; don't leave them behind
   const blanked = tab === 'tutorial' && session.state.includes(puzzle.unset);
   tab = t;
+  try { localStorage.setItem('tab', t); } catch { /* storage unavailable */ }
   if (blanked) setStateDirect(puzzle.solved());
   invalidateSolution(true);
   renderSolution();
@@ -836,7 +838,11 @@ function renderDrilling() {
       m.classList.toggle('next', open && !s!.stale && i === s!.index);
     });
     card.classList.toggle('playing', open && playing);
+    const status = card.querySelector<HTMLElement>('.case-status');
+    if (status) status.innerHTML = !open ? '' : s!.stale ? '<b>Cube turned</b>tap to set up'
+      : s!.index >= s!.moves.length && !playing ? '<b>Done ✓</b>tap to repeat' : '';
     card.querySelector<HTMLElement>('.case-back')?.classList.toggle('off', !open || !!s!.stale || s!.index === 0);
+    card.querySelector<HTMLElement>('.case-play')?.classList.toggle('off', !open || !!s!.stale);
   });
 }
 
@@ -1019,6 +1025,12 @@ function setTutorialStep(k: number) {
   tutStep = k;
   try { localStorage.setItem('tutorialStep', String(k)); } catch { /* storage unavailable */ }
   renderSolution();
+  // on a phone the page scrolls, not the panel: bring the new step's start up under the stepper
+  if (phone()) {
+    const top = $('#tut-steps').getBoundingClientRect();
+    const intro = $('#tut-intro').getBoundingClientRect();
+    if (intro.top < top.bottom || intro.top > innerHeight) scrollBy({ top: intro.top - top.bottom - 12 });
+  }
 }
 
 /** Set a case up on the cube, ready to play its algorithm. */
@@ -1061,7 +1073,7 @@ function renderTutorial(fresh: boolean) {
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-back" data-ctl="back" role="button" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><span class="case-play" data-ctl="play" role="button" aria-label="Play all moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></span></span>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><span class="case-back" data-ctl="back" role="button" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><span class="case-play" data-ctl="play" role="button" aria-label="Play all moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></span></span>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
@@ -1108,6 +1120,7 @@ function onCaseCardClick(e: Event) {
   if (b?.dataset.act === 'reset' && ref) void openCase(ref);
 }
 
+let lastCardTap = -1e9;
 function onTutorialClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
   if (!b) return;
@@ -1121,15 +1134,16 @@ function onTutorialClick(e: Event) {
     const s = solution;
     // on a phone the open case's card is the controller: tap it for the next move, tap a move to go back to it
     if (phone() && s?.tutorial && sameCase(s.tutorial, ref) && !s.stale) {
-      const mv = (e.target as HTMLElement).closest<HTMLElement>('.mv');
       const ctl = (e.target as HTMLElement).closest<HTMLElement>('[data-ctl]')?.dataset.ctl;
+      // a second tap within a moment is a bounce, not a wish for two moves
+      if (!ctl && e.timeStamp - lastCardTap < 250) return;
+      lastCardTap = e.timeStamp;
       if (ctl === 'back') stepBack();
       else if (ctl === 'play') {
         // the whole sequence from the start; tapping again while it plays pauses it
         if (!playing && s.index > 0) jumpTo(0);
         togglePlay();
-      } else if (mv) jumpTo(Number(mv.dataset.mv));
-      else if (s.index < s.moves.length) { playing = false; stepForward(); renderPlayback(); }
+      } else if (s.index < s.moves.length) { playing = false; stepForward(); renderPlayback(); }
       else void openCase(ref);
     } else void openCase(ref);
   }
@@ -1365,5 +1379,11 @@ void switchPuzzle(initial).then(() => {
     const v = puzzle.validate(session.state);
     toast(v.ok ? 'Loaded puzzle from link' : 'Loaded puzzle from link — ' + v.message);
     if (!v.ok) setMode('paint');
+  } else {
+    // come back to the tab you were on: a returning learner shouldn't have to tap Tutorial again
+    try {
+      const t = localStorage.getItem('tab');
+      if ((t === 'learn' || t === 'tutorial') && document.querySelector(`#sol-tabs [data-tab="${t}"]`)) setTab(t);
+    } catch { /* storage unavailable */ }
   }
 });
