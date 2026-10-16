@@ -4,7 +4,7 @@
 // picture, the 3D cube and the algorithm always agree.
 //
 //   Cross   a few example edges, since the cross is planned rather than learnt
-//   F2L     the idea, pair then insert, shown on a few cases, plus the five worth learning
+//   F2L     the idea, build the block then insert it, on a few cases, plus five quicker as algorithms
 //   OLL     two-look: the 3 edge cases that make a yellow cross, then the 7 corner cases
 //   PLL     two-look: the 2 corner cases, then the 4 edge cases
 //
@@ -20,40 +20,40 @@ import { invertAlg, UNSET, type CubeModel } from './model';
 /** F2L, for the front-right slot (white down, green front): [algorithm, note], by group */
 const F2L_GROUPS: { name: string; about: string; cases: [string, string][] }[] = [
   {
-    name: 'Insert a ready pair',
-    about: 'The moves every other case is built from. Learn to see these and the rest follows.',
+    name: 'Ready to go in',
+    about: 'Three moves, or four with a turn of the top. Every other case ends with one of these.',
     cases: [
-      ["R U R'", 'Corner and edge are joined, above the slot: drop them in.'],
-      ["F' U' F", 'The same, from the other side.'],
-      ["U R U' R'", 'Apart, but ready: the edge joins the corner as it goes in.'],
-      ["U' F' U F", 'The same, from the other side.'],
+      ["R U R'", 'Already a block, above the slot.'],
+      ["F' U' F", 'The mirror image, on the F side.'],
+      ["U R U' R'", 'Not a block yet, but the edge meets the corner on the way down.'],
+      ["U' F' U F", 'The mirror image, on the F side.'],
     ],
   },
   {
-    name: 'Pair, then insert',
-    about: 'When they won’t go in at once: first join them in the top layer, using the empty slot, then insert the pair.',
+    name: 'Build the block first',
+    about: 'Corner and edge are both on top but apart. Bring them together, then it’s a case from above.',
     cases: [
-      ["R U2 R' U R U' R'", 'R U2 R′ joins them, then U R U′ R′ inserts the pair.'],
-      ["U' R U R' U2 R U' R'", 'U′ R U R′ U2 joins them, then R U′ R′ inserts the pair.'],
-      ["U F' U' F U2 F' U F", 'The same, from the other side.'],
+      ["R U2 R' U R U' R'", 'R U2 R′ builds the block, U R U′ R′ puts it in.'],
+      ["U' R U R' U2 R U' R'", 'U′ R U R′ U2 builds the block, R U′ R′ puts it in.'],
+      ["U F' U' F U2 F' U F", 'The mirror image, on the F side.'],
     ],
   },
   {
-    name: 'Free a stuck piece',
-    about: 'A piece already in the slot, the wrong way: take it out, and it’s one of the cases above.',
+    name: 'Get a piece out of the slot',
+    about: 'One piece is down in the slot but wrong. Lift it to the top first.',
     cases: [
-      ["R U' R' F' U' F", 'R U′ R′ takes the corner out, F′ U′ F puts the pair in.'],
-      ["R U R' U' R U R'", 'R U R′ U′ takes the corner out, joined to its edge; R U R′ puts the pair in.'],
-      ["U' R U R' U F' U' F", 'U′ R U R′ takes the edge out; U F′ U′ F joins and inserts the pair.'],
+      ["R U' R' F' U' F", 'R U′ R′ lifts the corner and builds the block, F′ U′ F puts it in.'],
+      ["R U R' U' R U R'", 'R U R′ U′ lifts the corner and builds the block, R U R′ puts it in.'],
+      ["U' R U R' U F' U' F", 'U′ R U R′ lifts the edge, U F′ U′ F joins it to the corner on the way in.'],
     ],
   },
   {
-    name: 'Five worth learning',
-    about: 'Cases where the obvious way is long, and a repetitive algorithm is much faster.',
+    name: 'Faster as an algorithm',
+    about: 'Building the block by hand is slow here. These repeat a few moves, so they’re quick to learn.',
     cases: [
-      ["R U R' U' R U R' U' R U R'", 'The sexy move twice, then R U R′.'],
-      ["R U R' U' U' R U R' U' R U R'", 'The same, with an extra U′ after the first sexy move.'],
-      ["F' U' F U U F' U' F U F' U' F", 'The mirror of the one above, on the F side.'],
+      ["R U R' U' R U R' U' R U R'", 'White on top, edge in the slot.'],
+      ["R U R' U' U' R U R' U' R U R'", 'White on top, edge in front.'],
+      ["F' U' F U U F' U' F U F' U' F", 'White on top, edge on the right.'],
       ["R U R' U' R U' R' U2 F' U' F", 'Both in the slot, edge flipped and white facing right.'],
       ["R U' R' U F' U' F U' F' U' F", 'Both in the slot, edge flipped and white facing front.'],
     ],
@@ -143,14 +143,8 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     name: 'F2L',
     goal: CFOP_STAGES[1].goal,
     html: `<p><b>F2L</b> stands for <b>F</b>irst <b>2</b> <b>L</b>ayers. Each white corner and the middle edge beside it go in together, as a pair, into the slot between their two centers.</p>
-      <p>Every pair is solved the same way, in two parts: <b>join</b> the corner and edge in the top layer, then <b>insert</b> the pair. Hold the slot you’re working on at the <b>front right</b> and do the four slots one by one.</p>
-      <p>Don’t learn a table of algorithms for this: work each pair out, like the cross. The examples below show the idea. The one rule is to join pairs using an <b>empty slot</b>, so you never lift out a pair you’ve already solved. Turn the top first if you need to, so the moves only touch pieces you don’t care about yet.</p>
-      <p>A few tips once it clicks:</p>
-      <ul>
-        <li><b>Intuition isn’t always best.</b> For the last five cases below, a short repetitive algorithm beats working it out.</li>
-        <li><b>Don’t turn the whole cube.</b> Mostly <code>R</code> and <code>U</code>; use <code>F</code> or the left hand instead of rotating.</li>
-        <li><b>Slow down to speed up.</b> Turn slowly and steadily, and look for the next pair while you insert this one.</li>
-      </ul>`,
+      <p>Think of a corner and its edge as two halves of one block: bring them together in the top layer, then drop the block into its slot. Hold the slot you’re filling at the <b>front right</b>.</p>
+      <p>The cases below aren’t a list to learn by heart. They show that one idea from a few angles, so you can work out any pair yourself. Before you build a block, turn the top so your moves only pass through slots that aren’t done yet.</p>`,
     groups: f2lGroups,
     view: 'corner',
   };
