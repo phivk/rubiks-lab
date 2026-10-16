@@ -969,11 +969,6 @@ const markCode = (html: string) => html.replace(/<code>([^<]*)<\/code>/g, (_, te
 /** a case's picture, drawn as the 3D view draws the puzzle */
 const diagram = (step: TutorialStep, c: TutorialCase) => snapshot(puzzle, c.setup, step.view, step.arrows?.(c));
 
-/** every case of the tutorial in order, to go from one to the next */
-function caseOrder(): CaseRef[] {
-  return puzzle.tutorial!.steps.flatMap((st, step) => st.groups.flatMap((g, group) => g.cases.map((_, index) => ({ step, group, index }))));
-}
-
 function setTutorialStep(k: number) {
   tutStep = k;
   try { localStorage.setItem('tutorialStep', String(k)); } catch { /* storage unavailable */ }
@@ -1047,30 +1042,17 @@ function renderCaseCard() {
   const step = T.steps[ref.step];
   const group = step.groups[ref.group];
   const c = group.cases[ref.index];
-  const order = caseOrder();
-  const k = order.findIndex((r) => sameCase(r, ref));
   el.innerHTML = `
     <div class="lesson-head"><span class="eyebrow">${step.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
     <div class="lesson-title">${c.name}</div>
     <div class="case-big">${diagram(step, c)}</div>
-    ${c.note ? `<div class="lesson-text"><p>${c.note}</p></div>` : ''}
-    ${triggerRuns(c.moves).some(Boolean) ? `<p class="muted small"><span class="trig-key"></span>marks each ${T.triggers!.map((t) => `${t.name} (<code>${t.moves.join(' ')}</code>)`).join(' or ')}.</p>` : ''}
-    ${solution!.stale ? '<div class="lesson-stale">You turned the cube, so it no longer shows this case. <button class="link" data-act="reset">Set it up again</button></div>' : ''}
-    <div class="lesson-nav">
-      <button class="btn small ghost" data-act="prev" ${k > 0 ? '' : 'disabled'}><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous case</button>
-      <button class="btn small ghost" data-act="next" ${k < order.length - 1 ? '' : 'disabled'}>Next case<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
-    </div>`;
+    ${solution!.stale ? '<div class="lesson-stale">You turned the cube, so it no longer shows this case. <button class="link" data-act="reset">Set it up again</button></div>' : ''}`;
 }
 
 function onCaseCardClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
   const ref = solution?.tutorial;
-  if (!b || !ref) return;
-  const order = caseOrder();
-  const k = order.findIndex((r) => sameCase(r, ref));
-  if (b.dataset.act === 'reset') void openCase(ref);
-  else if (b.dataset.act === 'prev' && k > 0) void openCase(order[k - 1]);
-  else if (b.dataset.act === 'next' && k < order.length - 1) void openCase(order[k + 1]);
+  if (b?.dataset.act === 'reset' && ref) void openCase(ref);
 }
 
 function onTutorialClick(e: Event) {

@@ -155,7 +155,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     goal: 'Orient the Last Layer: make the whole top yellow, in two looks.',
     html: `<p><b>OLL</b> stands for <b>O</b>rient the <b>L</b>ast <b>L</b>ayer: with the first two layers solved, turn every top piece so yellow faces up.</p>
       <p>Do it in two looks: first the edges, making a yellow cross, then the corners. That’s 10 algorithms instead of the 57 it takes in one go, for a few extra moves.</p>
-      <p>Hold the cube with yellow on top and look at it from above. The pictures show which stickers are yellow, on top and on the sides of the top layer. Turn the top until your cube matches one, then do its algorithm. Watch for the <b>sexy move</b>, <code>R U R' U'</code>, highlighted wherever it appears.</p>`,
+      <p>Hold the cube with yellow on top and look at it from above. The pictures show which stickers are yellow, on top and on the sides of the top layer. Turn the top until your cube matches one, then do its algorithm.</p>`,
     groups: [
       {
         name: '1 · Yellow cross',
