@@ -570,6 +570,14 @@ body.tutorial .panel.tutorial { display: flex; }
 .case { touch-action: manipulation; }
 .case-note, .case-hint { display: none; font-size: 11px; line-height: 1.35; color: var(--text-3); }
 .case-hint { color: var(--accent-2); font-weight: 600; }
+/* the open case's back and play-all, at the bottom of its card */
+.case-ctl { display: none; justify-content: space-between; width: 100%; margin-top: 2px; }
+.case-back, .case-play { width: 44px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 10px; color: var(--text-2); background: rgba(255, 255, 255, 0.04); }
+.case-back svg { width: 22px; height: 22px; }
+.case-play svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.case-play .i-pause, .case.playing .case-play .i-play { display: none; }
+.case.playing .case-play .i-pause { display: block; }
+.case-back.off { visibility: hidden; }
 .case.active .mv.done { opacity: 0.35; }
 .case.active .mv.next { color: #fff; font-weight: 800; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .diagram .arrows { fill: #0b0d12; stroke: #0b0d12; stroke-width: 0.09; stroke-linecap: round; stroke-linejoin: round; }
@@ -642,6 +650,7 @@ kbd {
   /* in the tutorial the case card in the list is the controller: no second copy, chips or player */
   .solution.tutorial .case-card, .solution.tutorial .sol-body { display: none; }
   .case .case-note { display: block; }
+  .case.active .case-ctl { display: flex; }
   .case.active .case-hint { display: block; }
   /* readable from the table: the open case's moves are bigger */
   .panel.tutorial .case.active .case-alg { font-size: 15px; line-height: 1.5; }

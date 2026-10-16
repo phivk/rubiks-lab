@@ -835,9 +835,11 @@ function renderDrilling() {
       m.classList.toggle('done', open && !s!.stale && i < s!.index);
       m.classList.toggle('next', open && !s!.stale && i === s!.index);
     });
+    card.classList.toggle('playing', open && playing);
+    card.querySelector<HTMLElement>('.case-back')?.classList.toggle('off', !open || !!s!.stale || s!.index === 0);
     const hint = card.querySelector<HTMLElement>('.case-hint');
     if (hint) hint.textContent = !open ? '' : s!.stale ? 'You turned the cube · tap to set it up again'
-      : s!.index === 0 ? 'Tap again for each move' : s!.index >= s!.moves.length ? 'Done · tap to start over' : '';
+      : s!.index === 0 ? 'Tap the card for each move' : s!.index >= s!.moves.length ? 'Done · tap to start over' : '';
   });
 }
 
@@ -1062,7 +1064,7 @@ function renderTutorial(fresh: boolean) {
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-hint"></span>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-hint"></span><span class="case-ctl"><span class="case-back" data-ctl="back" role="button" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><span class="case-play" data-ctl="play" role="button" aria-label="Play all moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></span></span>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
@@ -1123,7 +1125,13 @@ function onTutorialClick(e: Event) {
     // on a phone the open case's card is the controller: tap it for the next move, tap a move to go back to it
     if (phone() && s?.tutorial && sameCase(s.tutorial, ref) && !s.stale) {
       const mv = (e.target as HTMLElement).closest<HTMLElement>('.mv');
-      if (mv) jumpTo(Number(mv.dataset.mv));
+      const ctl = (e.target as HTMLElement).closest<HTMLElement>('[data-ctl]')?.dataset.ctl;
+      if (ctl === 'back') stepBack();
+      else if (ctl === 'play') {
+        // the whole sequence from the start; tapping again while it plays pauses it
+        if (!playing && s.index > 0) jumpTo(0);
+        togglePlay();
+      } else if (mv) jumpTo(Number(mv.dataset.mv));
       else if (s.index < s.moves.length) { playing = false; stepForward(); renderPlayback(); }
       else void openCase(ref);
     } else void openCase(ref);
