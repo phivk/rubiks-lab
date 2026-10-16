@@ -1001,7 +1001,10 @@ function renderTutorial(fresh: boolean) {
     tutRendered = key;
     $('#tut-steps').innerHTML = T.steps.map((st, i) =>
       `<button role="tab" data-step="${i}" class="${i === tutStep ? 'active' : ''}" aria-selected="${i === tutStep}"><span class="num">${i + 1}</span>${st.name}</button>`).join('');
-    $('#tut-intro').innerHTML = `<div class="lesson-title">${step.goal}</div><div class="lesson-text">${markCode(step.html)}</div>`;
+    // a long explanation shows just its first paragraph on a phone, with a button for the rest
+    const long = (step.html.match(/<p[ >]/g) ?? []).length > 1;
+    $('#tut-intro').innerHTML = `<div class="lesson-title">${step.goal}</div><div class="lesson-text${long ? ' collapsible' : ''}">${markCode(step.html)}</div>` +
+      (long ? '<button class="link more" data-act="more" aria-expanded="false">Show more</button>' : '');
     $('#tut-groups').innerHTML = step.groups.map((g, gi) => `
       <section class="tut-group">
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length}</span></div>
@@ -1058,7 +1061,11 @@ function onCaseCardClick(e: Event) {
 function onTutorialClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
   if (!b) return;
-  if (b.dataset.step) setTutorialStep(Number(b.dataset.step));
+  if (b.dataset.act === 'more') {
+    const open = $('#tut-intro .collapsible').classList.toggle('open');
+    b.setAttribute('aria-expanded', String(open));
+    b.textContent = open ? 'Show less' : 'Show more';
+  } else if (b.dataset.step) setTutorialStep(Number(b.dataset.step));
   else if (b.dataset.group) void openCase({ step: tutStep, group: Number(b.dataset.group), index: Number(b.dataset.index) });
 }
 

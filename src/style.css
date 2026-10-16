@@ -537,6 +537,7 @@ body.tutorial .panel.tutorial { display: flex; }
 }
 .tut-steps button.active .num { background: var(--accent); color: #fff; }
 .tut-intro { display: flex; flex-direction: column; gap: 8px; }
+.tut-intro .more { display: none; align-self: flex-start; color: var(--accent-2); font-weight: 600; }
 .panel.tutorial code, .case-card code {
   font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 1px 5px; border-radius: 5px;
   background: var(--chip-hover); color: var(--text); white-space: nowrap;
@@ -632,6 +633,10 @@ kbd {
   .panel.tutorial { order: 4; }
   /* on a phone the page scrolls, under the sticky 3D view */
   .tut-steps { top: calc(max(46vh, 300px) + 12px); }
+  /* a long stage explanation folds down to its first paragraph */
+  .tut-intro .collapsible:not(.open) > :not(:first-child) { display: none; }
+  .tut-intro .collapsible:not(.open) > :first-child { margin-bottom: 0; }
+  .tut-intro .more { display: inline; }
   /* the tabs shrink and scroll sideways rather than widening the page */
   .puzzle-switch { position: static; transform: none; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .puzzle-switch::-webkit-scrollbar { display: none; }
