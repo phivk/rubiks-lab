@@ -4,13 +4,12 @@
 // picture, the 3D cube and the algorithm always agree.
 //
 //   Cross   a few example edges, since the cross is planned rather than learnt
-//   F2L     all 41 ways the front-right corner and edge can sit, each with an algorithm
+//   F2L     the idea, pair then insert, shown on a few cases, plus the five worth learning
 //   OLL     two-look: the 3 edge cases that make a yellow cross, then the 7 corner cases
 //   PLL     two-look: the 2 corner cases, then the 4 edge cases
 //
 // scripts/verify-tutorial.ts checks every case: each algorithm solves its setup, the F2L
-// cases are all different and cover all 41, and each stage's setups leave the earlier
-// stages alone.
+// cases are all different, and each stage's setups leave the earlier stages alone.
 
 import type { State, Tutorial, TutorialCase, TutorialStep } from '../core/types';
 import { OLL, PLL } from './algs';
@@ -18,19 +17,47 @@ import { CFOP_STAGES } from './cfop';
 import { alg, CORNERS, EDGES, lessonKit, sameSet, TOP_CORNERS, TOP_EDGES, WIDE_NOTATION } from './lessonKit';
 import { invertAlg, UNSET, type CubeModel } from './model';
 
-/** the four corner–edge pairs' F2L algorithms, for the front-right slot (white down, green front) */
-export const F2L_ALGS = [
-  "U R U' R'", "U' F' U F", "F' U' F", "R U R'",
-  "U' R U R' U2 R U' R'", "U F' U' F U2 F' U F", "U' R U2 R' U2 R U' R'", "U F' U2 F U2 F' U F",
-  "U' R U' R' U F' U' F", "U' R U R' U R U R'", "U' R U2 R' U F' U' F", "U F' U F U' F' U' F",
-  "U' R U' R' U R U R'", "R U' R' U2 F' U' F", "R U2 R' U' R U R'", "F' U2 F U F' U' F",
-  "U R U2 R' U R U' R'", "U' F' U2 F U' F' U F", "U2 R U R' U R U' R'", "U2 F' U' F U' F' U F",
-  "U R U' R' U' R U' R' U R U' R'", "F U R U' R' F' R U' R'", "U' R' F R F' R U R'", "U R U' R' F R' F' R",
-  "R U' R' U R U' R'", "F' U F U' F' U F", "R U R' U' R U R'", "U' R' F R F' R U' R'",
-  "U R U' R' U R U' R' U R U' R'", "U' R U' R' U2 R U' R'", "U R U R' U2 R U R'", "R2 U2 F R2 F' U2 R' U R'",
-  "R U' R' U' R U R' U2 R U' R'", "R U' R' U R U2 R' U R U' R'", "R U' R' F' U' F", "R U R' U' R U' R' U2 F' U' F",
-  "U' R U R' U F' U' F", "U F' U F U2 R U R'", "F' U2 F U' R U R'", "F' U' F U' R U R'",
-  "F' U F U2 F' U' F R U R'",
+/** F2L, for the front-right slot (white down, green front): [algorithm, note], by group */
+const F2L_GROUPS: { name: string; about: string; cases: [string, string][] }[] = [
+  {
+    name: 'Insert a ready pair',
+    about: 'The moves every other case is built from. Learn to see these and the rest follows.',
+    cases: [
+      ["R U R'", 'Corner and edge are joined, above the slot: drop them in.'],
+      ["F' U' F", 'The same, from the other side.'],
+      ["U R U' R'", 'Apart, but ready: the edge joins the corner as it goes in.'],
+      ["U' F' U F", 'The same, from the other side.'],
+    ],
+  },
+  {
+    name: 'Pair, then insert',
+    about: 'When they won’t go in at once: first join them in the top layer, using the empty slot, then insert the pair.',
+    cases: [
+      ["R U2 R' U R U' R'", 'R U2 R′ joins them, then U R U′ R′ inserts the pair.'],
+      ["U' R U R' U2 R U' R'", 'U′ R U R′ U2 joins them, then R U′ R′ inserts the pair.'],
+      ["U F' U' F U2 F' U F", 'The same, from the other side.'],
+    ],
+  },
+  {
+    name: 'Free a stuck piece',
+    about: 'A piece already in the slot, the wrong way: take it out, and it’s one of the cases above.',
+    cases: [
+      ["R U' R' F' U' F", 'R U′ R′ takes the corner out, F′ U′ F puts the pair in.'],
+      ["R U R' U' R U R'", 'R U R′ U′ takes the corner out, joined to its edge; R U R′ puts the pair in.'],
+      ["U' R U R' U F' U' F", 'U′ R U R′ takes the edge out; U F′ U′ F joins and inserts the pair.'],
+    ],
+  },
+  {
+    name: 'Five worth learning',
+    about: 'Cases where the obvious way is long, and a repetitive algorithm is much faster.',
+    cases: [
+      ["R U R' U' R U R' U' R U R'", 'The sexy move twice, then R U R′.'],
+      ["R U R' U' U' R U R' U' R U R'", 'The same, with an extra U′ after the first sexy move.'],
+      ["F' U' F U U F' U' F U F' U' F", 'The mirror of the one above, on the F side.'],
+      ["R U R' U' R U' R' U2 F' U' F", 'Both in the slot, edge flipped and white facing right.'],
+      ["R U' R' U F' U' F U' F' U' F", 'Both in the slot, edge flipped and white facing front.'],
+    ],
+  },
 ];
 
 /** example cross edges for the white–green edge, with how to bring it home */
@@ -103,27 +130,9 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   // ---------- 2. F2L ----------
 
   const pair = [[white, center(home, 'F'), center(home, 'R')], [center(home, 'F'), center(home, 'R')]];
-  const f2lGroup = (c: TutorialCase) => {
-    const corner = find(c.setup, pair[0]);
-    const edge = find(c.setup, pair[1]);
-    if (c.moves.length <= 4) return 0;
-    if (corner.includes('U') && edge.includes('U')) return c.setup[at(corner, 'U')] === white ? 2 : 1;
-    if (corner.includes('U')) return 3;
-    if (edge.includes('U')) return 4;
-    return 5;
-  };
-  const f2lCases = F2L_ALGS.map((a) => make('', a, (s) => [...centers, ...pieceStickers(s, pair)]));
-  const F2L_GROUP_NAMES: [string, string][] = [
-    ['Basic inserts', 'The pair is joined, or one move from it: insert it straight away.'],
-    ['Both on top, white facing out', 'Corner and edge in the top layer, with the corner’s white sticker on a side.'],
-    ['Both on top, white facing up', 'The trickiest pairs to join: first turn the corner so its white faces out.'],
-    ['Corner on top, edge in its slot', 'Take the edge out with the corner, or pair them over it.'],
-    ['Edge on top, corner in its slot', 'Take the corner out, joined to the edge.'],
-    ['Both in the slot', 'Wrongly placed, or flipped: take them out together and put them back.'],
-  ];
-  const f2lGroups = F2L_GROUP_NAMES.map(([name, about], g) => ({
+  const f2lGroups = F2L_GROUPS.map(({ name, about, cases }) => ({
     name, about,
-    cases: f2lCases.filter((c) => f2lGroup(c) === g).sort((x, y) => x.moves.length - y.moves.length),
+    cases: cases.map(([a, note]) => make('', a, (s) => [...centers, ...pieceStickers(s, pair)], note)),
   }));
   let n = 0;
   for (const g of f2lGroups) for (const c of g.cases) c.name = `F2L ${++n}`;
@@ -134,8 +143,14 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     name: 'F2L',
     goal: CFOP_STAGES[1].goal,
     html: `<p><b>F2L</b> stands for <b>F</b>irst <b>2</b> <b>L</b>ayers. Each white corner and the middle edge beside it go in together, as a pair, into the slot between their two centers.</p>
-      <p>Hold the slot you’re working on at the <b>front right</b>. Find its corner and edge, turn the top until they look like one of the pictures, and do its algorithm. Every case keeps the cross and the other slots.</p>
-      <p>There are 41 cases, but don’t learn them by heart: they’re all built from the same few moves (<code>R U R'</code>, <code>F' U' F</code>), which join the pair in the top layer and then insert it. Watch a few on the cube and you’ll see the idea.</p>`,
+      <p>Every pair is solved the same way, in two parts: <b>join</b> the corner and edge in the top layer, then <b>insert</b> the pair. Hold the slot you’re working on at the <b>front right</b> and do the four slots one by one.</p>
+      <p>Don’t learn a table of algorithms for this: work each pair out, like the cross. The examples below show the idea. The one rule is to join pairs using an <b>empty slot</b>, so you never lift out a pair you’ve already solved. Turn the top first if you need to, so the moves only touch pieces you don’t care about yet.</p>
+      <p>A few tips once it clicks:</p>
+      <ul>
+        <li><b>Intuition isn’t always best.</b> For the last five cases below, a short repetitive algorithm beats working it out.</li>
+        <li><b>Don’t turn the whole cube.</b> Mostly <code>R</code> and <code>U</code>; use <code>F</code> or the left hand instead of rotating.</li>
+        <li><b>Slow down to speed up.</b> Turn slowly and steadily, and look for the next pair while you insert this one.</li>
+      </ul>`,
     groups: f2lGroups,
     view: 'corner',
   };

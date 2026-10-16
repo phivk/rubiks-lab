@@ -1,8 +1,8 @@
 // Checks the CFOP tutorial: every algorithm solves its case's setup (the stickers it shows end
 // up home, and the blanked ones are only ones it doesn't show), each stage's setups keep
-// the earlier stages solved and need this one, the F2L cases are all different and cover all
-// 41, OLL and PLL each take two looks whose cases cover every situation between them, and
-// the PLL arrows join top stickers.
+// the earlier stages solved and need this one, the F2L cases are all different, OLL and
+// PLL each take two looks whose cases cover every situation between them, and the PLL
+// arrows join top stickers.
 import { lessonKit, U_TURNS } from '../src/cube/lessonKit';
 import { CubeModel, invertAlg, UNSET } from '../src/cube/model';
 import { cfopTutorial } from '../src/cube/tutorial';
@@ -41,7 +41,7 @@ for (const step of T.steps) {
     }
   }
 }
-// the 41 F2L cases: where the pair's corner and edge are, up to a turn of the top
+// the F2L cases: where the pair's corner and edge are, up to a turn of the top
 const white = K.center(home, 'D'), F = K.center(home, 'F'), R = K.center(home, 'R');
 const f2lCases = f2l.groups.flatMap((g) => g.cases);
 const keys = new Set(f2lCases.map((c) => U_TURNS.map((u) => {
@@ -77,6 +77,6 @@ for (const [name, g, n, needs, done, k] of looks) {
   if (g.cases.length !== n || different !== n) fail(`${name}: ${different} different cases in ${g.cases.length}, want ${n}`);
 }
 const count = (s: typeof cross) => s.groups.reduce((n, g) => n + g.cases.length, 0);
-if (keys.size !== 41 || count(f2l) !== 41) fail(`F2L: ${keys.size} different cases in ${count(f2l)}`);
+if (keys.size !== count(f2l)) fail(`F2L: ${keys.size} different cases in ${count(f2l)}`);
 console.log(`tutorial: ${T.steps.map((s) => `${s.name} ${count(s)}`).join(', ')}${fails ? ` — ${fails} failures` : ' — all ok'}`);
 if (fails) process.exit(1);
