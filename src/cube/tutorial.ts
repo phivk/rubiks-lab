@@ -5,8 +5,8 @@
 //
 //   Cross   a few example edges, since the cross is planned rather than learnt
 //   F2L     all 41 ways the front-right corner and edge can sit, each with an algorithm
-//   OLL     the 57 cases, grouped by shape
-//   PLL     the 21 cases, grouped by what moves
+//   OLL     two-look: the 3 edge cases that make a yellow cross, then the 7 corner cases
+//   PLL     two-look: the 2 corner cases, then the 4 edge cases
 //
 // scripts/verify-tutorial.ts checks every case: each algorithm solves its setup, the F2L
 // cases are all different and cover all 41, and each stage's setups leave the earlier
@@ -43,12 +43,6 @@ const CROSS_CASES: [string, string, string][] = [
   ['On the bottom, flipped', "F2 U' R' F R", 'Take it out to the top, then bring it back in the right way round.'],
 ];
 
-const OLL_GROUPS = [
-  'All Edges Oriented Correctly', 'T-Shapes', 'Squares', 'C-Shapes', 'W-Shapes', 'Corners Correct, Edges Flipped',
-  'P-Shapes', 'I-Shapes', 'Fish-Shapes', 'Knight Move Shapes', 'Awkward Shapes', 'L-Shapes', 'Lightning Bolts',
-  'No Edges Flipped Correctly',
-];
-const PLL_GROUPS = ['only edges move', 'only corners move', 'two neighbouring corners swap', 'two opposite corners swap'];
 
 
 export function cfopTutorial(M: CubeModel): Tutorial {
@@ -85,6 +79,8 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   function pllArrows(s: State): [number, number][] {
     const out: [number, number][] = [];
     for (const slot of TOP) {
+      // a blanked piece has nowhere to point
+      if (colorsAt(s, slot).includes(UNSET)) continue;
       const to = TOP.find((h) => h.length === slot.length && sameSet(colorsAt(s, slot), [...h].map((f) => center(s, f))))!;
       if (to !== slot) out.push([at(slot, 'U'), at(to, 'U')]);
     }
@@ -144,38 +140,83 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     view: 'corner',
   };
 
-  // ---------- 3. OLL ----------
+  // ---------- 3. OLL, in two looks ----------
 
+  const TOP_EDGE_STICKERS = new Set(TOP_EDGES.flatMap((slot) => stickersOf(slot)));
+  const inF2L = (i: number) => !slotOf[i].includes('U') || slotOf[i] === 'U';
   // the first two layers, and the top layer's yellow stickers: where the rest go is for PLL
-  const ollShown = (s: State) => M.facelets.map((f) => f.index).filter((i) => !slotOf[i].includes('U') || s[i] === yellow);
+  const ollShown = (s: State) => M.facelets.map((f) => f.index).filter((i) => inF2L(i) || s[i] === yellow);
+  // look 1 is about the edges: their yellow stickers only, the corners blank
+  const edgesShown = (s: State) => M.facelets.map((f) => f.index).filter((i) => inF2L(i) || (TOP_EDGE_STICKERS.has(i) && s[i] === yellow));
+  const ocll = (n: number, name: string) => make(name, OLL.find((o) => o.n === n)!.alg, ollShown);
 
   const oll: TutorialStep = {
     name: 'OLL',
-    goal: CFOP_STAGES[2].goal,
-    html: `<p><b>OLL</b> stands for <b>O</b>rient the <b>L</b>ast <b>L</b>ayer: with the first two layers solved, one algorithm turns every top piece so yellow faces up.</p>
-      <p>Hold the cube with yellow on top and look at it from above. The pictures show which stickers are yellow, on top and on the sides of the top layer. Turn the top until your cube matches one, then do its algorithm.</p>
-      <p>There are 57 cases. Start with the first group: once all four edges show yellow, these seven fix the corners. With the three edge cases in the T, I and P groups (<code>F R U R' U' F'</code> and friends) you have two-look OLL, and can learn the rest one at a time.</p>
-      <p>Look for the <b>sexy move</b> (<code>R U R' U'</code>, highlighted) inside the algorithms: many are one or two of them wrapped in a setup move. OLL 45 is just <code>F</code>, a sexy move, <code>F'</code>.</p>`,
-    groups: OLL_GROUPS.map((g) => ({
-      name: g,
-      cases: OLL.filter((o) => o.group === g).map((o) => make(`OLL ${o.n} · ${o.name}`, o.alg, ollShown)),
-    })),
+    goal: 'Orient the Last Layer: make the whole top yellow, in two looks.',
+    html: `<p><b>OLL</b> stands for <b>O</b>rient the <b>L</b>ast <b>L</b>ayer: with the first two layers solved, turn every top piece so yellow faces up.</p>
+      <p>Do it in two looks: first the edges, making a yellow cross, then the corners. That’s 10 algorithms instead of the 57 it takes in one go, for a few extra moves.</p>
+      <p>Hold the cube with yellow on top and look at it from above. The pictures show which stickers are yellow, on top and on the sides of the top layer. Turn the top until your cube matches one, then do its algorithm. Watch for the <b>sexy move</b>, <code>R U R' U'</code>, highlighted wherever it appears.</p>`,
+    groups: [
+      {
+        name: '1 · Yellow cross',
+        about: 'Ignore the corners. The yellow edges on top make a line, an L or just the center dot.',
+        cases: [
+          make('Line', "F R U R' U' F'", edgesShown, 'Hold the line left to right.'),
+          make('L', "f R U R' U' f'", edgesShown, 'Hold the L at the front right: yellow edges in front and on the right.'),
+          make('Dot', "F R U R' U' F' f R U R' U' f'", edgesShown, 'The line algorithm, then the L one: the first leaves exactly the L above, the second makes the cross.'),
+        ],
+      },
+      {
+        name: '2 · Yellow corners',
+        about: 'With the cross done, count the yellow corners on top and look where the side ones face.',
+        cases: [
+          ocll(27, 'Sune'),
+          ocll(26, 'Anti-Sune'),
+          ocll(21, 'H'),
+          ocll(22, 'Pi'),
+          ocll(23, 'Headlights'),
+          ocll(24, 'T'),
+          ocll(25, 'Bowtie'),
+        ],
+      },
+    ],
     view: 'top',
     focus: focusTop,
   };
 
-  // ---------- 4. PLL ----------
+  // ---------- 4. PLL, in two looks ----------
+
+  // look 1 moves the corners: the top edges' side stickers are blank
+  const cornersShown = (s: State) => M.facelets.map((f) => f.index).filter((i) => !TOP_EDGE_STICKERS.has(i) || s[i] === yellow);
+  const perm = (name: string, shown?: (s: State) => number[], note?: string) => make(`${name} perm`, PLL.find((p) => p.name === name)!.alg, shown, note);
 
   const pll: TutorialStep = {
     name: 'PLL',
-    goal: CFOP_STAGES[3].goal,
-    html: `<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, one algorithm moves its pieces to their spots. Each case is a letter-named “perm”.</p>
-      <p>Look at the sides of the top layer. Two matching corner stickers on a side are <b>headlights</b>: they tell the corners apart. Headlights on every side mean only edges move; on one side, two neighbouring corners swap; on none, two opposite corners swap. The arrows show where each piece goes.</p>
-      <p>Turn the top to match the picture, do the algorithm, then turn the top to line it up with the rest. For two-look PLL, learn the corner cases (A, E, T, Y) and the edge cases (U, H, Z) first.</p>`,
-    groups: PLL_GROUPS.map((k) => ({
-      name: k[0].toUpperCase() + k.slice(1),
-      cases: PLL.filter((p) => p.kind === k).map((p) => make(`${p.name} perm`, p.alg)),
-    })),
+    goal: 'Permute the Last Layer: move the top pieces to their spots, in two looks.',
+    html: `<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, move its pieces to their spots. Each case is a letter-named “perm”.</p>
+      <p>Again in two looks: first the corners, then the edges. That’s 6 algorithms instead of 21. The arrows show where each piece goes.</p>
+      <p>Look at the sides of the top layer. Two matching corner stickers on a side are <b>headlights</b>. Turn the top to match the picture, do the algorithm, and at the end turn the top to line it up with the rest.</p>`,
+    groups: [
+      {
+        name: '1 · Corners',
+        about: 'Ignore the edges and look for headlights. On every side: the corners are done, skip to the edges.',
+        cases: [
+          perm('T', cornersShown, 'Headlights on one side: hold them on the left. Two neighbouring corners swap.'),
+          perm('Y', cornersShown, 'No headlights anywhere: two opposite corners swap.'),
+        ],
+      },
+      {
+        name: '2 · Edges',
+        about: 'Headlights on every side now. Look for a side that’s all one color: its edge is already home.',
+        cases: [
+          perm('Ua', undefined, 'One solved side, held at the back. The front edge goes right, the right one left, the left one to the front.'),
+          perm('Ub', undefined, 'One solved side, held at the back. The front edge goes left, the left one right, the right one to the front.'),
+          perm('H', undefined, 'No solved side, opposite colors on each: opposite edges swap.'),
+          // the Z perm ends a quarter turn off; the U lines it up, so the arrows show just the edge swaps
+          make('Z perm', PLL.find((p) => p.name === 'Z')!.alg + ' U', undefined, 'No solved side, neighbouring colors: the edges swap in neighbouring pairs, front with right and back with left.'),
+        ],
+      },
+    ],
     view: 'top',
     arrows: (c) => pllArrows(c.setup),
     focus: focusTop,
