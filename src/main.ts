@@ -954,13 +954,13 @@ function triggerRuns(moves: string[]) {
 }
 
 /** Moves as text, with each trigger run marked. */
-function movesHtml(moves: string[]) {
+function movesHtml(moves: string[], breakAfter?: number) {
   const runs = triggerRuns(moves);
   return moves.map((m, i) => {
     const open = runs[i] && runs[i] !== runs[i - 1] ? '<span class="trig">' : '';
     const close = runs[i] && runs[i] !== runs[i + 1] ? '</span>' : '';
-    return open + m + close;
-  }).join(' ');
+    return (i === breakAfter ? '<br>' : i ? ' ' : '') + open + m + close;
+  }).join('');
 }
 
 /** HTML with the moves inside each <code> marked where they hold a trigger. */
@@ -1011,7 +1011,7 @@ function renderTutorial(fresh: boolean) {
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span><code class="case-alg">${movesHtml(c.moves)}</code>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span><code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];

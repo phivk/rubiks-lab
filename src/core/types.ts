@@ -137,6 +137,8 @@ export interface TutorialCase {
   setup: State;
   /** a sentence on how the moves work */
   note?: string;
+  /** show the algorithm on a new line after this many moves */
+  breakAfter?: number;
 }
 
 export interface TutorialStep {

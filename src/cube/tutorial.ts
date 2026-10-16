@@ -172,7 +172,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
         cases: [
           make('Line', "F R U R' U' F'", edgesShown, 'Hold the line left to right.'),
           make('L', "f R U R' U' f'", edgesShown, 'Hold the L at the front right: yellow edges in front and on the right.'),
-          make('Dot', "F R U R' U' F' f R U R' U' f'", edgesShown, 'The line algorithm, then the L one: the first leaves exactly the L above, the second makes the cross.'),
+          { ...make('Dot', "F R U R' U' F' f R U R' U' f'", edgesShown, 'The line algorithm, then the L one: the first leaves exactly the L above, the second makes the cross.'), breakAfter: 6 },
         ],
       },
       {
