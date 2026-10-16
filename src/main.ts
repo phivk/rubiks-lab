@@ -729,6 +729,7 @@ function renderSolution(fresh = false) {
   el.classList.toggle('stale', !!solution?.stale);
   renderTabs();
   if (!(solution?.lesson || solution?.tutorial) || solution.stale) view.setFocus(null);
+  renderHud();
   if (learn) {
     renderLearn();
     return;
@@ -816,7 +817,60 @@ function renderPlayback() {
     if (focus) view.setFocus(s.stale ? null : focus(session.state));
     followCurrentChip();
   }
+  renderHud();
 }
+
+/** On a phone, the open tutorial case's move and step buttons, on the pinned cube. */
+function renderHud() {
+  const s = solution;
+  const on = tab === 'tutorial' && !!s?.tutorial;
+  document.body.classList.toggle('drilling', on);
+  keepAwake(on);
+  if (!on) return;
+  const n = s.moves.length;
+  const now = $('#hud-now'), sub = $('#hud-sub');
+  const runs = triggerRuns(s.moves);
+  const c = puzzle.tutorial!.steps[s.tutorial!.step].groups[s.tutorial!.group].cases[s.tutorial!.index];
+  if (s.stale) {
+    now.textContent = 'Set up again';
+    now.className = 'hud-now done';
+    sub.textContent = `${c.name} · you turned the cube`;
+  } else if (s.index >= n) {
+    now.textContent = 'Done ✓';
+    now.className = 'hud-now done';
+    sub.textContent = `${c.name} · ◀ to step back`;
+  } else {
+    now.textContent = s.moves[s.index];
+    now.className = 'hud-now' + (runs[s.index] ? ' trig' : '');
+    sub.textContent = `${c.name} · ${s.index + 1} of ${n}` + (s.moves[s.index + 1] ? ` · then ${s.moves[s.index + 1]}` : '');
+  }
+  ($('#hud-prev') as HTMLButtonElement).disabled = s.stale || s.index === 0;
+  ($('#hud-next') as HTMLButtonElement).disabled = !s.stale && s.index >= n;
+}
+
+/** Keep a phone's screen on while a case is open: both hands are on the real cube. */
+let wakeLock: { release: () => Promise<void> } | null = null;
+let wantAwake = false;
+function keepAwake(on: boolean) {
+  wantAwake = on;
+  const nav = navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> } };
+  if (on && !wakeLock && nav.wakeLock && document.visibilityState === 'visible') {
+    nav.wakeLock.request('screen').then((lock) => {
+      if (wantAwake) wakeLock = lock;
+      else void lock.release();
+    }).catch(() => { /* not allowed or unsupported: the screen may sleep */ });
+  } else if (!on && wakeLock) {
+    void wakeLock.release();
+    wakeLock = null;
+  }
+}
+// the browser drops the lock when the page is hidden; take it again on return
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && wantAwake) {
+    wakeLock = null;
+    keepAwake(true);
+  }
+});
 
 // ---------- lessons ----------
 
@@ -989,6 +1043,10 @@ async function openCase(ref: CaseRef) {
   solution = { start: c.setup.slice(), moves: c.moves.slice(), index: 0, optimal: false, searching: false, elapsed: 0, stale: false, tutorial: ref };
   tutStep = ref.step;
   renderSolution(true);
+  // on a phone, keep the tapped card in view below the pinned cube
+  if (document.body.classList.contains('drilling') && matchMedia('(max-width: 860px)').matches) {
+    document.querySelector(`#tut-groups .case[data-group="${ref.group}"][data-index="${ref.index}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 }
 
 function renderTutorial(fresh: boolean) {
@@ -1226,6 +1284,11 @@ function bind() {
   $('#stages').addEventListener('click', onStageClick);
   $('#btn-play').addEventListener('click', togglePlay);
   $('#btn-next').addEventListener('click', () => { playing = false; stepForward(); renderPlayback(); });
+  $('#hud-next').addEventListener('click', () => {
+    if (solution?.stale && solution.tutorial) void openCase(solution.tutorial);
+    else { playing = false; stepForward(); renderPlayback(); }
+  });
+  $('#hud-prev').addEventListener('click', stepBack);
   $('#btn-prev').addEventListener('click', stepBack);
   $('#btn-first').addEventListener('click', () => jumpTo(0));
   $('#btn-last').addEventListener('click', () => solution && jumpTo(solution.moves.length));

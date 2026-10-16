@@ -301,6 +301,23 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .solved-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); }
 @keyframes pop { from { transform: translateX(-50%) scale(0.7); opacity: 0; } }
 
+/* ---------- phone step controls on the cube ---------- */
+.stage-hud {
+  display: none; position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2;
+  align-items: center; gap: 10px; padding: 6px;
+  background: rgba(11, 13, 18, 0.72); border: 1px solid var(--line-2); border-radius: 18px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  touch-action: manipulation;
+}
+.stage-hud .hud-btn { width: 56px; height: 56px; border-radius: 14px; flex: none; }
+.stage-hud .hud-btn svg { width: 26px; height: 26px; }
+.stage-hud .hud-btn.primary { background: var(--accent-soft); border-color: rgba(143, 123, 255, 0.45); color: #fff; }
+.hud-move { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.hud-now { font-family: var(--mono); font-weight: 700; font-size: 34px; color: #fff; letter-spacing: -0.02em; }
+.hud-now.trig { color: var(--accent-2); }
+.hud-now.done { font-family: inherit; font-size: 20px; color: var(--good); }
+.hud-sub { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
 /* ---------- solve button ---------- */
 .btn.solve {
   height: auto; flex-direction: column; gap: 2px; padding: 16px;
@@ -633,6 +650,11 @@ kbd {
   .panel.tutorial { order: 4; }
   /* on a phone the page scrolls, under the sticky 3D view */
   .tut-steps { top: calc(max(46vh, 300px) + 12px); }
+  /* while a tutorial case is open, its step controls sit on the pinned cube */
+  body.drilling .stage-hud { display: flex; }
+  body.drilling .stage-hint { display: none; }
+  /* scrolling a tapped card into view leaves it clear of the pinned cube and stepper */
+  .case { scroll-margin-top: calc(max(46vh, 300px) + 64px); scroll-margin-bottom: 16px; }
   /* a long stage explanation folds down to its first paragraph */
   .tut-intro .collapsible:not(.open) > :not(:first-child) { display: none; }
   .tut-intro .collapsible:not(.open) > :first-child { margin-bottom: 0; }
