@@ -574,10 +574,11 @@ body.tutorial .panel.tutorial { display: flex; }
 /* a case's moves: in the open case, the ones played fade and the next one stands out */
 .case { touch-action: manipulation; }
 .case-note { display: none; font-size: 11px; line-height: 1.35; color: var(--text-3); }
-/* the open case's back and play-all flank its picture, so the card keeps its size */
+/* the open case's controls flank its picture, so the card keeps its size: back and to-start on the left, play on the right */
 .case-ctl { display: none; }
-.case-back, .case-play { position: absolute; top: 6px; width: 34px; height: 92px; display: grid; place-items: center; border-radius: 9px; color: var(--text-2); }
-.case-back { left: 4px; }
+.case-back, .case-start, .case-play { position: absolute; top: 6px; width: 34px; height: 92px; display: grid; place-items: center; border-radius: 9px; color: var(--text-2); }
+.case-back, .case-start { left: 4px; height: 45px; }
+.case-start { top: 53px; }
 /* done or turned by hand: a word over the picture, so the card keeps its size */
 .case-status {
   position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 92px; height: 92px;
@@ -587,13 +588,12 @@ body.tutorial .panel.tutorial { display: flex; }
 .case-status:empty { display: none; }
 .case-status b { font-size: 14px; color: #fff; }
 .case-play { right: 4px; }
-.case-back:active, .case-play:active { background: rgba(255, 255, 255, 0.08); }
+.case-back:active, .case-start:active, .case-play:active { background: rgba(255, 255, 255, 0.08); }
 .case-back svg { width: 22px; height: 22px; }
-.case-play svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
-.case-play .i-pause, .case-play .i-replay, .case.playing .case-play .i-play, .case.midway .case-play .i-play { display: none; }
-.case.playing .case-play .i-pause, .case.midway .case-play .i-replay { display: block; }
-.case-play .i-replay { fill: none; stroke: currentColor; stroke-width: 2.2; }
-.case-back.off, .case-play.off { visibility: hidden; }
+.case-start svg, .case-play svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.case-play .i-pause, .case.playing .case-play .i-play { display: none; }
+.case.playing .case-play .i-pause { display: block; }
+.case-back.off, .case-start.off, .case-play.off { visibility: hidden; }
 .case.active .mv.done { opacity: 0.35; }
 /* the next move: a filled chip, readable from the table; its shadow pads it without moving the text */
 .case.active .mv.next { color: #fff; background: var(--accent); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent); }
