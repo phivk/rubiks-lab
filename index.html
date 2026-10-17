@@ -94,8 +94,15 @@
         <div class="status" id="status"></div>
       </aside>
 
+      <aside class="panel tutorial" id="tutorial" aria-label="Tutorial">
+        <div class="tut-steps" id="tut-steps" role="tablist" aria-label="Stage"></div>
+        <div class="tut-intro" id="tut-intro"></div>
+        <div class="tut-groups" id="tut-groups"></div>
+        <div class="lesson-nav" id="tut-nav"></div>
+      </aside>
+
       <main class="stage" id="stage">
-        <div class="stage-hint" id="stage-hint">Drag a face to turn it · Drag the background to orbit</div>
+        <div class="stage-hint" id="stage-hint">Drag a face to turn it · Drag the background to turn the view</div>
         <div class="solved-badge hidden" id="solved-badge">Solved</div>
       </main>
 
@@ -106,6 +113,9 @@
           </button>
           <button role="tab" data-tab="learn">
             <svg viewBox="0 0 24 24"><path d="M2 8.5 12 4l10 4.5-10 4.5z"/><path d="M6 10.5V16c3 2.5 9 2.5 12 0v-5.5"/></svg>Learn
+          </button>
+          <button role="tab" data-tab="tutorial" title="Every case of each CFOP stage, with its algorithm">
+            <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg>Tutorial
           </button>
         </div>
 
@@ -121,6 +131,7 @@
           </div>
           <div class="methods" id="methods" role="tablist" aria-label="Method"></div>
           <div class="lesson-intro" id="lesson-intro"></div>
+          <div class="case-card" id="case-card"></div>
           <div class="sol-body">
             <div class="sol-head">
               <div>
@@ -177,7 +188,7 @@
 
     <dialog id="about" class="about">
       <h2>About Rubik’s Lab</h2>
-      <p>A playground for the 2×2, 3×3, 4×4 and 5×5 cubes and the Pyraminx: turn them, paint in a real puzzle, get the shortest solution, or learn to solve them yourself on the <b>Learn</b> tab.</p>
+      <p>A playground for the 2×2, 3×3, 4×4 and 5×5 cubes and the Pyraminx: turn them, paint in a real puzzle, get the shortest solution, or learn to solve them yourself on the <b>Learn</b> tab. On the 3×3, the <b>Tutorial</b> tab shows every case of each CFOP stage with its algorithm.</p>
       <h3>Sources</h3>
       <p class="muted small">The lessons follow these well-known methods; the explanations, stage breakdowns and simplifications (such as two-look CMLL) are written for this app. Algorithms come from the lists below, and every one is checked by simulation against random scrambles.</p>
       <h4>Beginner methods</h4>

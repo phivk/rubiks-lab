@@ -445,7 +445,8 @@ export class PuzzleView {
   }
 
   private onPointerDown = (e: PointerEvent) => {
-    if (e.button !== 0 || this.drag) return;
+    // overlays on the stage (like the phone's step controls) handle their own taps
+    if (e.button !== 0 || this.drag || e.target !== this.renderer.domElement) return;
     const hit = this.pick(e);
     if (!hit && this.mode === 'play') return; // background → OrbitControls
     const isTurn = !!hit && this.mode === 'play' && !this.anim && !this.celebrate && !this.swapAnim && this.events.canDragTurn();
