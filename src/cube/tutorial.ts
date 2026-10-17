@@ -23,9 +23,9 @@ const F2L_GROUPS: { name: string; about: string; cases: [string, string, string]
     name: 'Ready to go in',
     about: 'Three moves, or four with a turn of the top. Every other case ends with one of these.',
     cases: [
-      ['White right, edge back', "R U R'", 'Already a block, above the slot.'],
+      ['White right, edge back', "R U R'", 'R brings the corner to the edge, U R′ drops the block in.'],
       ['White front, edge left', "F' U' F", 'The mirror image, on the F side.'],
-      ['White front, edge right', "U R U' R'", 'Not a block yet, but the edge meets the corner on the way down.'],
+      ['White front, edge right', "U R U' R'", 'Already a block, above the slot: U moves it aside, R U′ R′ puts it in.'],
       ['White right, edge front', "U' F' U F", 'The mirror image, on the F side.'],
     ],
   },
@@ -42,9 +42,9 @@ const F2L_GROUPS: { name: string; about: string; cases: [string, string, string]
     name: 'Get a piece out of the slot',
     about: 'One piece is down in the slot but wrong. Lift it to the top first.',
     cases: [
-      ['Corner in slot, edge back', "R U' R' F' U' F", 'R U′ R′ lifts the corner and builds the block, F′ U′ F puts it in.'],
-      ['Corner in slot, edge right', "R U R' U' R U R'", 'R U R′ U′ lifts the corner and builds the block, R U R′ puts it in.'],
-      ['Edge in slot, flipped', "U' R U R' U F' U' F", 'U′ R U R′ lifts the edge, U F′ U′ F joins it to the corner on the way in.'],
+      ['Corner in slot, edge back', "R U' R' F' U' F", 'R U′ R′ lifts the corner out, which leaves White front, edge left.'],
+      ['Corner in slot, edge right', "R U R' U' R U R'", 'R U R′ U′ lifts the corner out, which leaves White right, edge back.'],
+      ['Edge in slot, flipped', "U' R U R' U F' U' F", 'U′ R U R′ lifts the edge out, and U then leaves White front, edge left.'],
     ],
   },
   {
