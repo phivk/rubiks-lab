@@ -1415,11 +1415,11 @@ void switchPuzzle(initial).then(() => {
     const v = puzzle.validate(session.state);
     toast(v.ok ? 'Loaded puzzle from link' : 'Loaded puzzle from link — ' + v.message);
     if (!v.ok) setMode('paint');
-  } else {
-    // come back to the tab you were on: a returning learner shouldn't have to tap Tutorial again
-    try {
-      const t = localStorage.getItem('tab');
-      if ((t === 'learn' || t === 'tutorial') && document.querySelector(`#sol-tabs [data-tab="${t}"]`)) setTab(t);
-    } catch { /* storage unavailable */ }
   }
+  // come back to the tab you were on, even when the URL hash carries the puzzle state:
+  // a returning learner shouldn't have to tap Tutorial again
+  try {
+    const t = localStorage.getItem('tab');
+    if ((t === 'learn' || t === 'tutorial') && document.querySelector(`#sol-tabs [data-tab="${t}"]`)) setTab(t);
+  } catch { /* storage unavailable */ }
 });
