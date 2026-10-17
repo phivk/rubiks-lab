@@ -1,8 +1,8 @@
 // Checks the CFOP tutorial: every algorithm solves its case's setup (the stickers it shows end
 // up home, and the blanked ones are only ones it doesn't show), each stage's setups keep
-// the earlier stages solved and need this one, the F2L cases are all different, OLL and
-// PLL each take two looks whose cases cover every situation between them, and the PLL
-// arrows join top stickers.
+// the earlier stages solved and need this one, the F2L cases are all different, the F2L
+// notes that point to another case are right, OLL and PLL each take two looks whose cases
+// cover every situation between them, and the PLL arrows join top stickers.
 import { lessonKit, ROTATIONS, TOP_CORNERS as TOP_C, TOP_EDGES as TOP_E, U_TURNS } from '../src/cube/lessonKit';
 import { CubeModel, invertAlg, UNSET } from '../src/cube/model';
 import { cfopTutorial } from '../src/cube/tutorial';
@@ -43,6 +43,28 @@ for (const step of T.steps) {
     }
   }
 }
+// F2L notes that point to another case ("…, which leaves <case>", "…, and U then leaves <case>",
+// "… brings them together as <case>"): the note's opening moves, from this case's setup, leave
+// a position that case's algorithm solves after a turn of the top
+const f2lByName = new Map(f2l.groups.flatMap((g) => g.cases).map((c) => [c.name, c]));
+for (const c of f2lByName.values()) {
+  if (!c.note || !/\bleaves\b|together as/.test(c.note)) continue;
+  const m = c.note.match(/^(?<lead>.+?)(?:, which leaves|, and (?<then>U) then leaves| brings them together as) (?<name>.+)\.$/)?.groups;
+  if (!m) { fail(`${c.name}: can't read the note`); continue; }
+  const { name } = m;
+  const words = m.lead.replaceAll('′', "'").split(' ');
+  const end = words.findIndex((w) => !M.parseMove(w));
+  const moves = end < 0 ? words : words.slice(0, end);
+  if (m.then) moves.push(m.then);
+  const target = f2lByName.get(name);
+  if (!moves.length) fail(`${c.name}: no moves at the start of the note`);
+  else if (!target) fail(`${c.name}: the note names ${name}, which isn't an F2L case`);
+  else {
+    const t = K.apply(fullOf.get(c)!, moves);
+    if (!U_TURNS.some((u) => same(K.apply(t, [u, ...target.moves]), f2lStickers))) fail(`${c.name}: ${moves.join(' ')} doesn't leave ${name}`);
+  }
+}
+
 // the F2L cases: where the pair's corner and edge are, up to a turn of the top
 const white = K.center(home, 'D'), F = K.center(home, 'F'), R = K.center(home, 'R');
 const f2lCases = f2l.groups.flatMap((g) => g.cases);
