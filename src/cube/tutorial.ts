@@ -31,11 +31,12 @@ const F2L_GROUPS: { name: string; about: string; cases: [string, string, string]
   },
   {
     name: 'Build the block first',
-    about: 'Corner and edge are both on top but apart. Bring them together, then it’s a case from above.',
+    about: 'Corner and edge are both on top but apart. Bring them together, then it’s a case from above. If white faces up, those first moves also turn it to face a side.',
     cases: [
       ['White up, far apart', "R U2 R' U R U' R'", 'R U2 R′ builds the block, U R U′ R′ puts it in.'],
       ['White front, edge back', "U' R U R' U2 R U' R'", 'U′ R U R′ U2 builds the block, R U′ R′ puts it in.'],
       ['White right, edge left', "U F' U' F U2 F' U F", 'The mirror image, on the F side.'],
+      ['White up, apart, edge flipped', "U R U R' F' U' F", 'U R U R′ brings them together as White front, edge left.'],
     ],
   },
   {
