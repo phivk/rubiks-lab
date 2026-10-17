@@ -133,7 +133,8 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   const pair = [[white, center(home, 'F'), center(home, 'R')], [center(home, 'F'), center(home, 'R')]];
   const f2lGroups = F2L_GROUPS.map(({ name, about, cases }) => ({
     name, about,
-    cases: cases.map(([name, a, note]) => make(name, a, (s) => [...centers, ...pieceStickers(s, pair)], note)),
+    // the cross is already done by now, so it shows along with the pair
+    cases: cases.map(([name, a, note]) => make(name, a, (s) => [...centers, ...pieceStickers(s, crossEdges), ...pieceStickers(s, pair)], note)),
   }));
   // the sexy move, R U R' U': the trigger most F2L and OLL algorithms are built from, highlighted wherever it appears
   const SEXY = "R U R' U'";
