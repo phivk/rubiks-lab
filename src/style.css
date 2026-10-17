@@ -561,7 +561,9 @@ body.tutorial .panel.tutorial { display: flex; }
 }
 .case:hover { background: var(--chip-hover); border-color: var(--line-2); }
 .case.active { background: var(--accent-soft); border-color: rgba(143, 123, 255, 0.6); }
-.case:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* the whole card is one button; its controls are buttons on top */
+.case-hit { position: absolute; inset: 0; z-index: 1; padding: 0; border: 0; border-radius: inherit; background: none; cursor: pointer; touch-action: manipulation; }
+.case-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .case .diagram { width: 84px; height: 84px; }
 .case-name { font-size: 12px; font-weight: 650; }
 .panel.tutorial .case-alg {
@@ -578,15 +580,20 @@ body.tutorial .panel.tutorial { display: flex; }
 .case-note { display: none; font-size: 11px; line-height: 1.35; color: var(--text-3); }
 /* the open case's back and play/restart flank its picture, so the card keeps its size */
 .case-ctl { display: none; }
-.case-back, .case-play { position: absolute; top: 6px; width: 34px; height: 92px; display: grid; place-items: center; border-radius: 9px; color: var(--text-2); }
+.case-back, .case-play { position: absolute; z-index: 2; padding: 0; border: 0; background: none; cursor: pointer; top: 6px; width: 34px; height: 92px; display: grid; place-items: center; border-radius: 9px; color: var(--text-2); }
 .case-back { left: 4px; }
 .case-play { right: 4px; }
 /* done or turned by hand: a word over the picture, so the card keeps its size */
 .case-status {
   position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 92px; height: 92px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  border-radius: 12px; background: rgba(11, 13, 18, 0.82); font-size: 11px; color: var(--text-2); pointer-events: none;
+  border-radius: 12px; background: rgba(11, 13, 18, 0.82); font-size: 11px; color: var(--text-2); pointer-events: none; z-index: 2;
 }
+.case-undo {
+  pointer-events: auto; margin: 3px 0; padding: 3px 8px; border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--chip-hover); font-size: 11px; font-weight: 600; color: #fff; cursor: pointer;
+}
+.case-back:focus-visible, .case-play:focus-visible, .case-undo:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .case-status:empty { display: none; }
 .case-status b { font-size: 14px; color: #fff; }
 .case-back:active, .case-play:active { background: rgba(255, 255, 255, 0.08); }

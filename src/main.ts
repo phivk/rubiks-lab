@@ -37,6 +37,8 @@ interface Solution {
   searching: boolean;
   elapsed: number;
   stale: boolean;
+  /** a tutorial case the cube was turned away from: the turns since, which put it back once they cancel out */
+  drift?: string[];
   /** a lesson: the method, its moves explained step by step, and the move each step starts at */
   lesson?: { guide: Guide; steps: GuideStep[]; starts: number[] };
   /** a tutorial case: which one */
@@ -150,7 +152,26 @@ function follow(move: string, back = false) {
     s.index++;
     playing = false;
     renderSolution();
-  } else invalidateSolution();
+  } else {
+    if (s?.tutorial && !s.searching) {
+      // a tutorial case picks up where it was once the stray turns cancel out (undone, or turned back by hand)
+      if (!s.stale) s.drift = [];
+      s.drift!.push(back ? puzzle.invertMove(move) : move);
+      const here = s.moves.slice(0, s.index).reduce(applyMove, s.start);
+      if (s.drift!.reduce(applyMove, here).every((x, i) => x === here[i])) {
+        s.stale = false;
+        playing = false;
+        renderSolution();
+        return;
+      }
+    }
+    invalidateSolution();
+  }
+}
+
+/** Undo the turns that left the open tutorial case, back to where it was. */
+function undoStray() {
+  while (solution?.stale && session.moveHistory.length) undo();
 }
 
 /** whether `quarter` (R or R') is half of the half turn `half` (R2) */
@@ -855,7 +876,13 @@ function renderDrilling() {
     const status = card.querySelector<HTMLElement>('.case-status');
     if (status) status.innerHTML = caseStatus(open);
     card.querySelector<HTMLElement>('.case-back')?.classList.toggle('off', !here || s!.index === 0);
-    card.querySelector<HTMLElement>('.case-play')?.classList.toggle('off', !here);
+    const play = card.querySelector<HTMLElement>('.case-play');
+    play?.classList.toggle('off', !here);
+    play?.setAttribute('aria-label', open && playing ? 'Pause' : here && s!.index > 0 ? 'Back to the start' : 'Play the moves');
+    // what tapping the card does: on a phone the open case's card steps through its moves
+    const name = card.querySelector('.case-name')!.textContent;
+    const next = here && phone() && s!.index < s!.moves.length ? s!.moves[s!.index] : '';
+    card.querySelector('.case-hit')!.setAttribute('aria-label', next ? `Next move: ${next}` : open ? `Set up ${name} again` : `Set up ${name}`);
   });
 }
 
@@ -863,7 +890,7 @@ function renderDrilling() {
 function caseStatus(open: boolean) {
   const s = solution!;
   if (!open) return '';
-  if (s.stale) return '<b>Cube turned</b>tap to set up';
+  if (s.stale) return '<b>Cube turned</b><button class="case-undo" data-ctl="undo">Undo turn</button>tap to set up';
   if (playing) return '';
   if (s.index >= s.moves.length) return '<b>Done ✓</b>tap to repeat';
   // until you've stepped through a case once, the first open says how
@@ -1120,9 +1147,10 @@ function renderTutorial(fresh: boolean) {
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length} ${g.cases.length === 1 ? 'case' : 'cases'}</span></div>
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
-          <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><span class="case-back" data-ctl="back" role="button" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><span class="case-play" data-ctl="play" role="button" aria-label="Play the moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg class="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span></span>
-          </button>`).join('')}</div>
+          <div class="case" data-group="${gi}" data-index="${i}">
+            <button class="case-hit" title="Set up ${c.name} on the cube" aria-label="Set up ${c.name}"></button>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><button class="case-back" data-ctl="back" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button><button class="case-play" data-ctl="play" aria-label="Play the moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg class="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button></span>
+          </div>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
     $('#tut-nav').innerHTML =
@@ -1155,13 +1183,14 @@ function renderCaseCard() {
     <div class="lesson-head"><span class="eyebrow">${step.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
     <div class="lesson-title">${c.name}</div>
     <div class="case-big">${diagram(step, c)}</div>
-    ${solution!.stale ? '<div class="lesson-stale">You turned the cube, so it no longer shows this case. <button class="link" data-act="reset">Set it up again</button></div>' : ''}`;
+    ${solution!.stale ? '<div class="lesson-stale">You turned the cube, so it no longer shows this case. <button class="link" data-act="undo">Undo turn</button> or <button class="link" data-act="reset">set it up again</button></div>' : ''}`;
 }
 
 function onCaseCardClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
   const ref = solution?.tutorial;
-  if (b?.dataset.act === 'reset' && ref) void openCase(ref);
+  if (b?.dataset.act === 'undo') undoStray();
+  else if (b?.dataset.act === 'reset' && ref) void openCase(ref, true);
 }
 
 let lastCardTap = -1e9;
@@ -1176,12 +1205,13 @@ function onTutorialClick(e: Event) {
     b.setAttribute('aria-expanded', String(open));
     b.textContent = open ? 'Show less' : 'Show more';
   } else if (b.dataset.step) setTutorialStep(Number(b.dataset.step));
-  else if (b.dataset.group) {
-    const ref = cardRef(b);
+  else if (b.closest('.case')) {
+    const ref = cardRef(b.closest<HTMLElement>('.case')!);
     const s = solution;
+    const ctl = b.dataset.ctl;
+    if (ctl === 'undo') return undoStray();
     // on a phone the open case's card is the controller: tap it for the next move, tap a move to go back to it
     if (phone() && s?.tutorial && sameCase(s.tutorial, ref) && !s.stale) {
-      const ctl = (e.target as HTMLElement).closest<HTMLElement>('[data-ctl]')?.dataset.ctl;
       // a second tap within a moment is a bounce, not a wish for two moves
       if (!ctl && e.timeStamp - lastCardTap < 250) return;
       lastCardTap = e.timeStamp;
