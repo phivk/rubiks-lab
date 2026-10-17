@@ -847,7 +847,9 @@ function renderDrilling() {
     card.classList.toggle('begun', open && !playing && !s!.stale && s!.index > 0);
     const status = card.querySelector<HTMLElement>('.case-status');
     if (status) status.innerHTML = !open ? '' : s!.stale ? '<b>Cube turned</b>tap to set up'
-      : s!.index >= s!.moves.length && !playing ? '<b>Done ✓</b>tap to repeat' : '';
+      : s!.index >= s!.moves.length && !playing ? '<b>Done ✓</b>tap to repeat'
+      // until you've stepped through a case once, the first open says how
+      : s!.index === 0 && !playing && !tapLearned ? '<b>Tap the card</b>for each move' : '';
     card.querySelector<HTMLElement>('.case-back')?.classList.toggle('off', !open || !!s!.stale || s!.index === 0);
     card.querySelector<HTMLElement>('.case-play')?.classList.toggle('off', !open || !!s!.stale);
   });
@@ -1142,6 +1144,9 @@ function onCaseCardClick(e: Event) {
 }
 
 let lastCardTap = -1e9;
+/** whether you've stepped a case by tapping its card, so the how-to hint has done its job */
+let tapLearned = false;
+try { tapLearned = localStorage.getItem('tapLearned') === '1'; } catch { /* storage unavailable */ }
 function onTutorialClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
   if (!b) return;
@@ -1165,7 +1170,14 @@ function onTutorialClick(e: Event) {
         if (!playing && s.index > 0) jumpTo(0);
         else togglePlay();
       }
-      else if (s.index < s.moves.length) { playing = false; stepForward(); renderPlayback(); }
+      else if (s.index < s.moves.length) {
+        if (!tapLearned) {
+          tapLearned = true;
+          try { localStorage.setItem('tapLearned', '1'); } catch { /* storage unavailable */ }
+        }
+        navigator.vibrate?.(8); // a tick per move, where the phone can (not iOS)
+        playing = false; stepForward(); renderPlayback();
+      }
       else void openCase(ref);
     } else void openCase(ref, true);
   }
