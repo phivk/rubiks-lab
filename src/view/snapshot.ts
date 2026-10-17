@@ -42,7 +42,7 @@ function hull(pts: V2[]): V2[] {
  * A still picture of the puzzle as the 3D view draws it: the same stickers, colors, rounding
  * and light, seen from the view's home angle ('corner') or straight from above ('top').
  * Stickers on the top layer's hidden sides are folded out flat around the top, so every
- * sticker of the top layer shows. `arrows` join sticker pairs, from the first to the second;
+ * sticker of the top layer shows, unless it's blank. `arrows` join sticker pairs, from the first to the second;
  * a pair listed both ways is one arrow with two heads.
  */
 export function snapshot(puzzle: Puzzle, state: State, view: 'corner' | 'top', arrows: [number, number][] = []) {
@@ -75,6 +75,8 @@ export function snapshot(puzzle: Puzzle, state: State, view: 'corner' | 'top', a
     if (facing) body.push(...pts);
     all.push(...pts);
     centers[s.index] = [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+    // a blank folded-out sticker isn't drawn, but still sizes the picture so every case of a step matches
+    if (!facing && state[s.index] === puzzle.unset) continue;
     shapes.push(`<path d="${rounded(pts, puzzle.stickerCornerRadius)}" fill="${darken(puzzle.colors[state[s.index]], shade(s.normal))}"/>`);
   }
   const outline = hull(body);
