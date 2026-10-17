@@ -1091,7 +1091,8 @@ function renderTutorial(fresh: boolean) {
     const long = (step.html.match(/<p[ >]/g) ?? []).length > 1;
     $('#tut-intro').innerHTML = `<div class="lesson-title">${step.goal}</div><div class="lesson-text${long ? ' collapsible' : ''}">${markCode(step.html)}</div>` +
       (long ? '<button class="link more" data-act="more" aria-expanded="false">Show more</button>' : '') +
-      `<details class="notation"><summary>How to read the moves</summary><p class="muted small">${puzzle.notationHtml}${T.notation ? ' ' + T.notation : ''}</p></details>`;
+      // the notation is explained once, on the first step
+      (tutStep > 0 ? '' : `<details class="notation"><summary>How to read the moves</summary><p class="muted small">${puzzle.notationHtml}${T.notation ? ' ' + T.notation : ''}</p></details>`);
     $('#tut-groups').innerHTML = step.groups.map((g, gi) => `
       <section class="tut-group">
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length} ${g.cases.length === 1 ? 'case' : 'cases'}</span></div>
