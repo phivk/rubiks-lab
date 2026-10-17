@@ -4,7 +4,7 @@
 // picture, the 3D cube and the algorithm always agree.
 //
 //   Cross   a few example edges, since the cross is planned rather than learnt
-//   F2L     the idea, build the block then insert it, on a few cases, plus five quicker as algorithms
+//   F2L     the idea, build the block then insert it, on cases sorted by where the pieces are
 //   OLL     two-look: the 3 edge cases that make a yellow cross, then the 7 corner cases
 //   PLL     two-look: the 2 corner cases, then the 4 edge cases
 //
@@ -17,7 +17,11 @@ import { CFOP_STAGES } from './cfop';
 import { alg, CORNERS, EDGES, lessonKit, sameSet, TOP_CORNERS, TOP_EDGES, WIDE_NOTATION } from './lessonKit';
 import { invertAlg, UNSET, type CubeModel } from './model';
 
-/** F2L, for the front-right slot (white down, green front): [algorithm, note], by group */
+/**
+ * F2L, for the front-right slot (white down, green front): [name, algorithm, note], grouped by
+ * where the corner and edge are. The long ones say to learn them as algorithms.
+ */
+const ALG = 'Quicker to learn as an algorithm than to work out.';
 const F2L_GROUPS: { name: string; about: string; cases: [string, string, string][] }[] = [
   {
     name: 'Ready to go in',
@@ -31,32 +35,57 @@ const F2L_GROUPS: { name: string; about: string; cases: [string, string, string]
   },
   {
     name: 'Build the block first',
-    about: 'Corner and edge are both on top but apart. Bring them together, then it’s a case from above. If white faces up, those first moves also turn it to face a side.',
+    about: 'Corner and edge are both on top, white facing a side, but apart. Bring them together, then it’s a case from above.',
     cases: [
-      ['White up, far apart', "R U2 R' U R U' R'", 'R U2 R′ builds the block, U R U′ R′ puts it in.'],
       ['White front, edge back', "U' R U R' U2 R U' R'", 'U′ R U R′ U2 builds the block, R U′ R′ puts it in.'],
       ['White right, edge left', "U F' U' F U2 F' U F", 'The mirror image, on the F side.'],
+      ['White front, edge left, flipped', "U' R U2 R' U2 R U' R'", 'U′ R U2 R′ builds the block, which leaves White front, edge right.'],
+      ['White right, edge left, flipped', "U2 R U' R' U' R U R'", 'U2 R U′ R′ moves the edge round, which leaves White right, edge back.'],
+    ],
+  },
+  {
+    name: 'Joined wrongly',
+    about: 'Corner and edge touch on top, but their colors don’t line up into a block. Split them first.',
+    cases: [
+      ['White right, edge right', "U' R U' R' U R U R'", 'U′ R U′ R′ splits them, which leaves White right, edge back.'],
+      ['White front, edge front', "U F' U F U' F' U' F", 'U F′ U F splits them, which leaves White front, edge left.'],
+    ],
+  },
+  {
+    name: 'White facing up',
+    about: 'The first moves turn the corner so white faces a side, then it’s a case from above.',
+    cases: [
+      ['White up, far apart', "R U2 R' U R U' R'", 'R U2 R′ builds the block, U R U′ R′ puts it in.'],
       ['White up, apart, edge flipped', "U R U R' F' U' F", 'U R U R′ brings them together as White front, edge left.'],
+      ['White up, edge front', "R U R' U' U' R U R' U' R U R'", ALG],
+      ['White up, edge right', "F' U' F U U F' U' F U F' U' F", ALG],
     ],
   },
   {
-    name: 'Get a piece out of the slot',
-    about: 'One piece is down in the slot but wrong. Lift it to the top first.',
+    name: 'Corner in the slot',
+    about: 'Lift the corner out to the top first, even when it’s already right, then it’s a case from above.',
     cases: [
-      ['Corner in slot, edge back', "R U' R' F' U' F", 'R U′ R′ lifts the corner out, which leaves White front, edge left.'],
-      ['Corner in slot, edge right', "R U R' U' R U R'", 'R U R′ U′ lifts the corner out, which leaves White right, edge back.'],
+      ['Corner in slot, white front', "R U' R' F' U' F", 'R U′ R′ lifts the corner out, which leaves White front, edge left.'],
+      ['Corner in slot, white right', "R U R' U' R U R'", 'R U R′ U′ lifts the corner out, which leaves White right, edge back.'],
+      ['Corner done, edge from the front', "U R U' R' U' F' U F", 'U R U′ R′ lifts the corner out, which leaves White right, edge front.'],
+      ['Corner done, edge from the right', "U' F' U F U R U' R'", 'U′ F′ U F lifts the corner out, which leaves White front, edge right.'],
+    ],
+  },
+  {
+    name: 'Edge in the slot',
+    about: 'Lift the edge out to the top first.',
+    cases: [
       ['Edge in slot, flipped', "U' R U R' U F' U' F", 'U′ R U R′ lifts the edge out, and U then leaves White front, edge left.'],
+      ['White up, edge in slot', "R U R' U' R U R' U' R U R'", ALG],
     ],
   },
   {
-    name: 'Faster as an algorithm',
-    about: 'Building the block by hand is slow here. These repeat a few moves, so they’re quick to learn.',
+    name: 'Both in the slot',
+    about: 'Both pieces are in the slot, the edge flipped. Lift them out first.',
     cases: [
-      ['White up, edge in slot', "R U R' U' R U R' U' R U R'", ''],
-      ['White up, edge front', "R U R' U' U' R U R' U' R U R'", ''],
-      ['White up, edge right', "F' U' F U U F' U' F U F' U' F", ''],
-      ['Both in slot, white right', "R U R' U' R U' R' U2 F' U' F", 'The edge is flipped.'],
-      ['Both in slot, white front', "R U' R' U F' U' F U' F' U' F", 'The edge is flipped.'],
+      ['Both in slot, white down', "R U2 R' U R U2 R' U F' U' F", 'R U2 R′ U R U2 R′ lifts both out, which leaves White front, edge left.'],
+      ['Both in slot, white right', "R U R' U' R U' R' U2 F' U' F", ALG],
+      ['Both in slot, white front', "R U' R' U F' U' F U' F' U' F", ALG],
     ],
   },
 ];
