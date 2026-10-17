@@ -843,11 +843,12 @@ function renderDrilling() {
       m.classList.toggle('next', open && !s!.stale && i === s!.index);
     });
     card.classList.toggle('playing', open && playing);
+    // ▶ only at the start; once moves are played its place goes to ↻, back to the start
+    card.classList.toggle('begun', open && !playing && !s!.stale && s!.index > 0);
     const status = card.querySelector<HTMLElement>('.case-status');
     if (status) status.innerHTML = !open ? '' : s!.stale ? '<b>Cube turned</b>tap to set up'
       : s!.index >= s!.moves.length && !playing ? '<b>Done ✓</b>tap to repeat' : '';
     card.querySelector<HTMLElement>('.case-back')?.classList.toggle('off', !open || !!s!.stale || s!.index === 0);
-    card.querySelector<HTMLElement>('.case-start')?.classList.toggle('off', !open || !!s!.stale || s!.index === 0);
     card.querySelector<HTMLElement>('.case-play')?.classList.toggle('off', !open || !!s!.stale);
   });
 }
@@ -1093,7 +1094,7 @@ function renderTutorial(fresh: boolean) {
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <button class="case" data-group="${gi}" data-index="${i}" title="Set up ${c.name} on the cube">
-            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><span class="case-back" data-ctl="back" role="button" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><span class="case-start" data-ctl="start" role="button" aria-label="Back to the start"><svg viewBox="0 0 24 24"><path d="M6 5h2.5v14H6zM19 5v14L9 12z"/></svg></span><span class="case-play" data-ctl="play" role="button" aria-label="Play the moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></span></span>
+            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><span class="case-back" data-ctl="back" role="button" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></span><span class="case-play" data-ctl="play" role="button" aria-label="Play the moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg class="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span></span>
           </button>`).join('')}</div>
       </section>`).join('');
     const prev = T.steps[tutStep - 1], next = T.steps[tutStep + 1];
@@ -1159,9 +1160,11 @@ function onTutorialClick(e: Event) {
       if (!ctl && e.timeStamp - lastCardTap < 250) return;
       lastCardTap = e.timeStamp;
       if (ctl === 'back') stepBack();
-      else if (ctl === 'start') jumpTo(0);
-      // plays on from the current move; tapping again while it plays pauses it
-      else if (ctl === 'play') togglePlay();
+      // at the start ▶ plays the moves (tap again to pause); once begun, ↻ goes back to the start
+      else if (ctl === 'play') {
+        if (!playing && s.index > 0) jumpTo(0);
+        else togglePlay();
+      }
       else if (s.index < s.moves.length) { playing = false; stepForward(); renderPlayback(); }
       else void openCase(ref);
     } else void openCase(ref, true);
