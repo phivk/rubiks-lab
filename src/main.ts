@@ -843,6 +843,8 @@ function renderDrilling() {
       m.classList.toggle('next', open && !s!.stale && i === s!.index);
     });
     card.classList.toggle('playing', open && playing);
+    // until you've tapped through a case once, the next move pulses: this is what a tap plays
+    card.classList.toggle('teach', open && !s!.stale && !playing && !tapLearned);
     // ▶ only at the start; once moves are played its place goes to ↻, back to the start
     card.classList.toggle('begun', open && !playing && !s!.stale && s!.index > 0);
     const status = card.querySelector<HTMLElement>('.case-status');

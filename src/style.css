@@ -599,6 +599,9 @@ body.tutorial .panel.tutorial { display: flex; }
 .case.active .mv.done { opacity: 0.35; }
 /* the next move: a filled chip, readable from the table; its shadow pads it without moving the text */
 .case.active .mv.next { color: #fff; background: var(--accent); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent); }
+.case.teach .mv.next { animation: next-pulse 1.4s ease-in-out infinite; }
+@keyframes next-pulse { 50% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 7px rgba(143, 123, 255, 0.35); } }
+@media (prefers-reduced-motion: reduce) { .case.teach .mv.next { animation: none; } }
 .notation { display: none; }
 .notation summary { cursor: pointer; color: var(--accent-2); font-size: 13px; }
 .notation p { margin: 6px 0 0; }
