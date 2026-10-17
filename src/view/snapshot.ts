@@ -1,10 +1,10 @@
 import type { Puzzle, State, Vec3 } from '../core/types';
-import { add, cross, dot, scale } from '../core/vec';
+import { add, cross, dot, hull, mean, normalize, scale, sub } from '../core/vec';
 
 type V2 = [number, number];
 
 /** the 3D view's key light, and how much it brightens a face turned toward it */
-const LIGHT: Vec3 = (() => { const l: Vec3 = [5, 8, 6]; return scale(l, 1 / Math.hypot(...l)); })();
+const LIGHT = normalize([5, 8, 6]);
 const shade = (normal: Vec3) => 0.7 + 0.35 * Math.max(0, dot(normal, LIGHT));
 const BODY = '#0d0f14';
 
@@ -26,18 +26,6 @@ function rounded(pts: V2[], radius: number) {
   }).join('') + 'Z';
 }
 
-/** The convex hull of some points. */
-function hull(pts: V2[]): V2[] {
-  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const turn = (o: V2, a: V2, b: V2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const half = (list: V2[]) => list.reduce<V2[]>((h, q) => {
-    while (h.length >= 2 && turn(h[h.length - 2], h[h.length - 1], q) <= 1e-9) h.pop();
-    h.push(q);
-    return h;
-  }, []);
-  return [...half(p).slice(0, -1), ...half(p.reverse()).slice(0, -1)];
-}
-
 /**
  * A still picture of the puzzle as the 3D view draws it: the same stickers, colors, rounding
  * and light, seen from the view's home angle ('corner') or straight from above ('top').
@@ -46,17 +34,15 @@ function hull(pts: V2[]): V2[] {
  * a pair listed both ways is one arrow with two heads.
  */
 export function snapshot(puzzle: Puzzle, state: State, view: 'corner' | 'top', arrows: [number, number][] = []) {
-  const toCam = view === 'top' ? ([0, 1, 0] as Vec3) : (() => {
-    const v = puzzle.cameraHome.map((x, k) => x - puzzle.cameraTarget[k]) as Vec3;
-    return scale(v, 1 / Math.hypot(...v));
-  })();
-  const right = (() => { const r = cross(view === 'top' ? [0, 0, -1] : [0, 1, 0], toCam); return scale(r, 1 / Math.hypot(...r)); })();
+  const toCam: Vec3 = view === 'top' ? [0, 1, 0] : normalize(sub(puzzle.cameraHome, puzzle.cameraTarget));
+  const right = normalize(cross(view === 'top' ? [0, 0, -1] : [0, 1, 0], toCam));
   const up = cross(toCam, right);
   const project = (p: Vec3): V2 => [dot(p, right), -dot(p, up)];
 
   // stickers of the pieces with one on top fold out when they face away
-  const topPieces = new Set(puzzle.stickers.filter((s) => s.normal[1] > 0.9).map((s) => s.piece));
-  const top = Math.max(...puzzle.stickers.filter((s) => s.normal[1] > 0.9).flatMap((s) => s.outline.map((p) => p[1])));
+  const topStickers = puzzle.stickers.filter((s) => s.normal[1] > 0.9);
+  const topPieces = new Set(topStickers.map((s) => s.piece));
+  const top = Math.max(...topStickers.flatMap((s) => s.outline.map((p) => p[1])));
   const fold = (p: Vec3, n: Vec3): Vec3 => {
     // turn the face down flat about its top edge, a little apart from it, and squash it to a
     // strip as if seen at a slant
@@ -74,15 +60,15 @@ export function snapshot(puzzle: Puzzle, state: State, view: 'corner' | 'top', a
     const pts = (facing ? s.outline : s.outline.map((p) => fold(p, s.normal))).map(project);
     if (facing) body.push(...pts);
     all.push(...pts);
-    centers[s.index] = [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+    centers[s.index] = mean(pts);
     // a blank folded-out sticker isn't drawn, but still sizes the picture so every case of a step matches
     if (!facing && state[s.index] === puzzle.unset) continue;
     shapes.push(`<path d="${rounded(pts, puzzle.stickerCornerRadius)}" fill="${darken(puzzle.colors[state[s.index]], shade(s.normal))}"/>`);
   }
   const outline = hull(body);
-  const pad = 0.15;
-  const minX = Math.min(...all.map((p) => p[0])) - pad - 0.05, maxX = Math.max(...all.map((p) => p[0])) + pad + 0.05;
-  const minY = Math.min(...all.map((p) => p[1])) - pad - 0.05, maxY = Math.max(...all.map((p) => p[1])) + pad + 0.05;
+  const pad = 0.15, margin = pad + 0.05;
+  const minX = Math.min(...all.map((p) => p[0])) - margin, maxX = Math.max(...all.map((p) => p[0])) + margin;
+  const minY = Math.min(...all.map((p) => p[1])) - margin, maxY = Math.max(...all.map((p) => p[1])) + margin;
 
   const marks: string[] = [];
   const head = (at: V2, dir: V2) => {

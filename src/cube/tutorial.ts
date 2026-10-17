@@ -100,12 +100,10 @@ const CROSS_CASES: [string, string, string][] = [
   ['On the bottom, flipped', "F2 U' R' F R", 'Take it out to the top, then bring it back in the right way round.'],
 ];
 
-
-
 export function cfopTutorial(M: CubeModel): Tutorial {
   if (M.n !== 3) throw new Error('the CFOP tutorial is for the 3×3');
   const K = lessonKit(M);
-  const { at, stickersOf, center, find, colorsAt } = K;
+  const { at, stickersOf, center, colorsAt, focusOn } = K;
   // CFOP is solved with white down; z2 keeps green in front
   const home = K.apply(M.solved(), ['z2']);
   const white = center(home, 'D');
@@ -127,10 +125,10 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   const SLOTS = [...EDGES, ...CORNERS, ...'UDFRBL'];
   const slotOf: string[] = [];
   for (const slot of SLOTS) for (const i of stickersOf(slot)) slotOf[i] = slot;
-  const pieceStickers = (s: State, colors: number[][]) => colors.flatMap((c) => stickersOf(find(s, c)));
   const centers = [...'UDFRBL'].map((f) => at(f, f));
   const TOP = [...TOP_EDGES, ...TOP_CORNERS];
-  const focusTop = () => [at('U', 'U'), ...TOP.flatMap((slot) => stickersOf(slot))];
+  const TOP_STICKERS = [at('U', 'U'), ...TOP.flatMap((slot) => stickersOf(slot))];
+  const focusTop = () => TOP_STICKERS;
 
   /** An arrow from each top piece to its spot, as top stickers: where it is, where it goes. */
   function pllArrows(s: State): [number, number][] {
@@ -153,7 +151,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
     html: `<p>Hold the cube with the <b>white center down</b> and green in front. The cross is the four white edges on the bottom, each beside the center of its other color.</p>
       <p>There’s no algorithm to learn here: the cross takes at most eight moves, and with practice you plan all of it while you inspect the cube. These examples show the usual ways to bring one edge home, the white–green one, without disturbing the others.</p>
       <p class="muted">Tip: solve the cross on the bottom from the start, even though it’s harder to see. You’ll never have to flip the cube for the next stage.</p>`,
-    groups: [{ name: 'Bringing one edge home', cases: CROSS_CASES.map(([name, a, note]) => make(name, a, (s) => [...centers, ...pieceStickers(s, crossEdges)], note)) }],
+    groups: [{ name: 'Bringing one edge home', cases: CROSS_CASES.map(([name, a, note]) => make(name, a, (s) => [...centers, ...focusOn(crossEdges)(s)], note)) }],
     view: 'corner',
   };
 
@@ -163,7 +161,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   const f2lGroups = F2L_GROUPS.map(({ name, about, cases }) => ({
     name, about,
     // the cross is already done by now, so it shows along with the pair
-    cases: cases.map(([name, a, note]) => make(name, a, (s) => [...centers, ...pieceStickers(s, crossEdges), ...pieceStickers(s, pair)], note)),
+    cases: cases.map(([name, a, note]) => make(name, a, (s) => [...centers, ...focusOn(crossEdges)(s), ...focusOn(pair)(s)], note)),
   }));
   // the sexy move, R U R' U': the trigger most F2L and OLL algorithms are built from, highlighted wherever it appears
   const SEXY = "R U R' U'";
@@ -181,11 +179,12 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   // ---------- 3. OLL, in two looks ----------
 
   const TOP_EDGE_STICKERS = new Set(TOP_EDGES.flatMap((slot) => stickersOf(slot)));
+  const ALL = M.facelets.map((f) => f.index);
   const inF2L = (i: number) => !slotOf[i].includes('U') || slotOf[i] === 'U';
   // the first two layers, and the top layer's yellow stickers: where the rest go is for PLL
-  const ollShown = (s: State) => M.facelets.map((f) => f.index).filter((i) => inF2L(i) || s[i] === yellow);
+  const ollShown = (s: State) => ALL.filter((i) => inF2L(i) || s[i] === yellow);
   // look 1 is about the edges: their yellow stickers only, the corners blank
-  const edgesShown = (s: State) => M.facelets.map((f) => f.index).filter((i) => inF2L(i) || (TOP_EDGE_STICKERS.has(i) && s[i] === yellow));
+  const edgesShown = (s: State) => ALL.filter((i) => inF2L(i) || (TOP_EDGE_STICKERS.has(i) && s[i] === yellow));
   const ocll = (n: number, name: string) => make(name, OLL.find((o) => o.n === n)!.alg, ollShown);
 
   const oll: TutorialStep = {
@@ -225,8 +224,9 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   // ---------- 4. PLL, in two looks ----------
 
   // look 1 moves the corners: the top edges' side stickers are blank
-  const cornersShown = (s: State) => M.facelets.map((f) => f.index).filter((i) => !TOP_EDGE_STICKERS.has(i) || s[i] === yellow);
-  const perm = (name: string, shown?: (s: State) => number[], note?: string) => make(`${name} perm`, PLL.find((p) => p.name === name)!.alg, shown, note);
+  const cornersShown = (s: State) => ALL.filter((i) => !TOP_EDGE_STICKERS.has(i) || s[i] === yellow);
+  const perm = (name: string, shown?: (s: State) => number[], note?: string, after = '') =>
+    make(`${name} perm`, PLL.find((p) => p.name === name)!.alg + after, shown, note);
 
   const pll: TutorialStep = {
     name: 'PLL',
@@ -251,7 +251,7 @@ export function cfopTutorial(M: CubeModel): Tutorial {
           perm('Ub', undefined, 'One solved side, held at the back. The front edge goes left, the left one right, the right one to the front.'),
           perm('H', undefined, 'No solved side, opposite colors on each: opposite edges swap.'),
           // the Z perm ends a quarter turn off; the U lines it up, so the arrows show just the edge swaps
-          make('Z perm', PLL.find((p) => p.name === 'Z')!.alg + ' U', undefined, 'No solved side, neighbouring colors: the edges swap in neighbouring pairs, front with right and back with left.'),
+          perm('Z', undefined, 'No solved side, neighbouring colors: the edges swap in neighbouring pairs, front with right and back with left.', ' U'),
         ],
       },
     ],

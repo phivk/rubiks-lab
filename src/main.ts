@@ -2,7 +2,7 @@ import './style.css';
 import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
 import type { Guide, GuideStep, Puzzle, State, TutorialCase, TutorialStep, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
-import { countMoves, stepMoves } from './cube/lessonKit';
+import { alg, countMoves, stepMoves } from './cube/lessonKit';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
@@ -76,7 +76,7 @@ const view: PuzzleView = new PuzzleView($('#stage'), {
   onDragTurn: (move) => commitUserMove(move, false),
   onStickerClick: (i) => paintSticker(i),
   // on a phone, with a case open, a swipe on the cube (often meant to scroll) only turns the view
-  canDragTurn: () => queue.length === 0 && !running && !(phone() && document.body.classList.contains('drilling')),
+  canDragTurn: () => queue.length === 0 && !running && !(phone() && drilling()),
   ...link(() => view),
   onDrag: (move, steps) => maps.forEach((m) => m.showDrag(move, steps)),
 });
@@ -407,7 +407,6 @@ function setCubeKind(kind: CubeKind) {
   maps.forEach((m) => m.setPuzzle(puzzle));
   buildMovepad();
   renderCubeKind();
-  tutRendered = '';
   view.setState(session.state);
   onStateChanged();
 }
@@ -822,63 +821,82 @@ function renderPlayback() {
   renderDrilling();
 }
 
-const phone = () => matchMedia('(max-width: 860px)').matches;
+const phoneMQ = matchMedia('(max-width: 860px)');
+const phone = () => phoneMQ.matches;
+/** a tutorial case is open */
+const drilling = () => tab === 'tutorial' && !!solution?.tutorial;
 
 /** The open tutorial case's card shows where its algorithm is: played moves fade, the next one stands out. */
 function renderDrilling() {
   const s = solution;
-  const on = tab === 'tutorial' && !!s?.tutorial;
+  const on = drilling();
   document.body.classList.toggle('drilling', on);
-  if (on && !s!.stale) {
+  const live = on && !s!.stale;
+  if (live) {
     const k = s!.index;
     if (k > 0 && k < s!.moves.length) caseProgress.set(caseKey(s!.tutorial!), k);
     else caseProgress.delete(caseKey(s!.tutorial!));
   }
   keepAwake(on);
   document.querySelectorAll<HTMLElement>('#tut-groups .case').forEach((card) => {
-    const open = on && !!s && s.tutorial!.step === tutStep && sameCase(s.tutorial!, { step: tutStep, group: Number(card.dataset.group), index: Number(card.dataset.index) });
+    const open = on && sameCase(s!.tutorial!, cardRef(card));
+    const here = open && !s!.stale;
+    card.classList.toggle('active', open);
     card.querySelectorAll<HTMLElement>('.mv').forEach((m) => {
       const i = Number(m.dataset.mv);
-      m.classList.toggle('done', open && !s!.stale && i < s!.index);
-      m.classList.toggle('next', open && !s!.stale && i === s!.index);
+      m.classList.toggle('done', here && i < s!.index);
+      m.classList.toggle('next', here && i === s!.index);
     });
     card.classList.toggle('playing', open && playing);
     // until you've tapped through a case once, the next move pulses: this is what a tap plays
-    card.classList.toggle('teach', open && !s!.stale && !playing && !tapLearned);
+    card.classList.toggle('teach', here && !playing && !tapLearned);
     // ▶ only at the start; once moves are played its place goes to ↻, back to the start
-    card.classList.toggle('begun', open && !playing && !s!.stale && s!.index > 0);
+    card.classList.toggle('begun', here && !playing && s!.index > 0);
     const status = card.querySelector<HTMLElement>('.case-status');
-    if (status) status.innerHTML = !open ? '' : s!.stale ? '<b>Cube turned</b>tap to set up'
-      : s!.index >= s!.moves.length && !playing ? '<b>Done ✓</b>tap to repeat'
-      // until you've stepped through a case once, the first open says how
-      : s!.index === 0 && !playing && !tapLearned ? '<b>Tap the card</b>for each move' : '';
-    card.querySelector<HTMLElement>('.case-back')?.classList.toggle('off', !open || !!s!.stale || s!.index === 0);
-    card.querySelector<HTMLElement>('.case-play')?.classList.toggle('off', !open || !!s!.stale);
+    if (status) status.innerHTML = caseStatus(open);
+    card.querySelector<HTMLElement>('.case-back')?.classList.toggle('off', !here || s!.index === 0);
+    card.querySelector<HTMLElement>('.case-play')?.classList.toggle('off', !here);
   });
+}
+
+/** What the open case's card says under its moves. */
+function caseStatus(open: boolean) {
+  const s = solution!;
+  if (!open) return '';
+  if (s.stale) return '<b>Cube turned</b>tap to set up';
+  if (playing) return '';
+  if (s.index >= s.moves.length) return '<b>Done ✓</b>tap to repeat';
+  // until you've stepped through a case once, the first open says how
+  if (s.index === 0 && !tapLearned) return '<b>Tap the card</b>for each move';
+  return '';
 }
 
 /** Keep a phone's screen on while a case is open: both hands are on the real cube. */
 let wakeLock: { release: () => Promise<void> } | null = null;
 let wantAwake = false;
+let askingAwake = false;
 function keepAwake(on: boolean) {
   wantAwake = on;
   const nav = navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> } };
-  if (on && !wakeLock && nav.wakeLock && document.visibilityState === 'visible') {
+  if (on && !wakeLock && !askingAwake && nav.wakeLock && document.visibilityState === 'visible') {
+    askingAwake = true;
     nav.wakeLock.request('screen').then((lock) => {
       if (wantAwake) wakeLock = lock;
       else void lock.release();
-    }).catch(() => { /* not allowed or unsupported: the screen may sleep */ });
+    }).catch(() => { /* not allowed or unsupported: the screen may sleep */ }).finally(() => { askingAwake = false; });
   } else if (!on && wakeLock) {
     void wakeLock.release();
     wakeLock = null;
   }
 }
 // the stepper fades out what scrolls under it, but only once something does
-for (const scroller of [window, document.getElementById('tutorial')!]) {
-  scroller.addEventListener('scroll', () => {
-    const steps = document.getElementById('tut-steps')!;
-    steps.classList.toggle('stuck', document.getElementById('tut-intro')!.getBoundingClientRect().top < steps.getBoundingClientRect().bottom + 8);
-  }, { passive: true });
+{
+  const steps = $('#tut-steps'), intro = $('#tut-intro');
+  for (const scroller of [window, $('#tutorial')]) {
+    scroller.addEventListener('scroll', () => {
+      steps.classList.toggle('stuck', intro.getBoundingClientRect().top < steps.getBoundingClientRect().bottom + 8);
+    }, { passive: true });
+  }
 }
 
 // the browser drops the lock when the page is hidden; take it again on return
@@ -890,6 +908,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------- lessons ----------
+
+/** the puzzle's move notation, and any extra moves a guide or tutorial uses */
+const notationText = (extra?: string) => `${puzzle.notationHtml}${extra ? ' ' + extra : ''}`;
 
 function renderTabs() {
   $('#sol-tabs').classList.toggle('hidden', !puzzle.guides?.length && !puzzle.tutorial);
@@ -921,7 +942,7 @@ function renderLearn() {
     : solution ? 'From the cube as it is now' : 'Walks you through solving this cube';
   $('#lesson-intro').innerHTML = `
     <p><b>${guide.name}.</b> ${guide.intro}</p>
-    <p class="muted small">Moves use standard notation: ${puzzle.notationHtml}${guide.notation ? ' ' + guide.notation : ''}</p>
+    <p class="muted small">Moves use standard notation: ${notationText(guide.notation)}</p>
     <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along.</p>`;
   if (solution?.lesson) {
     renderLesson();
@@ -1006,6 +1027,8 @@ function onStageClick(e: Event) {
 let tutRendered = '';
 
 const sameCase = (a: CaseRef, b: CaseRef) => a.step === b.step && a.group === b.group && a.index === b.index;
+/** the case a card on screen shows */
+const cardRef = (el: HTMLElement): CaseRef => ({ step: tutStep, group: Number(el.dataset.group), index: Number(el.dataset.index) });
 
 /**
  * For each move, the trigger run it belongs to (counted from 1), or 0: the tutorial's
@@ -1035,7 +1058,7 @@ function movesHtml(moves: string[], breakAfter?: number) {
 }
 
 /** HTML with the moves inside each <code> marked where they hold a trigger. */
-const markCode = (html: string) => html.replace(/<code>([^<]*)<\/code>/g, (_, text: string) => `<code>${movesHtml(text.split(' ').filter(Boolean))}</code>`);
+const markCode = (html: string) => html.replace(/<code>([^<]*)<\/code>/g, (_, text: string) => `<code>${movesHtml(alg(text))}</code>`);
 
 /** a case's picture, drawn as the 3D view draws the puzzle */
 const diagram = (step: TutorialStep, c: TutorialCase) => snapshot(puzzle, c.setup, step.view, step.arrows?.(c));
@@ -1052,11 +1075,11 @@ function setTutorialStep(k: number) {
   }
 }
 
-/** Set a case up on the cube, ready to play its algorithm. */
 /** how far into each tutorial case you got this session, so coming back to one resumes it */
 const caseProgress = new Map<string, number>();
 const caseKey = (r: CaseRef) => `${r.step}:${r.group}:${r.index}`;
 
+/** Set a case up on the cube, ready to play its algorithm. */
 async function openCase(ref: CaseRef, resume = false) {
   const T = puzzle.tutorial;
   if (!T) return;
@@ -1081,7 +1104,6 @@ function renderTutorial(fresh: boolean) {
   const T = puzzle.tutorial!;
   tutStep = Math.min(tutStep, T.steps.length - 1);
   const step = T.steps[tutStep];
-  const open = solution?.tutorial;
   const key = `${tutStep}:${cubeKind()}`;
   if (tutRendered !== key) {
     tutRendered = key;
@@ -1092,7 +1114,7 @@ function renderTutorial(fresh: boolean) {
     $('#tut-intro').innerHTML = `<div class="lesson-title">${step.goal}</div><div class="lesson-text${long ? ' collapsible' : ''}">${markCode(step.html)}</div>` +
       (long ? '<button class="link more" data-act="more" aria-expanded="false">Show more</button>' : '') +
       // the notation is explained once, on the first step
-      (tutStep > 0 ? '' : `<details class="notation"><summary>How to read the moves</summary><p class="muted small">${puzzle.notationHtml}${T.notation ? ' ' + T.notation : ''}</p></details>`);
+      (tutStep > 0 ? '' : `<details class="notation"><summary>How to read the moves</summary><p class="muted small">${notationText(T.notation)}</p></details>`);
     $('#tut-groups').innerHTML = step.groups.map((g, gi) => `
       <section class="tut-group">
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length} ${g.cases.length === 1 ? 'case' : 'cases'}</span></div>
@@ -1108,10 +1130,6 @@ function renderTutorial(fresh: boolean) {
       (next ? `<button class="btn small primary-soft" data-step="${tutStep + 1}">Next: ${next.name}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : '');
     $('#tutorial').scrollTop = 0;
   }
-  document.querySelectorAll<HTMLElement>('#tut-groups .case').forEach((b) => {
-    const on = !!open && sameCase(open, { step: tutStep, group: Number(b.dataset.group), index: Number(b.dataset.index) });
-    b.classList.toggle('active', on);
-  });
   renderCaseCard();
   if (!solution) return;
   $('#sol-count').textContent = String(solution.moves.length);
@@ -1124,7 +1142,7 @@ function renderTutorial(fresh: boolean) {
 function renderCaseCard() {
   const T = puzzle.tutorial!;
   const el = $('#case-card');
-  const notation = `<p class="muted small">Moves use standard notation: ${puzzle.notationHtml}${T.notation ? ' ' + T.notation : ''}</p>`;
+  const notation = `<p class="muted small">Moves use standard notation: ${notationText(T.notation)}</p>`;
   const ref = solution?.tutorial;
   if (!ref) {
     el.innerHTML = `<div class="lesson-title">${T.name} tutorial</div><p class="lesson-text">${T.intro}</p>${notation}`;
@@ -1159,7 +1177,7 @@ function onTutorialClick(e: Event) {
     b.textContent = open ? 'Show less' : 'Show more';
   } else if (b.dataset.step) setTutorialStep(Number(b.dataset.step));
   else if (b.dataset.group) {
-    const ref = { step: tutStep, group: Number(b.dataset.group), index: Number(b.dataset.index) };
+    const ref = cardRef(b);
     const s = solution;
     // on a phone the open case's card is the controller: tap it for the next move, tap a move to go back to it
     if (phone() && s?.tutorial && sameCase(s.tutorial, ref) && !s.stale) {
