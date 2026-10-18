@@ -129,6 +129,44 @@ export interface Guide {
   steps: (s: State) => GuideStep[];
 }
 
+/** One case of a tutorial step: a picture of it and the algorithm that solves it. */
+export interface TutorialCase {
+  name: string;
+  moves: string[];
+  /** the state the algorithm solves, held the way it starts; stickers that don't matter yet are unset */
+  setup: State;
+  /** a sentence on how the moves work */
+  note?: string;
+  /** show the algorithm on a new line after this many moves */
+  breakAfter?: number;
+}
+
+export interface TutorialStep {
+  name: string;
+  goal: string;
+  /** the explanation, as HTML */
+  html: string;
+  groups: { name: string; about?: string; cases: TutorialCase[] }[];
+  /** how a case is pictured: the puzzle from its usual angle, or its top from above */
+  view: 'corner' | 'top';
+  /** arrows on a case's picture, from sticker to sticker */
+  arrows?: (c: TutorialCase) => [number, number][];
+  /** the stickers to keep lit on the 3D cube while a case plays, for any state, if not all */
+  focus?: (s: State) => number[];
+}
+
+/** Every case of each stage of a method, with its algorithm, to follow along on a real puzzle. */
+export interface Tutorial {
+  id: string;
+  name: string;
+  intro: string;
+  /** notation beyond the puzzle's basic moves */
+  notation?: string;
+  /** short move sequences worth spotting inside the algorithms, highlighted wherever they appear */
+  triggers?: { name: string; moves: string[] }[];
+  steps: TutorialStep[];
+}
+
 export interface Puzzle {
   id: string;
   name: string;
@@ -191,4 +229,6 @@ export interface Puzzle {
   cancelSolve: () => void;
   /** tutorials that walk through solving this puzzle by hand, one per method */
   guides?: Guide[];
+  /** every case of a method's stages, with algorithms, on the Tutorial tab */
+  tutorial?: Tutorial;
 }

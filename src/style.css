@@ -509,6 +509,115 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .stages li.current { background: var(--accent-soft); }
 .stages li.current .num { background: var(--accent); color: #fff; }
 
+/* ---------- tutorial ---------- */
+/* the tutorial takes the left panel's place, wider, and the cube sits between the panels */
+.panel.tutorial { grid-column: 1; display: none; }
+body.tutorial .app { grid-template-columns: minmax(400px, 1.3fr) minmax(240px, 1fr) 340px; }
+body.tutorial .stage { grid-column: 2; }
+body.tutorial .panel.left { display: none; }
+body.tutorial .panel.tutorial { display: flex; }
+.solution.tutorial { display: flex; flex-direction: column; gap: 14px; }
+.solution.tutorial .sol-empty, .solution.tutorial .sol-meta, .solution.tutorial .lesson-intro { display: none; }
+.solution:not(.tutorial) .case-card { display: none; }
+.solution.tutorial .chips { max-height: 160px; }
+/* the stages read as a sequence, ‹ one › after another, not as a second set of tabs */
+/* the stepper stays at the top of the panel while the cases scroll under it (12px below its edge: offsets count from inside the padding) */
+.tut-steps {
+  display: flex; gap: 12px; padding: 3px 0;
+  position: sticky; top: -4px; z-index: 1; box-shadow: 0 0 0 16px var(--panel-solid); background: var(--panel-solid);
+}
+.tut-steps button + button::before { content: '›'; position: absolute; left: -9px; color: var(--text-3); font-weight: 400; pointer-events: none; }
+/* cases scrolling under the stuck stepper fade out instead of being cut */
+.tut-steps.stuck::after { content: ''; position: absolute; left: -16px; right: -16px; top: calc(100% + 16px); height: 18px; background: linear-gradient(var(--panel-solid), transparent); pointer-events: none; }
+.tut-steps button {
+  position: relative; flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 4px;
+  border: 0; background: transparent; border-radius: 7px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--text-2); transition: background 0.2s, color 0.2s;
+}
+.tut-steps button:hover { color: var(--text); }
+.tut-steps button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.tut-steps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tut-steps .num {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 10.5px; font-weight: 700; background: var(--chip-hover); font-variant-numeric: tabular-nums;
+}
+.tut-steps button.active .num { background: var(--accent); color: #fff; }
+.tut-intro { display: flex; flex-direction: column; gap: 8px; }
+.tut-intro .more { display: none; align-self: flex-start; color: var(--accent-2); font-weight: 600; }
+.panel.tutorial code, .case-card code {
+  font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 1px 5px; border-radius: 5px;
+  background: var(--chip-hover); color: var(--text); white-space: nowrap;
+}
+.tut-groups { display: flex; flex-direction: column; gap: 18px; }
+.tut-group { display: flex; flex-direction: column; gap: 8px; }
+.tut-group > p { margin: -4px 0 0; }
+.cases { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
+.case {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 8px 9px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--chip); cursor: pointer;
+  text-align: center;
+  /* the card gives under your finger, like a button */
+  touch-action: manipulation; transition: background 0.15s, border-color 0.15s, transform 0.08s;
+}
+.case:hover { background: var(--chip-hover); border-color: var(--line-2); }
+.case.active { background: var(--accent-soft); border-color: rgba(143, 123, 255, 0.6); }
+/* the whole card is one button; its controls are buttons on top */
+.case-hit { position: absolute; inset: 0; z-index: 1; padding: 0; border: 0; border-radius: inherit; background: none; cursor: pointer; touch-action: manipulation; }
+.case-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.case .diagram { width: 84px; height: 84px; }
+.case-name { font-size: 12px; font-weight: 650; }
+.panel.tutorial .case-alg {
+  font-size: 10.5px; padding: 0; background: none; color: var(--text-2); white-space: normal; line-height: 1.35;
+}
+.diagram { stroke: none; stroke-width: 0; }
+/* a trigger (the sexy move) inside an algorithm: tinted in the text, underlined on the chips */
+.trig { color: var(--accent-2); }
+.chip.trig { box-shadow: inset 0 -2px 0 var(--accent-2); }
+.chip.trig.even { box-shadow: inset 0 -2px 0 var(--accent); }
+.chip.trig.current { box-shadow: inset 0 -2px 0 var(--accent-2), 0 0 0 3px rgba(143, 123, 255, 0.15); }
+/* a case's moves: in the open case, the ones played fade and the next one stands out */
+.case:active { transform: scale(0.97); }
+.case-note { display: none; font-size: 11px; line-height: 1.35; color: var(--text-3); }
+/* the open case's back and play/restart flank its picture, so the card keeps its size */
+.case-ctl { display: none; }
+.case-back, .case-play { position: absolute; z-index: 2; padding: 0; border: 0; background: none; cursor: pointer; top: 6px; width: 34px; height: 92px; display: grid; place-items: center; border-radius: 9px; color: var(--text-2); }
+.case-back { left: 4px; }
+.case-play { right: 4px; }
+/* done or turned by hand: a word over the picture, so the card keeps its size */
+.case-status {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 92px; height: 92px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 12px; background: rgba(11, 13, 18, 0.82); font-size: 11px; color: var(--text-2); pointer-events: none; z-index: 2;
+}
+.case-undo {
+  pointer-events: auto; margin: 3px 0; padding: 3px 8px; border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--chip-hover); font-size: 11px; font-weight: 600; color: #fff; cursor: pointer;
+}
+.case-back:focus-visible, .case-play:focus-visible, .case-undo:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.case-status:empty { display: none; }
+.case-status b { font-size: 14px; color: #fff; }
+.case-back:active, .case-play:active { background: rgba(255, 255, 255, 0.08); }
+.case-back svg { width: 22px; height: 22px; }
+.case-play svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.case-play .i-pause, .case-play .i-replay, .case.playing .case-play .i-play, .case.begun .case-play .i-play { display: none; }
+.case.playing .case-play .i-pause, .case.begun .case-play .i-replay { display: block; }
+.case-play .i-replay { fill: none; stroke: currentColor; stroke-width: 2.2; }
+.case-back.off, .case-play.off { visibility: hidden; }
+.case.active .mv.done { opacity: 0.35; }
+/* the next move: a filled chip, readable from the table; its shadow pads it without moving the text */
+.case.active .mv.next { color: #fff; background: var(--accent); border-radius: 3px; box-shadow: 0 0 0 3px var(--accent); }
+.case.teach .mv.next { animation: next-pulse 1.4s ease-in-out infinite; }
+@keyframes next-pulse { 50% { box-shadow: 0 0 0 3px var(--accent), 0 0 0 7px rgba(143, 123, 255, 0.35); } }
+@media (prefers-reduced-motion: reduce) { .case.teach .mv.next { animation: none; } }
+.notation { display: none; }
+.notation summary { cursor: pointer; color: var(--accent-2); font-size: 13px; }
+.notation p { margin: 6px 0 0; }
+.diagram .arrows { fill: #0b0d12; stroke: #0b0d12; stroke-width: 0.09; stroke-linecap: round; stroke-linejoin: round; }
+.case-card { display: flex; flex-direction: column; gap: 10px; }
+.case-card p { margin: 0; }
+.case-big { display: flex; justify-content: center; padding: 4px 0; }
+.case-big .diagram { width: 150px; height: 150px; }
+
 /* ---------- toasts ---------- */
 .toasts { position: fixed; top: 70px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; pointer-events: none; align-items: center; }
 .toast {
@@ -552,6 +661,7 @@ kbd {
 /* ---------- responsive ---------- */
 @media (max-width: 1100px) {
   .app { grid-template-columns: 300px 1fr 300px; }
+  body.tutorial .app { grid-template-columns: minmax(330px, 1.2fr) minmax(200px, 1fr) 300px; }
   .panel { margin: 4px 10px 10px; }
 }
 @media (max-width: 860px) {
@@ -563,9 +673,26 @@ kbd {
   .stage { height: 46vh; min-height: 300px; flex: none; position: sticky; top: 0; z-index: 3; background: radial-gradient(600px 400px at 50% 50%, #1a1e2b, var(--bg) 70%); border-bottom: 1px solid var(--line); margin-bottom: 16px; }
   .stage-hint { bottom: 10px; font-size: 11.5px; }
   .solved-badge { top: 12px; }
-  .panel { margin: 0 16px 16px; max-height: none; overflow: visible; }
+  .panel { margin: 0 16px 16px; max-height: none; overflow: visible; align-self: stretch; }
   .panel.right { order: 3; }
   .panel.left { order: 4; }
+  .panel.tutorial { order: 4; }
+  /* on a phone the page scrolls, under the sticky 3D view */
+  .tut-steps { top: calc(max(46vh, 300px) + 12px); }
+  /* in the tutorial the case card in the list is the controller: no second copy, chips or player */
+  .solution.tutorial { display: none; }
+  .case .case-note { display: block; }
+  .case.active .case-ctl { display: contents; }
+  .notation { display: block; }
+  /* readable from the table */
+  .panel.tutorial .case-alg { font-size: 13px; line-height: 1.45; }
+  body.drilling .stage-hint { display: none; }
+  /* scrolling a tapped card into view leaves it clear of the pinned cube and stepper */
+  .case { scroll-margin-top: calc(max(46vh, 300px) + 64px); scroll-margin-bottom: 16px; }
+  /* a long stage explanation folds down to its first paragraph */
+  .tut-intro .collapsible:not(.open) > :not(:first-child) { display: none; }
+  .tut-intro .collapsible:not(.open) > :first-child { margin-bottom: 0; }
+  .tut-intro .more { display: inline; }
   /* the tabs shrink and scroll sideways rather than widening the page */
   .puzzle-switch { position: static; transform: none; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .puzzle-switch::-webkit-scrollbar { display: none; }

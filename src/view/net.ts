@@ -1,22 +1,9 @@
 import type { DragOption, Puzzle, State, Turn, Vec3 } from '../core/types';
-import { add, cross, dot, mean, rotate, scale, sub } from '../core/vec';
+import { add, cross, dot, hull, mean, rotate, scale, sub } from '../core/vec';
 import { turnDuration } from './anim';
 import { MapView, SVG, UNIT } from './map';
 
 type V2 = [number, number];
-
-/** The convex hull of some points, counter-clockwise. */
-function hull(pts: V2[]): V2[] {
-  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const turn = (o: V2, a: V2, b: V2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const half = (list: V2[]) => list.reduce<V2[]>((h, q) => {
-    while (h.length >= 2 && turn(h[h.length - 2], h[h.length - 1], q) <= 1e-9) h.pop();
-    h.push(q);
-    return h;
-  }, []);
-  const lower = half(p), upper = half(p.reverse());
-  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
-}
 
 /**
  * How a face lies on the map: a point in the face's plane, written in two of its stickers'
