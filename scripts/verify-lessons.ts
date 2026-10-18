@@ -10,12 +10,13 @@ import { CubeModel } from '../src/cube/model';
 import { reductionMethod } from '../src/cube/reduction';
 import { rouxMethod } from '../src/cube/roux';
 import { zzMethod } from '../src/cube/zz';
+import { allPyraminxCases } from '../src/pyraminx/cases';
 import { pyraminxMethod } from '../src/pyraminx/lesson';
 import { applyAll as pyraApply, solved as pyraSolved } from '../src/pyraminx/model';
 import { scramble as pyraScramble } from '../src/pyraminx/solver';
 
 // a step that names a case must name one that exists
-const CASE_IDS = new Set([3, 2].flatMap((n) => [...allCases(new CubeModel(n)).keys()]));
+const CASE_IDS = new Set([...[3, 2].flatMap((n) => [...allCases(new CubeModel(n)).keys()]), ...allPyraminxCases().keys()]);
 // methods whose courses don't have their cases yet
 const PENDING = new Set(['reduction', 'zz', 'roux']);
 

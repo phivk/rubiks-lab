@@ -14,6 +14,9 @@
 //
 // Beginner (3×3 and 2×2): each case is one its stage meets, the guided solve does exactly its
 // algorithm on it, and names it. On the 2×2, the yellow-top cases are all seven shapes.
+//
+// Pyraminx: each case solves its setup and is one its stage meets, the guided solve does
+// exactly its algorithm on it and names it, and the moving top-layer cases have arrows.
 import type { Case, GuideStep, Method } from '../src/core/types';
 import { beginnerMethod, beginnerStages } from '../src/cube/beginner';
 import { beginner2Method, beginner2Stages } from '../src/cube/beginner2';
@@ -24,6 +27,11 @@ import { CubeModel, invertAlg, UNSET } from '../src/cube/model';
 import { reductionMethod } from '../src/cube/reduction';
 import { rouxMethod } from '../src/cube/roux';
 import { zzMethod } from '../src/cube/zz';
+import { allPyraminxCases } from '../src/pyraminx/cases';
+import { pyraminxMethod, pyraminxStages } from '../src/pyraminx/lesson';
+import * as P from '../src/pyraminx/model';
+
+const UNSET_P = P.UNSET;
 
 const M = new CubeModel(3);
 const K = lessonKit(M);
@@ -226,6 +234,56 @@ for (const [name, cases, n, needs, done] of fullSets) {
   for (const c of course2[2].caseGroups!.flatMap((g) => g.cases)) if (!C2.arrows(c).length) fail(`2×2 ${c.name}: no arrows`);
 }
 
+// ---------- the Pyraminx's layer-by-layer method ----------
+
+let pyraCount = 0;
+{
+  const home = P.solved();
+  const pyra = pyraminxMethod();
+  const PS = pyraminxStages();
+  const ids = allPyraminxCases();
+  const homeAt = (s: number[], piece: number) => P.piecesOf(piece).every((i) => s[i] === home[i]);
+  const tipOk = (s: number[], v: number) => P.piecesOf(P.TIP(v)).every((i) => s[i] === s[P.piecesOf(P.CENTER(v)).find((j) => P.stickers[j].color === P.stickers[i].color)!]);
+  const count = (s: number[], ok: (s: number[], k: number) => boolean, ks: number[]) => ks.filter((k) => ok(s, k)).length;
+  const BOTTOM = [1, 2, 3];
+  const BOTTOM_EDGES = [11, 12, 13];
+  const stages: [((s: number[], steps: GuideStep[]) => number[]), (full: number[]) => boolean][] = [
+    [PS.tips, (s) => count(s, tipOk, [0, 1, 2, 3]) === 3],
+    [PS.centers, (s) => count(s, tipOk, [0, 1, 2, 3]) === 4 && count(s, (t, v) => homeAt(t, P.CENTER(v)), BOTTOM) === 2],
+    [PS.bottomEdges, (s) => BOTTOM.every((v) => homeAt(s, P.TIP(v)) && homeAt(s, P.CENTER(v))) && count(s, homeAt, BOTTOM_EDGES) === 2],
+    [PS.topLayer, (s) => BOTTOM.every((v) => homeAt(s, P.TIP(v)) && homeAt(s, P.CENTER(v))) && BOTTOM_EDGES.every((e) => homeAt(s, e)) && !s.every((x, i) => x === home[i])],
+  ];
+  const seen = new Set<string>();
+  pyra.stages.forEach((st, k) => {
+    const [run, isCase] = stages[k];
+    for (const g of st.caseGroups ?? []) {
+      if (!g.cases.length) fail(`Pyraminx ${st.name}: empty group ${g.name}`);
+      for (const c of g.cases) {
+        pyraCount++;
+        if (seen.has(c.id)) fail(`Pyraminx: two cases are ${c.id}`);
+        seen.add(c.id);
+        if (ids.get(c.id) !== c) fail(`Pyraminx: ${c.id} isn't the case set's`);
+        if (c.moves.some((mv) => !P.parseMove(mv))) fail(`Pyraminx ${c.name}: a move that isn't one`);
+        const full = P.applyAll(home, [...c.moves].reverse().map(P.invertMove));
+        if (c.setup.some((x, i) => x !== UNSET_P && x !== full[i])) fail(`Pyraminx ${c.name}: setup doesn't match its algorithm`);
+        if (P.applyAll(c.setup, c.moves).some((x, i) => x !== UNSET_P && x !== home[i])) fail(`Pyraminx ${c.name}: doesn't solve its setup`);
+        if (!isCase(full)) fail(`Pyraminx ${st.name}: ${c.name} isn't a case of the stage`);
+        const steps: GuideStep[] = [];
+        PS.reset();
+        run(full, steps);
+        const moves = steps.flatMap((x) => x.phrases.flatMap((p) => p.moves));
+        if (moves.join(' ') !== c.moves.join(' ')) fail(`Pyraminx ${st.name}: ${c.name} is ${c.moves.join(' ')}, but the guided solve does ${moves.join(' ')}`);
+        const named = steps.map((x) => x.caseId).filter(Boolean);
+        if (!named.includes(c.id)) fail(`Pyraminx ${st.name}: the guided solve's steps for ${c.name} name ${named.join(', ') || 'no case'}`);
+        // the top layer: an arrow for each edge that moves
+        const arrows = st.arrows?.(c) ?? [];
+        if (k === 3 && arrows.length !== (c.id === 'pyra-ll-flip' ? 0 : 3)) fail(`Pyraminx ${c.name}: ${arrows.length} arrows`);
+      }
+    }
+  });
+  if (pyraCount !== ids.size) fail(`Pyraminx: the course has ${pyraCount} cases, the set ${ids.size}`);
+}
+
 // ---------- every case of every method ----------
 
 const ids = allCases(M);
@@ -264,6 +322,8 @@ for (const [Mn, m] of methods) {
   }
   if (total > before) perMethod.push(`${m.name}${Mn.n !== 3 ? ` ${Mn.n}×${Mn.n}` : ''} ${total - before}`);
 }
+total += pyraCount;
+perMethod.push(`Pyraminx ${pyraCount}`);
 
 console.log(`cases: CFOP ${course.map((s) => `${s.name} ${count(s)}`).join(', ')}, full OLL ${fullSets[0][1].length}, full PLL ${fullSets[1][1].length}; by course: ${perMethod.join(', ')}; ${total} in all${fails ? ` — ${fails} failures` : ' — all ok'}`);
 if (fails) process.exit(1);
