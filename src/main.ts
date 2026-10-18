@@ -37,8 +37,11 @@ interface Solution {
   searching: boolean;
   elapsed: number;
   stale: boolean;
-  /** a tutorial case the cube was turned away from: the turns since, which put it back once they cancel out */
-  drift?: string[];
+  /**
+   * A tutorial case the cube was turned away from: the turns since, the case's state they left
+   * and where they've taken it. Once that's back where it left, the case carries on.
+   */
+  drift?: { moves: string[]; from: State; now: State };
   /** a lesson: the method, its moves explained step by step, and the move each step starts at */
   lesson?: { guide: Guide; steps: GuideStep[]; starts: number[] };
   /** a tutorial case: which one */
@@ -155,13 +158,21 @@ function follow(move: string, back = false) {
   } else {
     if (s?.tutorial && !s.searching) {
       // a tutorial case picks up where it was once the stray turns cancel out (undone, or turned back by hand)
-      if (!s.stale) s.drift = [];
-      s.drift!.push(back ? puzzle.invertMove(move) : move);
-      const here = s.moves.slice(0, s.index).reduce(applyMove, s.start);
-      if (s.drift!.reduce(applyMove, here).every((x, i) => x === here[i])) {
+      if (!s.stale || !s.drift) {
+        const from = s.moves.slice(0, s.index).reduce(applyMove, s.start);
+        s.drift = { moves: [], from, now: from };
+      }
+      const turn = back ? puzzle.invertMove(move) : move;
+      // a turn and its undo cancel, so the button only offers what's left to turn back
+      if (s.drift.moves.at(-1) === puzzle.invertMove(turn)) s.drift.moves.pop();
+      else s.drift.moves.push(turn);
+      s.drift.now = applyMove(s.drift.now, turn);
+      if (s.drift.now.every((x, i) => x === s.drift!.from[i])) {
         s.stale = false;
+        s.drift = undefined;
         playing = false;
-        renderSolution();
+        // this move isn't on the cube yet: draw the case once it is, so its focus fits the cube
+        resumeOnTurn = true;
         return;
       }
     }
@@ -169,10 +180,20 @@ function follow(move: string, back = false) {
   }
 }
 
-/** Undo the turns that left the open tutorial case, back to where it was. */
+/** whether the open case just picked up again, to draw once the turn that did it lands */
+let resumeOnTurn = false;
+
+/** Turn the cube back through the turns that left the open tutorial case, so it carries on. */
 function undoStray() {
-  while (solution?.stale && session.moveHistory.length) undo();
+  const d = solution?.stale && solution.drift;
+  if (d) doMoves(d.moves.slice().reverse().map((m) => puzzle.invertMove(m)));
 }
+
+/** "Undo turn", or "Undo 3 turns": what undoStray will turn back. */
+const undoLabel = () => {
+  const n = solution?.drift?.moves.length ?? 1;
+  return n === 1 ? 'Undo turn' : `Undo ${n} turns`;
+};
 
 /** whether `quarter` (R or R') is half of the half turn `half` (R2) */
 const isHalfOf = (half: string | undefined, quarter: string) =>
@@ -631,7 +652,10 @@ function onStateChanged() {
   renderStatus();
   $('#solved-badge').classList.toggle('hidden', !puzzle.isSolved(session.state));
   if (mode === 'paint') renderPalette();
-  if (solution && !solution.stale) renderPlayback();
+  if (resumeOnTurn) {
+    resumeOnTurn = false;
+    renderSolution();
+  } else if (solution && !solution.stale) renderPlayback();
   // the lesson button's subtitle says whether it will scramble first
   else if (!solution && tab === 'learn') renderSolution();
   view.setHighlight([]);
@@ -844,6 +868,8 @@ function renderPlayback() {
 
 const phoneMQ = matchMedia('(max-width: 860px)');
 const phone = () => phoneMQ.matches;
+// crossing the breakpoint changes what tapping a case does, so its labels follow
+phoneMQ.addEventListener('change', () => renderDrilling());
 /** a tutorial case is open */
 const drilling = () => tab === 'tutorial' && !!solution?.tutorial;
 
@@ -874,7 +900,12 @@ function renderDrilling() {
     // ▶ only at the start; once moves are played its place goes to ↻, back to the start
     card.classList.toggle('begun', here && !playing && s!.index > 0);
     const status = card.querySelector<HTMLElement>('.case-status');
-    if (status) status.innerHTML = caseStatus(open);
+    // only when it changes, so a focused Undo button isn't replaced under the keyboard
+    const html = caseStatus(open);
+    if (status && status.dataset.html !== html) {
+      status.innerHTML = html;
+      status.dataset.html = html;
+    }
     card.querySelector<HTMLElement>('.case-back')?.classList.toggle('off', !here || s!.index === 0);
     const play = card.querySelector<HTMLElement>('.case-play');
     play?.classList.toggle('off', !here);
@@ -882,7 +913,10 @@ function renderDrilling() {
     // what tapping the card does: on a phone the open case's card steps through its moves
     const name = card.querySelector('.case-name')!.textContent;
     const next = here && phone() && s!.index < s!.moves.length ? s!.moves[s!.index] : '';
-    card.querySelector('.case-hit')!.setAttribute('aria-label', next ? `Next move: ${next}` : open ? `Set up ${name} again` : `Set up ${name}`);
+    const hit = card.querySelector('.case-hit')!;
+    const label = next ? `Next move: ${next}` : open ? `Set up ${name} again` : `Set up ${name}`;
+    hit.setAttribute('aria-label', label);
+    hit.setAttribute('title', label);
   });
 }
 
@@ -890,7 +924,7 @@ function renderDrilling() {
 function caseStatus(open: boolean) {
   const s = solution!;
   if (!open) return '';
-  if (s.stale) return '<b>Cube turned</b><button class="case-undo" data-ctl="undo">Undo turn</button>tap to set up';
+  if (s.stale) return `<b>Cube turned</b>${s.drift ? `<button class="case-undo" data-ctl="undo">${undoLabel()}</button>` : ''}tap to set up`;
   if (playing) return '';
   if (s.index >= s.moves.length) return '<b>Done ✓</b>tap to repeat';
   // until you've stepped through a case once, the first open says how
@@ -1148,7 +1182,7 @@ function renderTutorial(fresh: boolean) {
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <div class="case" data-group="${gi}" data-index="${i}">
-            <button class="case-hit" title="Set up ${c.name} on the cube" aria-label="Set up ${c.name}"></button>
+            <button class="case-hit" title="Set up ${c.name}" aria-label="Set up ${c.name}"></button>
             ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><button class="case-back" data-ctl="back" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button><button class="case-play" data-ctl="play" aria-label="Play the moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg class="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button></span>
           </div>`).join('')}</div>
       </section>`).join('');
@@ -1183,7 +1217,7 @@ function renderCaseCard() {
     <div class="lesson-head"><span class="eyebrow">${step.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
     <div class="lesson-title">${c.name}</div>
     <div class="case-big">${diagram(step, c)}</div>
-    ${solution!.stale ? '<div class="lesson-stale">You turned the cube, so it no longer shows this case. <button class="link" data-act="undo">Undo turn</button> or <button class="link" data-act="reset">set it up again</button></div>' : ''}`;
+    ${solution!.stale ? `<div class="lesson-stale">You turned the cube, so it no longer shows this case. ${solution!.drift ? `<button class="link" data-act="undo">${undoLabel()}</button> or ` : ''}<button class="link" data-act="reset">set it up again</button></div>` : ''}`;
 }
 
 function onCaseCardClick(e: Event) {
@@ -1422,7 +1456,7 @@ function bind() {
       return;
     }
     if (e.metaKey || e.ctrlKey) return;
-    if (k === ' ') { e.preventDefault(); togglePlay(); return; }
+    if (k === ' ' && target.tagName !== 'BUTTON') { e.preventDefault(); togglePlay(); return; }
     if (k === 'ArrowRight') { e.preventDefault(); playing = false; stepForward(); renderPlayback(); return; }
     if (k === 'ArrowLeft') { e.preventDefault(); stepBack(); return; }
     if (k === 'Home') { jumpTo(0); return; }
