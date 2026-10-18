@@ -3,6 +3,8 @@
 // by undoing its algorithm on a solved cube held with white down, so the picture, the 3D cube
 // and the algorithm always agree.
 //
+//   beginner     the beginner's method, stage by stage: example cross edges (white on top,
+//                where the method builds it), then each stage's algorithm on the cases it meets
 //   cross        a few example edges, since the cross is planned rather than learnt
 //   F2L          the idea, build the block then insert it, on cases sorted by where the pieces are
 //   two-look     OLL: the 3 edge cases that make a yellow cross, then the 7 corner cases (OCLL);
@@ -15,7 +17,7 @@
 
 import type { Case, CaseGroup, State } from '../core/types';
 import { OLL, OLL_CORNERS, OLL_EDGES, PLL, PLL_CORNERS, PLL_EDGES, type TwoLookAlg } from './algs';
-import { alg, CORNERS, EDGES, lessonKit, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
+import { alg, CORNERS, EDGES, lessonKit, repeat, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
 import { invertAlg, UNSET, type CubeModel } from './model';
 
 /**
@@ -111,6 +113,29 @@ const CROSS_CASES: [string, string, string][] = [
 /** the sexy move, R U R' U': the trigger most F2L and OLL algorithms are built from */
 export const SEXY = alg("R U R' U'");
 
+/** the beginner's method's algorithms, as its guided solve (beginner.ts) does them */
+export const BEGINNER = {
+  right: alg("U R U' R' U' F' U F"),
+  left: alg("U' L' U L U F U' F'"),
+  cross: alg("F R U R' U' F'"),
+  sune: alg("R U R' U R U2 R' U"),
+  niklas: alg("U R U' L' U R' U' L"),
+  twist: alg("R' D' R D"),
+};
+
+/**
+ * The beginner's cross, built on top: example cases for the white–green edge, each the
+ * fewest turns that leave the other cross edges where they were. [name, algorithm, note]
+ */
+const BEGINNER_CROSS_CASES: [string, string, string][] = [
+  ['On the bottom, white facing down', 'F2', 'It’s right under its spot: turn the front twice.'],
+  ['On the bottom, to one side', "D' F2", 'Turn the bottom to bring it under its spot first. No white edge is on the bottom, so that moves nothing you’ve done.'],
+  ['On the bottom, white facing out', "R F' R'", 'R lifts it into the middle layer and F′ brings it up; R′ puts back the edge R moved.'],
+  ['In the middle, white facing right', "F'", 'One turn of the front brings it up.'],
+  ['In the middle, white facing front', "U' R U", 'U′ moves its spot above it, R lifts it in, and U turns the top back.'],
+  ['On top, flipped', "U L U' F", 'U moves it to the left, L turns it down into the middle layer and U′ puts the top back. Now white faces left: F brings it up.'],
+];
+
 const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const capital = (text: string) => text[0].toUpperCase() + text.slice(1);
 
@@ -135,9 +160,9 @@ function buildCases(M: CubeModel) {
    * A case, set up by undoing its algorithm. Stickers outside `shown` are blanked, on the
    * picture and the 3D cube alike: they're whatever a real cube has there at this stage.
    */
-  const make = (id: string, name: string, text: string, shown?: (s: State) => number[], note?: string): Case => {
-    const moves = alg(text);
-    const setup = K.apply(home, invertAlg(moves));
+  const make = (id: string, name: string, text: string | string[], shown?: (s: State) => number[], note?: string, from = home): Case => {
+    const moves = typeof text === 'string' ? alg(text) : text;
+    const setup = K.apply(from, invertAlg(moves));
     if (shown) {
       const keep = new Set(shown(setup));
       setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
@@ -263,11 +288,117 @@ function buildCases(M: CubeModel) {
     }),
   }));
 
+  // ---------- the beginner's method ----------
+
+  const { right, left, cross: crossAlg, sune, niklas, twist } = BEGINNER;
+  const whiteCorners = [['F', 'R'], ['R', 'B'], ['B', 'L'], ['L', 'F']].map(([a, b]) => [white, center(home, a), center(home, b)]);
+  const middleEdges = [['F', 'R'], ['R', 'B'], ['B', 'L'], ['L', 'F']].map(([a, b]) => [center(home, a), center(home, b)]);
+  const firstLayer = [...crossEdges, ...whiteCorners];
+  const lit = (pieces: number[][]) => (s: State) => [...centers, ...focusOn(pieces)(s)];
+  const TOP_CORNER_STICKERS = new Set(TOP_CORNERS.flatMap((slot) => stickersOf(slot)));
+  // the corners are for later: their stickers are blank
+  const noCorners = (s: State) => ALL.filter((i) => !TOP_CORNER_STICKERS.has(i));
+  const TOP_LAYER = new Set(TOP_STICKERS);
+  const topOnly = (s: State) => ALL.filter((i) => TOP_LAYER.has(i) || centers.includes(i));
+  const B = (stage: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string, from = home) =>
+    make(`${stage}-${slug(name)}`, name, moves, shown, note, from);
+  const sexy = (n: number) => repeat(SEXY, n);
+
+  const beginner = {
+    whiteCross: [{
+      id: 'white-cross-one-edge',
+      name: 'Bringing one edge home',
+      about: 'The white–green edge, with the other three already in the cross. Each case is the fewest turns that leave them where they are.',
+      // the cross goes on top, so these are set up on a cube held the usual way up
+      cases: BEGINNER_CROSS_CASES.map(([name, a, note]) => B('white-cross', name, alg(a), lit(crossEdges), note, M.solved())),
+    }],
+    whiteCorners: [
+      {
+        id: 'white-corners-top',
+        name: 'Above its spot',
+        about: 'The corner is on top, right above its spot at the front right. Repeat R U R′ U′ until it drops in with white facing down.',
+        cases: [
+          B('white-corner', 'White facing right', sexy(1), lit(firstLayer), 'One round drops it in.'),
+          B('white-corner', 'White facing up', sexy(3), lit(firstLayer), 'Three rounds.'),
+          B('white-corner', 'White facing front', sexy(5), lit(firstLayer), 'Five rounds. It looks like a lot, but it’s the same four moves each time.'),
+        ],
+      },
+      {
+        id: 'white-corners-stuck',
+        name: 'Stuck in the bottom',
+        about: 'In its spot but twisted, or in the wrong spot: hold it at the front right and do R U R′ U′ once to lift it to the top. Then it’s a case from above.',
+        cases: [
+          B('white-corner', 'In its spot, white facing right', sexy(2), lit(firstLayer), 'The first round lifts it out, the second drops it in.'),
+          B('white-corner', 'In its spot, white facing front', sexy(4), lit(firstLayer), 'The first round lifts it out, with white facing up; three more drop it in.'),
+        ],
+      },
+    ],
+    middleLayer: [
+      {
+        id: 'middle-top',
+        name: 'From the top',
+        about: 'Find an edge on top without yellow. Turn the top until its front sticker sits above the center of its color, making an upside-down T, and look at its top color.',
+        cases: [
+          B('middle', 'Goes to the right', right, lit([...firstLayer, ...middleEdges]), 'Its top color is the right center’s, so it goes down to the right.'),
+          B('middle', 'Goes to the left', left, lit([...firstLayer, ...middleEdges]), 'Its top color is the left center’s: the mirror image.'),
+        ],
+      },
+      {
+        id: 'middle-stuck',
+        name: 'Stuck in the middle layer',
+        about: 'Flipped in its slot, or in the wrong one: hold it at the front right and the right-hand algorithm swaps it out for an edge from the top.',
+        cases: [{
+          ...B('middle', 'In its spot, flipped', [...right, 'U2', ...right], lit([...firstLayer, ...middleEdges]), 'The algorithm takes it out to the top, U2 brings it round above the green center, and the algorithm puts it back the right way round.'),
+          breakAfter: 8,
+        }],
+      },
+    ],
+    yellowCross: [{
+      id: 'yellow-cross',
+      name: 'Yellow cross',
+      about: 'Ignore the corners. Look at the yellow edges on top: a line, an L or just the center dot. Hold the shape as shown and do F R U R′ U′ F′; each go takes it one shape further.',
+      cases: [
+        B('yellow-cross', 'Line', crossAlg, edgesShown, 'Hold the line left to right. One go makes the plus.'),
+        { ...B('yellow-cross', 'L', [...crossAlg, ...crossAlg], edgesShown, 'Hold the L at the back left. The first go makes a line, left to right, and the second the plus.'), breakAfter: 6 },
+        { ...B('yellow-cross', 'Dot', [...crossAlg, 'U2', ...crossAlg, ...crossAlg], edgesShown, 'Do it from any side and you have an L. Turn the top to hold it at the back left (here U2): then it’s the L case.'), breakAfter: 6 },
+      ],
+    }],
+    yellowEdges: [{
+      id: 'yellow-edges',
+      name: 'Yellow edges',
+      about: 'Turn the top until at least two edges match the center below them, then do R U R′ U R U2 R′ U. The arrows show where the edges go.',
+      cases: [
+        B('yellow-edges', 'Two side by side', sune, noCorners, 'Hold the two that match at the back and the right. One go swaps the other two.'),
+        { ...B('yellow-edges', 'Two opposite', [...sune, 'U', 'y', ...sune], noCorners, 'Do it once from any side. Turn the top until two neighbours match (here U), hold them at the back and the right (y) and it’s the case above.'), breakAfter: 8 },
+      ],
+    }],
+    cornerSpots: [{
+      id: 'corner-spots',
+      name: 'Corner spots',
+      about: 'A corner is in its spot when it has the colors of the three centers around it, however it’s twisted. Hold one that is at the front right and do U R U′ L′ U R′ U′ L: it moves the other three round. The arrows show where they go.',
+      cases: [
+        B('corner-spots', 'One in its spot', niklas, undefined, 'One go moves the other three home.'),
+        { ...B('corner-spots', 'One in its spot, the other way', [...niklas, ...niklas], undefined, 'The other three go round the other way: do it twice.'), breakAfter: 8 },
+        { ...B('corner-spots', 'None in its spot', [...niklas, 'y', ...niklas], undefined, 'Do it once from any side and one corner will be in its spot. Hold that one at the front right (here y) and it’s a case above.'), breakAfter: 8 },
+      ],
+    }],
+    cornerTwists: [{
+      id: 'corner-twists',
+      name: 'Twist a corner',
+      about: 'Hold a corner without yellow on top at the front right and repeat R′ D′ R D until yellow faces up. The lower layers get scrambled on the way: that’s fine. Then turn only the top to bring the next corner there, and keep going. Once the last corner is done, the lower layers are back.',
+      cases: [
+        B('corner-twist', 'Yellow facing right', repeat(twist, 2), topOnly, 'Two rounds.'),
+        B('corner-twist', 'Yellow facing front', repeat(twist, 4), topOnly, 'Four rounds.'),
+      ],
+    }],
+  };
+
   return {
     home,
     /** the top layer, to keep lit while a last-layer case plays */
     focusTop: () => TOP_STICKERS,
     pllArrows: (c: Case) => pllArrows(c.setup),
+    beginner,
     cross, f2l,
     ollEdges, ollCorners, oll,
     pllCorners, pllEdges, pll,
@@ -277,6 +408,6 @@ function buildCases(M: CubeModel) {
 /** Every case of every set, by id: what a guided solve's step can name. */
 export function allCases(M: CubeModel) {
   const C = cubeCases(M);
-  const groups = [...C.cross, ...C.f2l, C.ollEdges, C.ollCorners, ...C.oll, C.pllCorners, C.pllEdges, ...C.pll];
+  const groups = [...Object.values(C.beginner).flat(), ...C.cross, ...C.f2l, C.ollEdges, C.ollCorners, ...C.oll, C.pllCorners, C.pllEdges, ...C.pll];
   return new Map(groups.flatMap((g) => g.cases).map((c) => [c.id, c]));
 }

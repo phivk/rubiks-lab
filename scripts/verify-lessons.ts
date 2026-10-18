@@ -16,6 +16,8 @@ import { scramble as pyraScramble } from '../src/pyraminx/solver';
 
 // a step that names a case must name one that exists
 const CASE_IDS = new Set(allCases(new CubeModel(3)).keys());
+// methods whose courses don't have their cases yet
+const PENDING = new Set(['reduction', 'zz', 'roux']);
 
 const RUNS = Number(process.env.RUNS ?? 500);
 /** run only the lessons for this puzzle (3x3, 2x2, 4x4, 5x5, pyra) */
@@ -82,6 +84,7 @@ for (const c of cases) {
   const stepCounts: number[] = [];
   let failed = 0;
   const t0 = Date.now();
+  const courseIds = new Set(method.stages.flatMap((st) => (st.caseGroups ?? []).flatMap((g) => g.cases.map((x) => x.id))));
   for (let i = 0; i < c.runs; i++) {
     const start = c.scramble(i);
     try {
@@ -94,6 +97,9 @@ for (const c of cases) {
       const html = steps.map((s) => s.html).join(' ').replace(/<[^>]*>/g, '');
       const unknown = steps.find((s) => s.caseId && !CASE_IDS.has(s.caseId));
       if (unknown) throw new Error(`step "${unknown.title}" names no case: ${unknown.caseId}`);
+      // and one its own method's course has, so it links to it
+      const missing = steps.find((s) => s.caseId && !courseIds.has(s.caseId));
+      if (missing && !PENDING.has(method.id)) throw new Error(`step "${missing.title}" names ${missing.caseId}, which ${method.name}'s course doesn't have`);
       for (const [word, meaning] of ACRONYMS) if (word.test(text) && !meaning.test(html)) throw new Error(`${word.source} is never spelled out`);
       lengths.push(moves.length);
       stepCounts.push(steps.length);

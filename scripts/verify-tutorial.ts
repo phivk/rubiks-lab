@@ -11,8 +11,11 @@
 //
 // Full OLL and PLL: 57 and 21 cases, each one a case of its kind that its algorithm finishes,
 // and no algorithm finishes another's case.
-import type { Case, Method } from '../src/core/types';
-import { beginnerMethod } from '../src/cube/beginner';
+//
+// Beginner: each case is one its stage meets, the guided solve does exactly its algorithm on
+// it, and names it.
+import type { Case, GuideStep, Method } from '../src/core/types';
+import { beginnerMethod, beginnerStages } from '../src/cube/beginner';
 import { beginner2Method } from '../src/cube/beginner2';
 import { allCases, cubeCases } from '../src/cube/cases';
 import { cfopMethod } from '../src/cube/cfop';
@@ -141,6 +144,45 @@ for (const [name, cases, n, needs, done] of fullSets) {
   });
 }
 
+// ---------- the beginner's method ----------
+
+// each case is one its stage meets (the stages before it done, this one not), and the guided
+// solve's own stage, run on the case's setup, does exactly the case's algorithm
+{
+  const B = beginnerStages(M);
+  const course = beginnerMethod(M).stages;
+  const up = M.solved();
+  const placedAll = (s: number[], slots: string[]) => slots.every((slot) => K.placed(s, slot));
+  const MIDDLE = ['FR', 'RB', 'BL', 'LF'];
+  const BOTTOM = ['DF', 'DR', 'DB', 'DL', 'DRF', 'DFL', 'DLB', 'DBR'];
+  const yellowUp = (s: number[], slots: string[]) => slots.every((slot) => s[K.at(slot, 'U')] === K.center(s, 'U'));
+  const stages: [((s: number[], steps: GuideStep[]) => number[]), (full: number[]) => boolean, string[]][] = [
+    [B.crossStage, (s) => !placedAll(s, TOP_E) && TOP_E.filter((e) => K.placed(s, e)).length === 3, []],
+    // the guided solve flips the cube first; the case starts after that
+    [(s, steps) => B.cornersStage(K.apply(s, ['z2']), steps), (s) => placedAll(s, ['DF', 'DR', 'DB', 'DL']) && BOTTOM.filter((c) => !K.placed(s, c)).length === 1, ['z2']],
+    [B.middleStage, (s) => placedAll(s, BOTTOM) && !placedAll(s, MIDDLE), []],
+    [B.yellowCross, (s) => placedAll(s, [...BOTTOM, ...MIDDLE]) && !yellowUp(s, TOP_E), []],
+    [B.yellowEdges, (s) => placedAll(s, [...BOTTOM, ...MIDDLE]) && yellowUp(s, TOP_E) && !U_TURNS.some((u) => placedAll(K.apply(s, [u]), TOP_E)), []],
+    [B.cornerSpots, (s) => placedAll(s, [...BOTTOM, ...MIDDLE, ...TOP_E]) && !TOP_C.every((c) => K.inSpot(s, c)), []],
+    // a corner's twist scrambles the lower layers until the last is done, so its cases show only the top
+    [B.cornerTwists, (s) => placedAll(s, TOP_E) && TOP_C.every((c) => K.inSpot(s, c)) && !yellowUp(s, TOP_C), []],
+  ];
+  course.forEach((st, k) => {
+    const [run, isCase, before] = stages[k];
+    for (const c of (st.caseGroups ?? []).flatMap((g) => g.cases)) {
+      const full = K.apply(k === 0 ? up : home, invertAlg(c.moves));
+      if (!isCase(full)) fail(`Beginner ${st.name}: ${c.name} isn't a case of the stage`);
+      const steps: GuideStep[] = [];
+      run(full, steps);
+      const moves = steps.flatMap((x) => x.phrases.flatMap((p) => p.moves));
+      if (moves.join(' ') !== [...before, ...c.moves].join(' ')) fail(`Beginner ${st.name}: ${c.name} is ${c.moves.join(' ')}, but the guided solve does ${moves.join(' ')}`);
+      // its steps name this case, or (where the case is several goes) the cases it passes through on the way
+      const named = steps.map((x) => x.caseId).filter(Boolean);
+      if (k > 0 && !named.includes(c.id)) fail(`Beginner ${st.name}: the guided solve's steps for ${c.name} name ${named.join(', ') || 'no case'}`);
+    }
+  });
+}
+
 // ---------- every case of every method ----------
 
 const ids = allCases(M);
@@ -153,7 +195,9 @@ const methods: [CubeModel, Method][] = [
 ];
 const faceOf = (Mn: CubeModel, i: number) => Mn.facelets[i].normal.join();
 let total = 0;
+const perMethod: string[] = [];
 for (const [Mn, m] of methods) {
+  const before = total;
   const seen = new Set<string>();
   for (const st of m.stages) {
     for (const g of st.caseGroups ?? []) {
@@ -175,7 +219,8 @@ for (const [Mn, m] of methods) {
       }
     }
   }
+  if (total > before) perMethod.push(`${m.name}${Mn.n !== 3 ? ` ${Mn.n}×${Mn.n}` : ''} ${total - before}`);
 }
 
-console.log(`cases: ${course.map((s) => `${s.name} ${count(s)}`).join(', ')}, full OLL ${fullSets[0][1].length}, full PLL ${fullSets[1][1].length}; ${total} in every course${fails ? ` — ${fails} failures` : ' — all ok'}`);
+console.log(`cases: CFOP ${course.map((s) => `${s.name} ${count(s)}`).join(', ')}, full OLL ${fullSets[0][1].length}, full PLL ${fullSets[1][1].length}; by course: ${perMethod.join(', ')}; ${total} in all${fails ? ` — ${fails} failures` : ' — all ok'}`);
 if (fails) process.exit(1);
