@@ -8,7 +8,7 @@ import {
   AXES, CENTER, COLORS, COLOR_LETTERS, COLOR_NAMES, CUBE_COLOR_IDS, EDGE_PAIRS, H2, N, S2, TIP, UNSET, VERTEX_NAMES,
   applyAll, bigLayer, invertMove, isSolved, parseAlg, parseMove, pieceCorners, piecesOf, rotations, shrinkToPiece, solved, stickers,
 } from './model';
-import { pyraminxGuide } from './lesson';
+import { pyraminxMethod } from './lesson';
 import { scramble, solveOptimal } from './solver';
 
 // ---------- validation ----------
@@ -199,5 +199,5 @@ export const pyraminx: Puzzle = {
   },
 
   ...syncSolver(solveOptimal, (s, moves) => isSolved(applyAll(s, moves))),
-  guides: [pyraminxGuide()],
+  methods: [pyraminxMethod()],
 };

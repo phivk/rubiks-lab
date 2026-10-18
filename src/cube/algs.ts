@@ -4,11 +4,13 @@
 //
 // OLL numbers, names, groups and algorithms follow the community-standard list (as in the
 // speedsolving.com wiki); PLL algorithms are the top-voted ones on SpeedCubeDB.
-// scripts/verify-methods.ts checks that each OLL keeps the first two layers and orients the
+// scripts/verify-tutorial.ts checks that each OLL keeps the first two layers and orients the
 // top, that each PLL keeps all orientation and solves its case, and that together they cover
 // every case.
 
 export interface OllAlg {
+  /** the Case id it's known by everywhere, from its number: oll-27 */
+  id: string;
   n: number;
   name: string;
   group: string;
@@ -16,6 +18,8 @@ export interface OllAlg {
 }
 
 export interface PllAlg {
+  /** the Case id it's known by everywhere: pll-T */
+  id: string;
   name: string;
   /** what moves: corners only, edges only, or both with an adjacent or diagonal corner swap */
   kind: string;
@@ -81,7 +85,7 @@ const OLL_TABLE: [number, string, string, string][] = [
   [56, "Streetlights", "I-Shapes", "r U r' U R U' R' U R U' R' r U' r'"],
   [57, "Mummy", "Corners Correct, Edges Flipped", "R U R' U' M' U R U' r'"],];
 
-export const OLL: OllAlg[] = OLL_TABLE.map(([n, name, group, alg]) => ({ n, name, group, alg }));
+export const OLL: OllAlg[] = OLL_TABLE.map(([n, name, group, alg]) => ({ id: `oll-${n}`, n, name, group, alg }));
 
 /** the seven OLLs with every edge already oriented: OCLL, the corner half of two-look OLL */
 export const OCLL = OLL.filter((o) => o.n >= 21 && o.n <= 27);
@@ -91,7 +95,7 @@ const ADJACENT = 'two neighbouring corners swap';
 const DIAGONAL = 'two opposite corners swap';
 const CORNERS_ONLY = 'only corners move';
 
-export const PLL: PllAlg[] = [
+const PLL_TABLE: Omit<PllAlg, 'id'>[] = [
   { name: 'Ua', kind: EDGES_ONLY, alg: "M2 U M U2 M' U M2" },
   { name: 'Ub', kind: EDGES_ONLY, alg: "M2 U' M U2 M' U' M2" },
   { name: 'H', kind: EDGES_ONLY, alg: "M2 U M2 U2 M2 U M2" },
@@ -115,14 +119,21 @@ export const PLL: PllAlg[] = [
   { name: 'Nb', kind: DIAGONAL, alg: "r' D' F r U' r' F' D r2 U r' U' r' F r F'" },
 ];
 
-/** A case of two-look OLL or PLL, by the id and name the tutorial shows it under. */
+export const PLL: PllAlg[] = PLL_TABLE.map((p) => ({ id: `pll-${p.name}`, ...p }));
+
+/** A case of two-look OLL or PLL, by the id and name its course shows it under. */
 export interface TwoLookAlg {
   id: string;
   name: string;
+  /** its number in full OLL, for a corner case */
+  alias?: string;
   alg: string;
 }
 
-const pll = (name: string): TwoLookAlg => ({ id: `pll-${name}`, name: `${name} perm`, alg: PLL.find((p) => p.name === name)!.alg });
+const pll = (name: string): TwoLookAlg => {
+  const p = PLL.find((x) => x.name === name)!;
+  return { id: p.id, name: `${name} perm`, alg: p.alg };
+};
 
 /** two-look OLL, look 1: the three edge cases that make a yellow cross */
 export const OLL_EDGES: TwoLookAlg[] = [
@@ -133,7 +144,10 @@ export const OLL_EDGES: TwoLookAlg[] = [
 
 /** two-look OLL, look 2: the seven corner cases (OCLL), by their everyday names */
 export const OLL_CORNERS: TwoLookAlg[] = ([[27, 'Sune'], [26, 'Anti-Sune'], [21, 'H'], [22, 'Pi'], [23, 'Headlights'], [24, 'T'], [25, 'Bowtie']] as const)
-  .map(([n, name]) => ({ id: `oll-${n}`, name, alg: OLL.find((o) => o.n === n)!.alg }));
+  .map(([n, name]) => {
+    const o = OLL.find((x) => x.n === n)!;
+    return { id: o.id, name, alias: `OLL ${n}`, alg: o.alg };
+  });
 
 /** two-look PLL, look 1: the corners, swapping two neighbours or two opposites */
 export const PLL_CORNERS: TwoLookAlg[] = ['T', 'Y'].map(pll);

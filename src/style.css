@@ -519,7 +519,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .lesson-nav .btn.ghost { padding: 0 6px; }
 .lesson-stale { padding: 8px 10px; border-radius: 10px; background: rgba(255, 200, 87, 0.1); color: var(--warn); font-size: 12.5px; }
 .lesson-stale .link { color: var(--text); font-size: 12.5px; font-weight: 600; text-decoration: underline; }
-.solution.stale .lesson > :not(.lesson-stale) { opacity: 0.4; pointer-events: none; }
+.solution.stale .lesson > :not(.lesson-stale, .lesson-foot) { opacity: 0.4; pointer-events: none; }
 
 .stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .solution:not(.empty) .stages { border-top: 1px solid var(--line); padding-top: 10px; }
@@ -577,6 +577,8 @@ body.learn .panel.tutorial { display: flex; }
 .tut-steps button.current:not(.active) .num { box-shadow: 0 0 0 2px var(--accent); }
 .tut-intro { display: flex; flex-direction: column; gap: 8px; }
 .tut-intro .more { display: none; align-self: flex-start; color: var(--accent-2); font-weight: 600; }
+.tut-intro .practise-stage { align-self: flex-start; }
+.tut-intro .practise-stage svg { fill: currentColor; stroke: none; }
 .panel.tutorial code, .case-card code {
   font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 1px 5px; border-radius: 5px;
   background: var(--chip-hover); color: var(--text); white-space: nowrap;
@@ -599,6 +601,8 @@ body.learn .panel.tutorial { display: flex; }
 .case-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .case .diagram { width: 84px; height: 84px; }
 .case-name { font-size: 12px; font-weight: 650; }
+.alias { color: var(--text-2); font-weight: 500; white-space: nowrap; }
+.level { display: inline-block; margin: 0 4px 0 2px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: #d6ceff; font-size: 11px; font-weight: 600; vertical-align: 1px; }
 .panel.tutorial .case-alg {
   font-size: 10.5px; padding: 0; background: none; color: var(--text-2); white-space: normal; line-height: 1.35;
 }

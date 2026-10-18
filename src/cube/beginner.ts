@@ -13,7 +13,7 @@
 // the moves, so the text always describes what's on screen. Pieces are named by colors and
 // found relative to the centers, so whole-cube turns (x, y, z) need no bookkeeping.
 
-import type { Guide, GuideStep, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, State } from '../core/types';
 import {
   alg, countMoves, FACE_MOVES, lessonKit, list, repeat, ROTATIONS, rounds, sameSet, SIDE_NAME, TOP_CORNERS, TOP_EDGES, U_TURNS,
 } from './lessonKit';
@@ -28,13 +28,13 @@ const NIKLAS = alg("U R U' L' U R' U' L");
 const TWIST = alg("R' D' R D");
 
 export const STAGES = [
-  { name: 'White cross', goal: 'A white plus on top, each edge matching the center beside it.' },
-  { name: 'White corners', goal: 'Flip the cube and drop in the corners to finish the first layer.' },
-  { name: 'Middle layer', goal: 'Slot in the four edges between the centers.' },
-  { name: 'Yellow cross', goal: 'Make a yellow plus on top.' },
-  { name: 'Yellow edges', goal: 'Line the plus up with the side centers.' },
-  { name: 'Corner spots', goal: 'Move each top corner to its spot.' },
-  { name: 'Corner twists', goal: 'Twist the corners until yellow faces up.' },
+  { id: 'white-cross', name: 'White cross', goal: 'A white plus on top, each edge matching the center beside it.' },
+  { id: 'white-corners', name: 'White corners', goal: 'Flip the cube and drop in the corners to finish the first layer.' },
+  { id: 'middle-layer', name: 'Middle layer', goal: 'Slot in the four edges between the centers.' },
+  { id: 'yellow-cross', name: 'Yellow cross', goal: 'Make a yellow plus on top.' },
+  { id: 'yellow-edges', name: 'Yellow edges', goal: 'Line the plus up with the side centers.' },
+  { id: 'corner-spots', name: 'Corner spots', goal: 'Move each top corner to its spot.' },
+  { id: 'corner-twists', name: 'Corner twists', goal: 'Twist the corners until yellow faces up.' },
 ];
 
 /**
@@ -396,17 +396,18 @@ export function beginnerStages(M: CubeModel) {
   return { crossStage, cornersStage, middleStage, yellowCross, yellowEdges, cornerSpots, cornerTwists };
 }
 
-export function beginnerGuide(M: CubeModel): Guide {
+export function beginnerMethod(M: CubeModel): Method {
   const B = beginnerStages(M);
   const STAGE_FNS = [B.crossStage, B.cornersStage, B.middleStage, B.yellowCross, B.yellowEdges, B.cornerSpots, B.cornerTwists];
   return {
     id: 'beginner',
     name: 'Beginner method',
     short: 'Beginner',
+    level: 'Beginner',
     notation: '<code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.',
     intro: 'Solve the cube layer by layer, the way most people first learn it: seven stages and a handful of short algorithms.',
     stages: STAGES,
-    steps: (state) => {
+    solve: (state) => {
       const steps: GuideStep[] = [];
       let s = state;
       for (const stage of STAGE_FNS) s = stage(s, steps);

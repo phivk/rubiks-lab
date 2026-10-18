@@ -1,15 +1,31 @@
-// Checks the CFOP tutorial: every algorithm solves its case's setup (the stickers it shows end
-// up home, and the blanked ones are only ones it doesn't show), each stage's setups keep
-// the earlier stages solved and need this one, the F2L cases are all different, the F2L
-// notes that point to another case are right, OLL and PLL each take two looks whose cases
-// cover every situation between them, and the PLL arrows join top stickers.
+// Checks every case of every method's course, and the case sets they come from (cases.ts).
+//
+// Every method: each case's algorithm solves its setup (whatever stickers it shows end up on
+// faces of one color), its moves are moves, its id is its own, and no case group is empty.
+//
+// CFOP: every algorithm solves its case's setup (the stickers it shows end up home, and the
+// blanked ones are only ones it doesn't show), each stage's setups keep the earlier stages
+// solved and need this one, the F2L cases are all different, the F2L notes that point to
+// another case are right, OLL and PLL each take two looks whose cases cover every situation
+// between them, and the PLL arrows join top stickers.
+//
+// Full OLL and PLL: 57 and 21 cases, each one a case of its kind that its algorithm finishes,
+// and no algorithm finishes another's case.
+import type { Case, Method } from '../src/core/types';
+import { beginnerMethod } from '../src/cube/beginner';
+import { beginner2Method } from '../src/cube/beginner2';
+import { allCases, cubeCases } from '../src/cube/cases';
+import { cfopMethod } from '../src/cube/cfop';
 import { lessonKit, ROTATIONS, TOP_CORNERS as TOP_C, TOP_EDGES as TOP_E, U_TURNS } from '../src/cube/lessonKit';
 import { CubeModel, invertAlg, UNSET } from '../src/cube/model';
-import { cfopTutorial } from '../src/cube/tutorial';
+import { reductionMethod } from '../src/cube/reduction';
+import { rouxMethod } from '../src/cube/roux';
+import { zzMethod } from '../src/cube/zz';
 
 const M = new CubeModel(3);
 const K = lessonKit(M);
-const T = cfopTutorial(M);
+const C = cubeCases(M);
+const cfop = cfopMethod(M);
 const home = K.apply(M.solved(), ['z2']);
 const crossEdges = [...'FRBL'].flatMap((f) => K.stickersOf('D' + f));
 const slots = ['FR', 'RB', 'BL', 'LF'].map((p) => [...K.stickersOf(p), ...K.stickersOf('D' + p)]);
@@ -19,11 +35,12 @@ const topYellow = (s: number[]) => home.every((_, i) => M.facelets[i].normal[1] 
 
 let fails = 0;
 const fail = (msg: string) => { fails++; console.log('FAIL', msg); };
-const [cross, f2l, oll, pll] = T.steps;
+const course = cfop.stages.map((st) => ({ ...st, groups: st.caseGroups ?? [] }));
+const [cross, f2l, oll, pll] = course;
 const tops = new Set([...TOP_E, ...TOP_C].map((slot) => K.at(slot, 'U')));
 /** each case's setup before any stickers were blanked */
-const fullOf = new Map(T.steps.flatMap((step) => step.groups.flatMap((g) => g.cases)).map((c) => [c, K.apply(home, invertAlg(c.moves))]));
-for (const step of T.steps) {
+const fullOf = new Map(course.flatMap((step) => step.groups.flatMap((g) => g.cases)).map((c) => [c, K.apply(home, invertAlg(c.moves))]));
+for (const step of course) {
   for (const g of step.groups) {
     if (!g.cases.length) fail(`${step.name}: empty group ${g.name}`);
     for (const c of g.cases) {
@@ -101,5 +118,64 @@ for (const [name, g, n, needs, done, k] of looks) {
 }
 const count = (s: typeof cross) => s.groups.reduce((n, g) => n + g.cases.length, 0);
 if (keys.size !== count(f2l)) fail(`F2L: ${keys.size} different cases in ${count(f2l)}`);
-console.log(`tutorial: ${T.steps.map((s) => `${s.name} ${count(s)}`).join(', ')}${fails ? ` — ${fails} failures` : ' — all ok'}`);
+
+// ---------- full OLL and PLL ----------
+
+const topUp = (s: number[]) => home.every((_, i) => M.facelets[i].normal[1] !== 1 || s[i] === K.center(s, 'U'));
+const fullSets: [string, Case[], number, (s: number[]) => boolean, (s: number[]) => boolean][] = [
+  ['OLL', C.oll.flatMap((g) => g.cases), 57, (s) => same(s, f2lStickers) && !topUp(s), topUp],
+  ['PLL', C.pll.flatMap((g) => g.cases), 21, (s) => same(s, f2lStickers) && topUp(s) && !U_TURNS.some((u) => M.isSolved(K.apply(s, [u]))), (s) => M.isSolved(s)],
+];
+for (const [name, cases, n, needs, done] of fullSets) {
+  if (cases.length !== n) fail(`${name}: ${cases.length} cases, want ${n}`);
+  const fulls = cases.map((c) => K.apply(home, invertAlg(c.moves)));
+  cases.forEach((c, i) => {
+    if (!needs(fulls[i])) fail(`${name}: ${c.name} isn't a case of it`);
+    if (!done(K.apply(fulls[i], c.moves))) fail(`${name}: ${c.name} doesn't finish it`);
+    // a case's algorithm finishes no other case, however the cube is held and the top turned
+    cases.forEach((d, j) => {
+      if (j !== i && ROTATIONS.some((r) => U_TURNS.some((u) => U_TURNS.some((v) => done(K.apply(fulls[i], [r, u, ...d.moves, v].filter(Boolean)))))))
+        fail(`${name}: ${d.name} also finishes ${c.name}`);
+    });
+    if (name === 'PLL' && !C.pllArrows(c).length) fail(`${name}: ${c.name} has no arrows`);
+  });
+}
+
+// ---------- every case of every method ----------
+
+const ids = allCases(M);
+const methods: [CubeModel, Method][] = [
+  ...[beginnerMethod(M), cfop, rouxMethod(M), zzMethod(M)].map((m): [CubeModel, Method] => [M, m]),
+  ...[2, 4, 5].map((n): [CubeModel, Method] => {
+    const Mn = new CubeModel(n);
+    return [Mn, n === 2 ? beginner2Method(Mn) : reductionMethod(Mn)];
+  }),
+];
+const faceOf = (Mn: CubeModel, i: number) => Mn.facelets[i].normal.join();
+let total = 0;
+for (const [Mn, m] of methods) {
+  const seen = new Set<string>();
+  for (const st of m.stages) {
+    for (const g of st.caseGroups ?? []) {
+      if (!g.cases.length) fail(`${m.name} ${st.name}: empty group ${g.name}`);
+      for (const c of g.cases) {
+        total++;
+        if (seen.has(c.id)) fail(`${m.name}: two cases are ${c.id}`);
+        seen.add(c.id);
+        if (Mn.n === 3 && ids.get(c.id)?.moves.join(' ') !== c.moves.join(' ')) fail(`${m.name}: ${c.id} isn't the case set's`);
+        if (c.moves.some((mv) => !Mn.parseMove(mv))) fail(`${m.name} ${c.name}: a move that isn't one`);
+        const end = Mn.applyAll(c.setup, c.moves);
+        const colorOf = new Map<string, number>();
+        end.forEach((x, i) => {
+          if (x === UNSET) return;
+          const f = faceOf(Mn, i);
+          if ((colorOf.get(f) ?? x) !== x) fail(`${m.name} ${c.name}: doesn't solve its setup`);
+          colorOf.set(f, x);
+        });
+      }
+    }
+  }
+}
+
+console.log(`cases: ${course.map((s) => `${s.name} ${count(s)}`).join(', ')}, full OLL ${fullSets[0][1].length}, full PLL ${fullSets[1][1].length}; ${total} in every course${fails ? ` — ${fails} failures` : ' — all ok'}`);
 if (fails) process.exit(1);

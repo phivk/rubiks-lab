@@ -12,7 +12,7 @@
 // search over moves that put the bottom centers back (X U X'), so they always read as
 // "lift the slot, turn the top, put it back".
 
-import type { Guide, GuideStep, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, State } from '../core/types';
 import { alg, lessonNotes } from '../cube/lessonKit';
 import { CENTER, COLORS, COLOR_NAMES, EDGE_PAIRS, TIP, VERTEX_NAMES, apply, applyAll, invertMove, piecesOf, solved, stickers } from './model';
 
@@ -55,10 +55,10 @@ const U_TURNS = ['', 'U', "U'"];
 const focusPieces = (pieces: number[]) => () => pieces.flatMap(piecesOf);
 
 export const STAGES = [
-  { name: 'Tips', goal: 'Turn each tip to match the center beside it.' },
-  { name: 'Bottom centers', goal: 'Turn the bottom corners until their centers show yellow below.' },
-  { name: 'Bottom edges', goal: 'Bring the three yellow edges home to finish the bottom.' },
-  { name: 'Top layer', goal: 'Solve the last three edges with one algorithm.' },
+  { id: 'tips', name: 'Tips', goal: 'Turn each tip to match the center beside it.' },
+  { id: 'bottom-centers', name: 'Bottom centers', goal: 'Turn the bottom corners until their centers show yellow below.' },
+  { id: 'bottom-edges', name: 'Bottom edges', goal: 'Bring the three yellow edges home to finish the bottom.' },
+  { id: 'top-layer', name: 'Top layer', goal: 'Solve the last three edges with one algorithm.' },
 ];
 
 /** The cheapest run of macros putting the edges `pieces` home, by uniform-cost search. */
@@ -105,7 +105,7 @@ function partner(i: number) {
   return piecesOf(stickers[i].piece).find((j) => j !== i)!;
 }
 
-export function pyraminxGuide(): Guide {
+export function pyraminxMethod(): Method {
   let notes = lessonNotes();
 
   // ---------- 1. tips ----------
@@ -270,9 +270,10 @@ export function pyraminxGuide(): Guide {
     id: 'lbl',
     name: 'Layer by layer',
     short: 'Beginner',
+    level: 'Beginner',
     intro: 'The beginner’s way to solve a Pyraminx: the tips, then the bottom layer, then the last three edges with one short algorithm.',
     stages: STAGES,
-    steps: (state) => {
+    solve: (state) => {
       const steps: GuideStep[] = [];
       notes = lessonNotes();
       let s = tips(state, steps);

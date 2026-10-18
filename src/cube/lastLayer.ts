@@ -77,6 +77,7 @@ export function ollStep(K: Kit, s: State, stage: number, set: OllAlg[], prefix: 
         `<p>${u ? 'Turn the top to the angle the algorithm starts from, then do' : 'It’s already at the right angle. Do'} ${K.code(moves)}. Afterwards the whole top is yellow.</p>`,
       phrases: [...K.topPhrase(u), { label: `${prefix} ${o.n}`, moves }],
       focus: focusTop(K),
+      caseId: o.id,
     },
   };
 }
@@ -125,6 +126,7 @@ export function pllStep(K: Kit, s: State, stage: number, solved: (t: State) => b
         (v ? ', then turn the top to line it up.' : '.') + '</p>',
       phrases: [...K.topPhrase(u), { label: `${p.name} perm`, moves }, ...K.topPhrase(v, 'Line up the top')],
       focus: focusTop(K),
+      caseId: p.id,
     },
   };
 }

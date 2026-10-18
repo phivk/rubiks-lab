@@ -105,7 +105,7 @@ export interface Phrase {
 }
 
 export interface GuideStep {
-  /** index into the guide's stages */
+  /** index into the method's stages */
   stage: number;
   title: string;
   /** the explanation, as HTML */
@@ -113,29 +113,17 @@ export interface GuideStep {
   phrases: Phrase[];
   /** the stickers to keep lit while this step is on screen, for any state */
   focus: (s: State) => number[];
-  /** the tutorial case this step is, if it is one (a TutorialCase id) */
+  /** the case this step is, if it is one (a Case id), so it can link to it in the method's course */
   caseId?: string;
 }
 
-/** A method that solves a puzzle the way a person would, in explained steps. */
-export interface Guide {
+/** One case of a stage: a picture of it and the algorithm that solves it. */
+export interface Case {
+  /** the same everywhere it comes up: in each course that has it, and on a guided solve's step (GuideStep.caseId) */
   id: string;
   name: string;
-  /** the name on the method picker */
-  short: string;
-  intro: string;
-  /** notation the lesson uses beyond the puzzle's basic moves, explained before it starts */
-  notation?: string;
-  stages: { name: string; goal: string }[];
-  /** throws if the state can't be solved this way */
-  steps: (s: State) => GuideStep[];
-}
-
-/** One case of a tutorial step: a picture of it and the algorithm that solves it. */
-export interface TutorialCase {
-  /** for a case a lesson step can be (GuideStep.caseId) */
-  id?: string;
-  name: string;
+  /** its number in the full list, shown beside the name ("OLL 27") */
+  alias?: string;
   moves: string[];
   /** the state the algorithm solves, held the way it starts; stickers that don't matter yet are unset */
   setup: State;
@@ -145,30 +133,44 @@ export interface TutorialCase {
   breakAfter?: number;
 }
 
-export interface TutorialStep {
+export interface CaseGroup {
+  id: string;
+  name: string;
+  about?: string;
+  cases: Case[];
+}
+
+/** A stage of a method: what it's for, how it's done, and the cases to learn for it, if it has any yet. */
+export interface Stage {
+  id: string;
   name: string;
   goal: string;
-  /** the explanation, as HTML */
-  html: string;
-  groups: { name: string; about?: string; cases: TutorialCase[] }[];
+  /** the course's explanation, as HTML; without it the course shows the goal */
+  html?: string;
+  caseGroups?: CaseGroup[];
   /** how a case is pictured: the puzzle from its usual angle, or its top from above */
-  view: 'corner' | 'top';
+  view?: 'corner' | 'top';
   /** arrows on a case's picture, from sticker to sticker */
-  arrows?: (c: TutorialCase) => [number, number][];
+  arrows?: (c: Case) => [number, number][];
   /** the stickers to keep lit on the 3D cube while a case plays, for any state, if not all */
   focus?: (s: State) => number[];
 }
 
-/** Every case of each stage of a method, with its algorithm, to follow along on a real puzzle. */
-export interface Tutorial {
+/** A way to solve a puzzle by hand, taught stage by stage: a course of its stages and cases, and a guided solve of any scramble. */
+export interface Method {
   id: string;
   name: string;
+  /** the name on the method picker */
+  short: string;
+  level: 'Beginner' | 'Intermediate' | 'Advanced';
   intro: string;
-  /** notation beyond the puzzle's basic moves */
+  /** notation the method uses beyond the puzzle's basic moves */
   notation?: string;
   /** short move sequences worth spotting inside the algorithms, highlighted wherever they appear */
   triggers?: { name: string; moves: string[] }[];
-  steps: TutorialStep[];
+  stages: Stage[];
+  /** a guided solve: the moves that solve this state, explained step by step; throws if it can't be solved this way */
+  solve?: (s: State) => GuideStep[];
 }
 
 export interface Puzzle {
@@ -231,8 +233,6 @@ export interface Puzzle {
   solveHint?: string;
   solve: (state: State, budgetMs: number, handlers: SolveHandlers) => void;
   cancelSolve: () => void;
-  /** tutorials that walk through solving this puzzle by hand, one per method */
-  guides?: Guide[];
-  /** every case of a method's stages, with algorithms: the case library in Learn, for the guide with the same id */
-  tutorial?: Tutorial;
+  /** the ways to solve it by hand that Learn teaches */
+  methods?: Method[];
 }

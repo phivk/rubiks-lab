@@ -3,16 +3,15 @@ import { COLORS, COLOR_NAMES } from '../core/colors';
 import { syncSolver } from '../core/syncSolver';
 import type { DragOption, MoveButton, Puzzle, ScanFace, StickerDef, Turn, Vec3 } from '../core/types';
 import { SolverClient } from '../core/worker';
-import { beginnerGuide } from './beginner';
-import { beginner2Guide } from './beginner2';
-import { cfopGuide } from './cfop';
+import { beginnerMethod } from './beginner';
+import { beginner2Method } from './beginner2';
+import { cfopMethod } from './cfop';
 import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
-import { reductionGuide } from './reduction';
+import { reductionMethod } from './reduction';
 import { ringMap } from './rings';
-import { rouxGuide } from './roux';
+import { rouxMethod } from './roux';
 import { Solver2 } from './solve2';
-import { cfopTutorial } from './tutorial';
-import { zzGuide } from './zz';
+import { zzMethod } from './zz';
 
 const unit = (axis: number): Vec3 => [axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0];
 
@@ -224,7 +223,7 @@ export const cube2: Puzzle = {
   movePadExtra: rows(['x', 'y', 'z']),
   movePadExtraLabel: 'Rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
-  guides: [beginner2Guide(model2)],
+  methods: [beginner2Method(model2)],
   scan: scanFaces(model2),
 };
 
@@ -245,8 +244,7 @@ export const cube3: Puzzle = {
   movePadExtraLabel: 'Slices & rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
   scan: scanFaces(model3),
-  guides: [beginnerGuide(model3), cfopGuide(model3), rouxGuide(model3), zzGuide(model3)],
-  tutorial: cfopTutorial(model3),
+  methods: [beginnerMethod(model3), cfopMethod(model3), rouxMethod(model3), zzMethod(model3)],
 };
 
 // ---------- 4×4 ----------
@@ -275,7 +273,7 @@ export const cube4: Puzzle = {
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), rotations],
   movePadExtraLabel: 'Wide turns & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 2R' F",
-  guides: [reductionGuide(model4)],
+  methods: [reductionMethod(model4)],
   scan: scanFaces(model4),
 };
 
@@ -294,6 +292,6 @@ export const cube5: Puzzle = {
   movePadExtra: [...rows(['Uw', 'Dw', 'Rw', 'Lw', 'Fw', 'Bw']).slice(0, 2), ['M', "M'", 'E', "E'", 'S', "S'"].map(btn), rotations],
   movePadExtraLabel: 'Wide turns, slices & rotations',
   algPlaceholder: "Type an algorithm… Rw U2 3R' M",
-  guides: [reductionGuide(model5)],
+  methods: [reductionMethod(model5)],
   scan: scanFaces(model5),
 };

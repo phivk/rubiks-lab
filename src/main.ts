@@ -1,13 +1,14 @@
 import './style.css';
 import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
-import type { Guide, GuideStep, Puzzle, State, TutorialCase, TutorialStep, Validation } from './core/types';
+import type { Case, GuideStep, Method, Puzzle, Stage, State, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
-import { alg, countMoves, stepMoves } from './cube/lessonKit';
+import { countMoves, list, plural, stepMoves } from './cube/lessonKit';
 import { pyraminx } from './pyraminx/puzzle';
 import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 import { RingView } from './view/rings';
 import { Scanner } from './view/scanner';
+import { drillControlsHtml, drillStatus, markCode, movesHtml, offPlanHtml, stepperHtml, trigClass, triggerRuns } from './view/course';
 import { snapshot } from './view/snapshot';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -58,17 +59,20 @@ interface Solution {
   elapsed: number;
   stale: boolean;
   /**
-   * A lesson or tutorial case the cube was turned away from: the turns since, the state they
+   * A guided solve or case the cube was turned away from: the turns since, the state they
    * left and where they've taken it. Once that's back where it left, it carries on.
    */
   drift?: { moves: string[]; from: State; now: State };
-  /** a lesson: the method, its moves explained step by step, and the move each step starts at */
-  lesson?: { guide: Guide; steps: GuideStep[]; starts: number[] };
-  /** a tutorial case: which one */
-  tutorial?: CaseRef;
+  /**
+   * a guided solve (a lesson): the method, its moves explained step by step, and the move each
+   * step starts at; practising one stage on a scramble, which stage
+   */
+  lesson?: { method: Method; steps: GuideStep[]; starts: number[]; stage?: number };
+  /** a case being practised: which one */
+  drill?: CaseRef;
 }
-/** a tutorial case, by its step, group and place in the group */
-interface CaseRef { step: number; group: number; index: number }
+/** a case of the method, by its stage, group and place in the group */
+interface CaseRef { stage: number; group: number; index: number }
 let solution: Solution | null = null;
 let playing = false;
 /** where playback last started: a lesson pauses at the end of each step */
@@ -83,23 +87,21 @@ let place: Place = 'cube';
 /** which of Learn's cubes is on screen: the one cases are set up on, or the guided solve's */
 type Practice = 'cases' | 'guided';
 let practiceKind: Practice = 'guided';
-/** the method Learn teaches, by guide id */
+/** the method Learn teaches, by id */
 let methodId = '';
 try { methodId = localStorage.getItem('method') ?? ''; } catch { /* storage unavailable */ }
-const currentGuide = () => puzzle.guides?.find((g) => g.id === methodId) ?? puzzle.guides?.[0];
-/** the method's cases, if it has a tutorial */
-const methodTutorial = () => (puzzle.tutorial && puzzle.tutorial.id === currentGuide()?.id ? puzzle.tutorial : undefined);
+const currentMethod = () => puzzle.methods?.find((m) => m.id === methodId) ?? puzzle.methods?.[0];
 /** the cube a place works on: yours, or one of Learn's */
 const sessionFor = (p: Puzzle, pl: Place, k: Practice) => (pl === 'learn' ? practiceCube(p, k) : sessions.get(p.id)!);
 /** where a solution belongs: the puzzle, the place and, in Learn, the method and its cube */
-const placeKey = (k = practiceKind) => `${puzzle.id}:${place}${place === 'learn' ? `:${currentGuide()?.id}:${k}` : ''}`;
+const placeKey = (k = practiceKind) => `${puzzle.id}:${place}${place === 'learn' ? `:${currentMethod()?.id}:${k}` : ''}`;
 /** the solution each place was left with, to pick up on coming back to it */
 const parked = new Map<string, Solution>();
 /** the guided solve, open or put aside while a case is practised */
 const guidedLesson = () => (practiceKind === 'guided' ? solution : parked.get(placeKey('guided')) ?? null);
 /** the stage Learn shows, for this puzzle and method */
 let stageIdx = 0;
-const stageKey = () => `stage:${puzzle.id}:${currentGuide()?.id}`;
+const stageKey = () => `stage:${puzzle.id}:${currentMethod()?.id}`;
 function loadStage() {
   try { stageIdx = Number(localStorage.getItem(stageKey())) || 0; } catch { stageIdx = 0; }
 }
@@ -222,9 +224,9 @@ function follow(move: string, back = false) {
     playing = false;
     renderSolution();
   } else {
-    // a lesson or tutorial case picks up where it was once the stray turns cancel out (undone, or turned back by hand);
+    // a guided solve or case picks up where it was once the stray turns cancel out (undone, or turned back by hand);
     // one that went stale some other way (the cube changed while it was put aside) can't
-    if ((s?.tutorial || s?.lesson) && !s.searching && (!s.stale || s.drift)) {
+    if ((s?.drill || s?.lesson) && !s.searching && (!s.stale || s.drift)) {
       if (!s.stale) {
         const from = s.moves.slice(0, s.index).reduce(applyMove, s.start);
         s.drift = { moves: [], from, now: from };
@@ -251,7 +253,7 @@ function follow(move: string, back = false) {
 /** whether the open case just picked up again, to draw once the turn that did it lands */
 let resumeOnTurn = false;
 
-/** Turn the cube back through the turns that left the lesson or open tutorial case, so it carries on. */
+/** Turn the cube back through the turns that left the guided solve or open case, so it carries on. */
 function undoStray() {
   const d = solution?.stale && solution.drift;
   if (d) doMoves(d.moves.slice().reverse().map((m) => puzzle.invertMove(m)));
@@ -390,7 +392,7 @@ function undoAction() {
 }
 
 /**
- * Put the cube in a new state; undo can take it back unless it's a tutorial case being set up.
+ * Put the cube in a new state; undo can take it back unless it's a practice cube being set up.
  * Returns a toast's Undo button for it, if there's anything to undo.
  */
 function setStateDirect(s: State, undoable = true) {
@@ -610,10 +612,13 @@ function loadScan(state: State, kind: CubeKind) {
 
 /**
  * A guided solve, on Learn's own cube: of a new scramble, of a copy of your cube, or of the
- * guided cube as it is now (after it was turned off the lesson's path).
+ * guided cube as it is now (after it was turned off the lesson's path). With `stage`, only up to
+ * the end of that stage: "here" carries on practising it, and "scramble" starts on a scramble
+ * with the stages before it already done.
  */
-async function startLesson(from: 'scramble' | 'mine' | 'here') {
-  const guide = currentGuide()!;
+async function startLesson(from: 'scramble' | 'mine' | 'here', stage?: number) {
+  const method = currentMethod()!;
+  if (!method.solve) return;
   const forPuzzle = puzzle;
   if (from === 'mine') {
     const mine = sessions.get(puzzle.id)!.state;
@@ -622,20 +627,34 @@ async function startLesson(from: 'scramble' | 'mine' | 'here') {
     if (puzzle.isSolved(mine)) return toast('Your cube is solved — scramble it first', 'good');
   }
   await go('learn', 'guided');
-  if (puzzle !== forPuzzle || place !== 'learn' || practiceKind !== 'guided' || currentGuide() !== guide) return;
-  if (from === 'mine') setStateDirect(sessions.get(puzzle.id)!.state, false);
-  else if (from === 'scramble') {
-    scramble(false);
-    await idle();
-    // the puzzle, place or method may have changed while it scrambled
-    if (puzzle !== forPuzzle || place !== 'learn' || practiceKind !== 'guided' || currentGuide() !== guide) return;
-  } else if (!checkValid()) return;
-  let steps: GuideStep[];
+  const moved = () => puzzle !== forPuzzle || place !== 'learn' || practiceKind !== 'guided' || currentMethod() !== method;
+  if (moved()) return;
+  let steps: GuideStep[] | null = null;
   try {
-    steps = guide.steps(session.state);
+    if (from === 'mine') setStateDirect(sessions.get(puzzle.id)!.state, false);
+    else if (from === 'scramble' && stage !== undefined) {
+      const at = stageStart(method, stage);
+      setStateDirect(at.state, false);
+      steps = at.steps;
+      const before = method.stages.slice(0, stage).map((st) => st.name);
+      toast(before.length ? `Here’s a cube with ${list(before)} done. Now do ${method.stages[stage].name}.` : `Here’s a scramble. Now do ${method.stages[stage].name}.`);
+    } else if (from === 'scramble') {
+      scramble(false);
+      await idle();
+      // the puzzle, place or method may have changed while it scrambled
+      if (moved()) return;
+    } else if (!checkValid()) return;
+    steps ??= method.solve(session.state);
   } catch {
     toast('Couldn’t build a lesson for this cube', 'bad');
     return;
+  }
+  if (stage !== undefined) {
+    steps = steps.filter((st) => st.stage <= stage);
+    if (!steps.length) {
+      toast(`${method.stages[stage].name} is done on this cube`, 'good');
+      return;
+    }
   }
   const { moves, starts } = flattenLesson(steps);
   playing = false;
@@ -643,10 +662,26 @@ async function startLesson(from: 'scramble' | 'mine' | 'here') {
     start: session.state.slice(),
     moves,
     index: 0, optimal: false, searching: false, elapsed: 0, stale: false,
-    lesson: { guide, steps, starts },
+    lesson: { method, steps, starts, stage },
   };
   followedStage = -1;
   renderSolution(true);
+}
+
+/**
+ * A cube to practise a stage on: a scramble, with the guided solve played silently up to the
+ * start of the stage. Its steps for that stage, and for any after it, come with it. A scramble
+ * that skips the stage (it's done by the stages before) is passed over for another.
+ */
+function stageStart(method: Method, stage: number) {
+  for (let tries = 0; ; tries++) {
+    const scrambled = puzzle.scramble().reduce(applyMove, puzzle.solved());
+    const steps = method.solve!(scrambled);
+    const first = steps.findIndex((st) => st.stage >= stage);
+    if (tries < 20 && (first < 0 || steps[first].stage !== stage)) continue;
+    const skip = first < 0 ? steps.length : first;
+    return { state: steps.slice(0, skip).flatMap(stepMoves).reduce(applyMove, scrambled), steps: steps.slice(skip) };
+  }
 }
 
 /** Go to a place and, in Learn, one of its cubes; whatever was open where you left waits for you to come back. */
@@ -679,7 +714,7 @@ async function go(to: Place, k: Practice = practiceKind) {
 }
 
 function setMethod(id: string) {
-  if (id === currentGuide()?.id) return;
+  if (id === currentMethod()?.id) return;
   park();
   methodId = id;
   try { localStorage.setItem('method', id); } catch { /* storage unavailable */ }
@@ -949,9 +984,9 @@ function renderStatus() {
 
 function renderSolution(fresh = false) {
   const el = $('#solution');
-  const learn = place === 'learn' && !!currentGuide();
+  const learn = place === 'learn' && !!currentMethod();
   el.classList.toggle('learn', learn);
-  el.classList.toggle('drill', learn && !!solution?.tutorial);
+  el.classList.toggle('drill', learn && !!solution?.drill);
   el.classList.toggle('guided', learn && !!solution?.lesson);
   document.body.classList.toggle('learn', learn);
   // in Learn the big button starts a guided solve, so it goes once one is open
@@ -961,8 +996,8 @@ function renderSolution(fresh = false) {
   renderPlaces();
   // your cube, ready to solve: you could learn to solve it yourself instead
   const mine = !learn && !puzzle.isSolved(session.state) && puzzle.validate(session.state).ok;
-  $('#btn-learn-mine').classList.toggle('hidden', !mine || !puzzle.guides?.length);
-  if (!(solution?.lesson || solution?.tutorial) || solution.stale) view.setFocus(null);
+  $('#btn-learn-mine').classList.toggle('hidden', !mine || !puzzle.methods?.some((m) => m.solve));
+  if (!(solution?.lesson || solution?.drill) || solution.stale) view.setFocus(null);
   renderDrilling();
   if (learn) {
     renderLearn(fresh);
@@ -1006,13 +1041,12 @@ function renderSolution(fresh = false) {
 function renderChips(fresh: boolean) {
   const s = solution!;
   const chips = $('#chips');
-  const runs = s.tutorial ? triggerRuns(s.moves) : [];
+  // in Learn, chips of a trigger (the sexy move) are marked
+  const runs = s.drill ? triggerRuns(s.moves, currentMethod()?.triggers) : [];
   chips.replaceChildren();
   s.moves.forEach((m, i) => {
     const c = document.createElement('button');
-    c.className = 'chip';
-    // in the tutorial, chips of a trigger (the sexy move) are marked, each run on its own
-    if (runs[i]) c.classList.add('trig', runs[i] % 2 ? 'odd' : 'even');
+    c.className = 'chip' + trigClass(runs[i]);
     c.dataset.i = String(i);
     c.innerHTML = `${m}<sub>${i + 1}</sub>`;
     if (fresh) c.style.animationDelay = `${i * 18}ms`;
@@ -1044,7 +1078,7 @@ function renderPlayback() {
     const step = s.lesson.steps[currentStep(s)];
     view.setFocus(step && !s.stale ? step.focus(session.state) : null);
   } else {
-    const focus = s.tutorial && puzzle.tutorial?.steps[s.tutorial.step].focus;
+    const focus = s.drill && currentMethod()?.stages[s.drill.stage].focus;
     if (focus) view.setFocus(s.stale ? null : focus(session.state));
     followCurrentChip();
   }
@@ -1056,9 +1090,9 @@ const phone = () => phoneMQ.matches;
 // crossing the breakpoint changes what tapping a case does, so its labels follow
 phoneMQ.addEventListener('change', () => renderDrilling());
 /** a case is open, in Learn */
-const drilling = () => place === 'learn' && !!solution?.tutorial;
+const drilling = () => place === 'learn' && !!solution?.drill;
 
-/** The open tutorial case's card shows where its algorithm is: played moves fade, the next one stands out. */
+/** The open case's card shows where its algorithm is: played moves fade, the next one stands out. */
 function renderDrilling() {
   const s = solution;
   const on = drilling();
@@ -1066,12 +1100,12 @@ function renderDrilling() {
   const live = on && !s!.stale;
   if (live) {
     const k = s!.index;
-    if (k > 0 && k < s!.moves.length) caseProgress.set(caseKey(s!.tutorial!), k);
-    else caseProgress.delete(caseKey(s!.tutorial!));
+    if (k > 0 && k < s!.moves.length) caseProgress.set(caseKey(s!.drill!), k);
+    else caseProgress.delete(caseKey(s!.drill!));
   }
   keepAwake(on);
   document.querySelectorAll<HTMLElement>('#tut-groups .case').forEach((card) => {
-    const open = on && sameCase(s!.tutorial!, cardRef(card));
+    const open = on && sameCase(s!.drill!, cardRef(card));
     const here = open && !s!.stale;
     card.classList.toggle('active', open);
     card.querySelectorAll<HTMLElement>('.mv').forEach((m) => {
@@ -1113,30 +1147,31 @@ function setHtml(el: HTMLElement | null, html: string) {
 function caseDone() {
   const s = solution!;
   if (s.stale || playing || s.index < s.moves.length) return '';
-  const next = nextCase(s.tutorial!);
+  const next = nextCase(s.drill!);
   return '<b>Done ✓</b><button class="btn small ghost" data-act="repeat">Repeat</button>' +
-    (next ? `<button class="btn small primary-soft" data-act="next">Next: ${caseAt(next).name}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : '');
+    (next ? `<button class="btn small primary-soft" data-act="next">Next: ${caseName(caseAt(next))}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : '');
 }
 
 /** the case after this one in its stage, if any */
 function nextCase(r: CaseRef): CaseRef | null {
-  const groups = puzzle.tutorial!.steps[r.step].groups;
+  const groups = currentMethod()!.stages[r.stage].caseGroups!;
   if (r.index + 1 < groups[r.group].cases.length) return { ...r, index: r.index + 1 };
-  if (r.group + 1 < groups.length) return { step: r.step, group: r.group + 1, index: 0 };
+  if (r.group + 1 < groups.length) return { stage: r.stage, group: r.group + 1, index: 0 };
   return null;
 }
-const caseAt = (r: CaseRef) => puzzle.tutorial!.steps[r.step].groups[r.group].cases[r.index];
+const caseAt = (r: CaseRef) => currentMethod()!.stages[r.stage].caseGroups![r.group].cases[r.index];
+/** a case's name, with its number in the full list: Sune (OLL 27) */
+const caseName = (c: Case) => c.name + (c.alias ? ` <span class="alias">(${c.alias})</span>` : '');
 
 /** What the open case's card says under its moves. */
 function caseStatus(open: boolean) {
   const s = solution!;
   if (!open) return '';
-  if (s.stale) return `<b>Cube turned</b>${s.drift ? `<button class="case-undo" data-ctl="undo">${undoLabel()}</button>` : ''}tap to set up`;
-  if (playing) return '';
-  if (s.index >= s.moves.length) return `<b>Done ✓</b>${nextCase(s.tutorial!) ? '<button class="case-undo" data-ctl="next">Next case ›</button>' : ''}tap to repeat`;
-  // until you've stepped through a case once, the first open says how
-  if (s.index === 0 && !tapLearned) return '<b>Tap the card</b>for each move';
-  return '';
+  return drillStatus({
+    stale: s.stale, undo: s.drift ? undoLabel() : null, playing,
+    done: s.index >= s.moves.length, hasNext: !!nextCase(s.drill!),
+    atStart: s.index === 0, tapLearned,
+  });
 }
 
 /** Keep a phone's screen on while a case is open: both hands are on the real cube. */
@@ -1177,7 +1212,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- lessons ----------
 
-/** the puzzle's move notation, and any extra moves a guide or tutorial uses */
+/** the puzzle's move notation, and any extra moves a method uses */
 const notationText = (extra?: string) => `${puzzle.notationHtml}${extra ? ' ' + extra : ''}`;
 /** the notation, folded away until it's wanted */
 const notationHelp = (extra?: string) =>
@@ -1198,7 +1233,7 @@ let lessonStep = -1;
 
 /** Learn: the course on the left, and on the right the open case or guided solve, or how to start one. */
 function renderLearn(fresh: boolean) {
-  const guide = currentGuide()!;
+  const method = currentMethod()!;
   renderCourse();
   $('.solve-label').textContent = 'Start a guided solve';
   $('#solve-sub').textContent = 'On a new scramble, step by step';
@@ -1206,16 +1241,16 @@ function renderLearn(fresh: boolean) {
   const useMine = !puzzle.isSolved(mine) && puzzle.validate(mine).ok;
   // only when it changes: an opened "How to read the moves" stays open as the cube turns
   setHtml($('#lesson-intro'), `
-    <p><b>${guide.name}.</b> ${guide.intro}</p>
-    ${methodTutorial() ? '<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube.</p>' : ''}
+    <p><b>${method.name}</b> <span class="level">${method.level}</span> ${method.intro}</p>
+    ${method.stages.some((st) => st.caseGroups) ? '<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube.</p>' : ''}
     <p class="muted small">Make the moves yourself, here or on a real cube, and the guided solve follows along.</p>
     ${useMine ? '<button class="link use-mine" data-act="mine">Use my cube instead ›</button>' : ''}
-    ${notationHelp(guide.notation)}`);
+    ${notationHelp(method.notation)}`);
   if (solution?.lesson) {
     $('#case-card').innerHTML = '';
     renderLesson();
     renderPlayback();
-  } else if (solution?.tutorial) {
+  } else if (solution?.drill) {
     $('#lesson').innerHTML = '';
     renderCaseCard();
     $('#sol-count').textContent = String(solution.moves.length);
@@ -1230,19 +1265,21 @@ function renderLearn(fresh: boolean) {
 
 function renderLesson() {
   const s = solution!;
-  const { steps, starts } = s.lesson!;
+  const { method, steps, starts, stage } = s.lesson!;
   const k = currentStep(s);
   lessonStep = k;
-  const stale = s.stale
-    ? `<div class="lesson-stale">You turned the cube, so this lesson no longer fits it. ` +
-      (s.drift ? `<button class="link" data-act="undo">${undoLabel()}</button> to carry on, or <button class="link" data-act="resume">start again from here</button>` : '<button class="link" data-act="resume">Continue from here</button>') +
-      '</div>'
-    : '';
+  const stale = s.stale ? offPlanHtml('this guided solve no longer fits it', s.drift ? undoLabel() : null, { act: 'resume', label: 'start again from here' }) : '';
+  const prevBtn = '<button class="btn small ghost" data-act="prev"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button>';
   if (k >= steps.length) {
-    $('#lesson').innerHTML = stale + `
+    // practising one stage: again on another scramble, or on to the next stage
+    const next = stage !== undefined ? method.stages[stage + 1] : undefined;
+    $('#lesson').innerHTML = stale + (stage !== undefined ? `
+      <div class="lesson-title">${method.stages[stage].name} done ✓</div>
+      <div class="lesson-text"><p>That’s the stage: ${plural(steps.length, 'step')} and ${plural(s.moves.length, 'move')}. Practise it on a few more scrambles until it comes without thinking.</p></div>
+      <div class="lesson-nav">${prevBtn}<button class="btn small ghost" data-act="again">Again</button>${next ? `<button class="btn small primary-soft" data-act="next-stage">Next: ${next.name}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : ''}</div>` : `
       <div class="lesson-title">Solved!</div>
       <div class="lesson-text"><p>That’s the whole method: ${steps.length} steps and ${s.moves.length} moves. Every lesson starts from your own scramble, so practise until the algorithms stick.</p></div>
-      <div class="lesson-nav"><button class="btn small ghost" data-act="prev"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button><button class="btn small primary-soft" data-act="again">New scramble</button></div>`;
+      <div class="lesson-nav">${prevBtn}<button class="btn small primary-soft" data-act="again">New scramble</button></div>`);
     renderStepper();
     return;
   }
@@ -1254,13 +1291,17 @@ function renderLesson() {
   }
   renderStepper();
   let i = starts[k];
-  const phrases = step.phrases.map((p) => `
+  const phrases = step.phrases.map((p) => {
+    // a phrase's triggers (the sexy move) are marked, as on a case
+    const runs = triggerRuns(p.moves, method.triggers);
+    return `
     <div class="phrase">
       <span class="phrase-label">${p.label}</span>
-      <div class="phrase-moves">${p.moves.map((m) => `<button class="chip" data-i="${i}" title="Jump to after this move">${m}<sub>${++i - starts[k]}</sub></button>`).join('')}</div>
-    </div>`).join('');
+      <div class="phrase-moves">${p.moves.map((m, j) => `<button class="chip${trigClass(runs[j])}" data-i="${i}" title="Jump to after this move">${m}<sub>${++i - starts[k]}</sub></button>`).join('')}</div>
+    </div>`;
+  }).join('');
   $('#lesson').innerHTML = stale + `
-    <div class="lesson-head"><span class="eyebrow">${s.lesson!.guide.stages[step.stage].name}</span><span class="step">Step ${k + 1} of ${steps.length}</span></div>
+    <div class="lesson-head"><span class="eyebrow">${method.stages[step.stage].name}${stage !== undefined ? ' practice' : ''}</span><span class="step">Step ${k + 1} of ${steps.length}</span></div>
     <div class="lesson-title">${step.title}</div>
     <div class="lesson-text">${step.html}</div>
     <div class="phrases">${phrases}</div>
@@ -1272,11 +1313,12 @@ function renderLesson() {
     <div class="lesson-foot"><button class="link" data-act="again">New scramble</button><button class="link" data-act="end">End guided solve</button></div>`;
 }
 
-/** the stage a guided solve is in (the number of stages once it's done), or -1 */
+/** the stage a guided solve is in (once it's done, the stage after the last it covers), or -1 */
 function lessonStage(s: Solution | null) {
   if (!s?.lesson) return -1;
   const k = currentStep(s);
-  return k < s.lesson.steps.length ? s.lesson.steps[k].stage : s.lesson.guide.stages.length;
+  const { steps, stage, method } = s.lesson;
+  return k < steps.length ? steps[k].stage : stage !== undefined ? stage + 1 : method.stages.length;
 }
 
 /** the stage the course was last moved to by the guided solve */
@@ -1291,8 +1333,9 @@ function onLessonClick(e: Event) {
   if (b.dataset.i) jumpTo(Number(b.dataset.i) + 1);
   else if (b.dataset.act === 'prev') jumpTo(starts[s.index > (starts[k] ?? s.moves.length) ? k : k - 1] ?? 0);
   else if (b.dataset.act === 'next') jumpTo(starts[k + 1] ?? s.moves.length);
-  else if (b.dataset.act === 'again') void startLesson('scramble');
-  else if (b.dataset.act === 'resume') void startLesson('here');
+  else if (b.dataset.act === 'again') void startLesson('scramble', s.lesson.stage);
+  else if (b.dataset.act === 'next-stage') void startLesson('scramble', s.lesson.stage! + 1);
+  else if (b.dataset.act === 'resume') void startLesson('here', s.lesson.stage);
   else if (b.dataset.act === 'end') {
     solution = null;
     playing = false;
@@ -1302,23 +1345,24 @@ function onLessonClick(e: Event) {
   else if (b.dataset.act === 'case') void practiseCase(b.dataset.case!);
 }
 
-/** A lesson step's tutorial case: its picture, and a way to practise it. */
+/** A guided solve step's case, if the method's course has it: its picture, and a way to practise it. */
 function caseLink(id?: string) {
   const ref = id ? findCase(id) : null;
   if (!ref) return '';
-  const step = puzzle.tutorial!.steps[ref.step];
-  const group = step.groups[ref.group];
+  const stage = currentMethod()!.stages[ref.stage];
+  const group = stage.caseGroups![ref.group];
   const c = group.cases[ref.index];
-  return `<button class="case-link" data-act="case" data-case="${id}">${diagram(step, c)}<span class="case-link-text"><b>${c.name}</b><small>${step.name} · ${group.name}</small><span class="case-link-go">Practise this case ›</span></span></button>`;
+  return `<button class="case-link" data-act="case" data-case="${id}">${diagram(stage, c)}<span class="case-link-text"><b>${caseName(c)}</b><small>${stage.name} · ${group.name}</small><span class="case-link-go">Practise this case ›</span></span></button>`;
 }
 
-/** the tutorial case with this id */
+/** the method's case with this id, if its course has it */
 function findCase(id: string): CaseRef | null {
-  const steps = puzzle.tutorial?.steps ?? [];
-  for (let step = 0; step < steps.length; step++) {
-    for (let group = 0; group < steps[step].groups.length; group++) {
-      const index = steps[step].groups[group].cases.findIndex((c) => c.id === id);
-      if (index >= 0) return { step, group, index };
+  const stages = currentMethod()?.stages ?? [];
+  for (let stage = 0; stage < stages.length; stage++) {
+    const groups = stages[stage].caseGroups ?? [];
+    for (let group = 0; group < groups.length; group++) {
+      const index = groups[group].cases.findIndex((c) => c.id === id);
+      if (index >= 0) return { stage, group, index };
     }
   }
   return null;
@@ -1330,47 +1374,17 @@ async function practiseCase(id: string) {
   if (ref) await openCase(ref);
 }
 
-// ---------- tutorial ----------
+// ---------- the course ----------
 
 /** the puzzle, method, stage and cube colors the course was drawn for */
 let tutRendered = '';
 
-const sameCase = (a: CaseRef, b: CaseRef) => a.step === b.step && a.group === b.group && a.index === b.index;
+const sameCase = (a: CaseRef, b: CaseRef) => a.stage === b.stage && a.group === b.group && a.index === b.index;
 /** the case a card on screen shows */
-const cardRef = (el: HTMLElement): CaseRef => ({ step: stageIdx, group: Number(el.dataset.group), index: Number(el.dataset.index) });
-
-/**
- * For each move, the trigger run it belongs to (counted from 1), or 0: the tutorial's
- * triggers found in `moves`, left to right, without overlaps.
- */
-function triggerRuns(moves: string[]) {
-  const runs = moves.map(() => 0);
-  let run = 0;
-  for (let i = 0; i < moves.length;) {
-    const t = puzzle.tutorial?.triggers?.find((tr) => tr.moves.every((m, k) => moves[i + k] === m));
-    if (!t) { i++; continue; }
-    run++;
-    for (let k = 0; k < t.moves.length; k++) runs[i + k] = run;
-    i += t.moves.length;
-  }
-  return runs;
-}
-
-/** Moves as text, with each trigger run marked. */
-function movesHtml(moves: string[], breakAfter?: number) {
-  const runs = triggerRuns(moves);
-  return moves.map((m, i) => {
-    const open = runs[i] && runs[i] !== runs[i - 1] ? '<span class="trig">' : '';
-    const close = runs[i] && runs[i] !== runs[i + 1] ? '</span>' : '';
-    return (i === breakAfter ? '<br>' : i ? ' ' : '') + open + `<span class="mv" data-mv="${i}">${m}</span>` + close;
-  }).join('');
-}
-
-/** HTML with the moves inside each <code> marked where they hold a trigger. */
-const markCode = (html: string) => html.replace(/<code>([^<]*)<\/code>/g, (_, text: string) => `<code>${movesHtml(alg(text))}</code>`);
+const cardRef = (el: HTMLElement): CaseRef => ({ stage: stageIdx, group: Number(el.dataset.group), index: Number(el.dataset.index) });
 
 /** a case's picture, drawn as the 3D view draws the puzzle */
-const diagram = (step: TutorialStep, c: TutorialCase) => snapshot(puzzle, c.setup, step.view, step.arrows?.(c));
+const diagram = (stage: Stage, c: Case) => snapshot(puzzle, c.setup, stage.view ?? 'corner', stage.arrows?.(c));
 
 /** Show a stage of the course; `scroll` brings its start into view on a phone. */
 function setStage(k: number, scroll = true) {
@@ -1385,24 +1399,24 @@ function setStage(k: number, scroll = true) {
   }
 }
 
-/** how far into each tutorial case you got this session, so coming back to one resumes it */
+/** how far into each case you got this session, so coming back to one resumes it */
 const caseProgress = new Map<string, number>();
-const caseKey = (r: CaseRef) => `${r.step}:${r.group}:${r.index}`;
+const caseKey = (r: CaseRef) => `${puzzle.id}:${currentMethod()?.id}:${r.stage}:${r.group}:${r.index}`;
 
 /** Set a case up on the cases cube, ready to play its algorithm. */
 async function openCase(ref: CaseRef, resume = false) {
-  const T = puzzle.tutorial;
-  if (!T) return;
-  const c = T.steps[ref.step].groups[ref.group].cases[ref.index];
+  const method = currentMethod();
+  const c = method?.stages[ref.stage].caseGroups?.[ref.group].cases[ref.index];
+  if (!c) return;
   await go('learn', 'cases');
   queue.length = 0;
   await idle();
-  if (place !== 'learn' || practiceKind !== 'cases' || puzzle.tutorial !== T) return;
+  if (place !== 'learn' || practiceKind !== 'cases' || currentMethod() !== method) return;
   const k = resume ? caseProgress.get(caseKey(ref)) ?? 0 : 0;
   setStateDirect(c.moves.slice(0, k).reduce(applyMove, c.setup), false);
   playing = false;
-  solution = { start: c.setup.slice(), moves: c.moves.slice(), index: k, optimal: false, searching: false, elapsed: 0, stale: false, tutorial: ref };
-  if (stageIdx !== ref.step) setStage(ref.step, false);
+  solution = { start: c.setup.slice(), moves: c.moves.slice(), index: k, optimal: false, searching: false, elapsed: 0, stale: false, drill: ref };
+  if (stageIdx !== ref.stage) setStage(ref.stage, false);
   renderSolution(true);
   // on a phone, keep the tapped card in view below the pinned cube
   if (phone()) {
@@ -1412,15 +1426,14 @@ async function openCase(ref: CaseRef, resume = false) {
 
 /** Learn's left panel: the method, its stages, and the stage on screen with its cases if it has any. */
 function renderCourse() {
-  const guide = currentGuide()!;
-  const T = methodTutorial();
-  stageIdx = Math.min(stageIdx, guide.stages.length - 1);
-  const stage = guide.stages[stageIdx];
-  const step = T?.steps[stageIdx];
+  const method = currentMethod()!;
+  const methods = puzzle.methods!;
+  stageIdx = Math.min(stageIdx, method.stages.length - 1);
+  const stage = method.stages[stageIdx];
   // the method picker, or the method's name when there's no choice
-  $('#methods').classList.toggle('single', puzzle.guides!.length < 2);
-  $('#methods').innerHTML = puzzle.guides!.length < 2 ? `<span class="method-name">${guide.name}</span>` : puzzle.guides!.map((g) =>
-    `<button role="tab" data-method="${g.id}" class="${g === guide ? 'active' : ''}" aria-selected="${g === guide}">${g.short}</button>`).join('');
+  $('#methods').classList.toggle('single', methods.length < 2);
+  $('#methods').innerHTML = methods.length < 2 ? `<span class="method-name">${method.name}</span>` : methods.map((m) =>
+    `<button role="tab" data-method="${m.id}" class="${m === method ? 'active' : ''}" aria-selected="${m === method}" title="${m.name} · ${m.level}">${m.short}</button>`).join('');
   // practising a case with a guided solve put aside: the way back to it
   const g = practiceKind === 'cases' ? guidedLesson() : null;
   const back = $('#btn-back-lesson');
@@ -1430,28 +1443,30 @@ function renderCourse() {
     back.textContent = k < g.lesson.steps.length ? `‹ Back to your guided solve, step ${k + 1} of ${g.lesson.steps.length}` : '‹ Back to your guided solve';
   }
   renderStepper();
-  const key = `${puzzle.id}:${guide.id}:${stageIdx}:${cubeKind()}`;
+  const key = `${puzzle.id}:${method.id}:${stageIdx}:${cubeKind()}`;
   if (tutRendered === key) return;
   tutRendered = key;
-  const html = step?.html ?? `<p>${stage.goal}</p>`;
+  const html = stage.html ?? `<p>${stage.goal}</p>`;
   // a long explanation shows just its first paragraph on a phone, with a button for the rest
   const long = (html.match(/<p[ >]/g) ?? []).length > 1;
-  $('#tut-intro').innerHTML = `<div class="lesson-title">${step?.goal ?? stage.name}</div><div class="lesson-text${long ? ' collapsible' : ''}">${markCode(html)}</div>` +
+  $('#tut-intro').innerHTML = `<div class="lesson-title">${stage.html ? stage.goal : stage.name}</div><div class="lesson-text${long ? ' collapsible' : ''}">${markCode(html, method.triggers)}</div>` +
     (long ? '<button class="link more" data-act="more" aria-expanded="false">Show more</button>' : '') +
+    (method.solve ? `<button class="btn small primary-soft practise-stage" data-act="practise-stage"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Practise ${stage.name} on a scramble</button>` : '') +
     // the notation is explained once, on the first stage
-    (stageIdx > 0 ? '' : notationHelp(T?.notation ?? guide.notation));
-  $('#tut-groups').innerHTML = !step ? `<p class="no-cases muted small">No cases to practise for this stage yet. A guided solve teaches it on a scramble, step by step.</p>`
-    : step.groups.map((g, gi) => `
+    (stageIdx > 0 ? '' : notationHelp(method.notation));
+  const groups = stage.caseGroups;
+  $('#tut-groups').innerHTML = !groups ? `<p class="no-cases muted small">Guided solve only — cases coming. ${method.solve ? `Practise ${stage.name} on a scramble, step by step.` : ''}</p>`
+    : groups.map((g, gi) => `
       <section class="tut-group">
-        <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${g.cases.length} ${g.cases.length === 1 ? 'case' : 'cases'}</span></div>
+        <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${plural(g.cases.length, 'case')}</span></div>
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <div class="case" data-group="${gi}" data-index="${i}">
             <button class="case-hit" title="Set up ${c.name}" aria-label="Set up ${c.name}"></button>
-            ${diagram(step, c)}<span class="case-name">${c.name}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, c.breakAfter)}</code><span class="case-ctl"><span class="case-status"></span><button class="case-back" data-ctl="back" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button><button class="case-play" data-ctl="play" aria-label="Play the moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg class="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button></span>
+            ${diagram(stage, c)}<span class="case-name">${caseName(c)}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, method.triggers, c.breakAfter)}</code>${drillControlsHtml()}
           </div>`).join('')}</div>
       </section>`).join('');
-  const prev = guide.stages[stageIdx - 1], next = guide.stages[stageIdx + 1];
+  const prev = method.stages[stageIdx - 1], next = method.stages[stageIdx + 1];
   $('#tut-nav').innerHTML =
     (prev ? `<button class="btn small ghost" data-step="${stageIdx - 1}"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>${prev.name}</button>` : '<span></span>') +
     (next ? `<button class="btn small primary-soft" data-step="${stageIdx + 1}">Next: ${next.name}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : '');
@@ -1461,27 +1476,21 @@ function renderCourse() {
 
 /** The method's stages, ‹ one › after another: the one on screen, and how far a guided solve has got. */
 function renderStepper() {
-  const guide = currentGuide()!;
-  const cur = lessonStage(guidedLesson());
-  setHtml($('#tut-steps'), guide.stages.map((st, i) => {
-    const state = cur < 0 ? '' : i < cur ? ' done' : i === cur ? ' current' : '';
-    return `<button role="tab" data-step="${i}" class="${i === stageIdx ? 'active' : ''}${state}" aria-selected="${i === stageIdx}"><span class="num">${state === ' done' ? '✓' : i + 1}</span>${st.name}</button>`;
-  }).join(''));
+  setHtml($('#tut-steps'), stepperHtml(currentMethod()!.stages, stageIdx, lessonStage(guidedLesson())));
 }
 
 /** The open case, big, with what's next once it's done. */
 function renderCaseCard() {
-  const T = puzzle.tutorial!;
   const el = $('#case-card');
-  const ref = solution!.tutorial!;
-  const step = T.steps[ref.step];
-  const group = step.groups[ref.group];
+  const ref = solution!.drill!;
+  const stage = currentMethod()!.stages[ref.stage];
+  const group = stage.caseGroups![ref.group];
   const c = group.cases[ref.index];
   el.innerHTML = `
-    <div class="lesson-head"><span class="eyebrow">${step.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
-    <div class="lesson-title">${c.name}</div>
-    <div class="case-big">${diagram(step, c)}</div>
-    ${solution!.stale ? `<div class="lesson-stale">You turned the cube, so it no longer shows this case. ${solution!.drift ? `<button class="link" data-act="undo">${undoLabel()}</button> or ` : ''}<button class="link" data-act="reset">set it up again</button></div>` : ''}
+    <div class="lesson-head"><span class="eyebrow">${stage.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
+    <div class="lesson-title">${caseName(c)}</div>
+    <div class="case-big">${diagram(stage, c)}</div>
+    ${solution!.stale ? offPlanHtml('it no longer shows this case', solution!.drift ? undoLabel() : null, { act: 'reset', label: 'set it up again' }) : ''}
     <div class="case-done"></div>
     <div class="lesson-foot"><button class="link" data-act="close">Close the case</button></div>`;
   renderDrilling();
@@ -1489,7 +1498,7 @@ function renderCaseCard() {
 
 function onCaseCardClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
-  const ref = solution?.tutorial;
+  const ref = solution?.drill;
   if (b?.dataset.act === 'undo') undoStray();
   else if (b?.dataset.act === 'reset' && ref) void openCase(ref, true);
   else if (b?.dataset.act === 'repeat' && ref) void openCase(ref);
@@ -1507,14 +1516,15 @@ let lastCardTap = -1e9;
 /** whether you've stepped a case by tapping its card, so the how-to hint has done its job */
 let tapLearned = false;
 try { tapLearned = localStorage.getItem('tapLearned') === '1'; } catch { /* storage unavailable */ }
-function onTutorialClick(e: Event) {
+function onCourseClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
   if (!b) return;
   if (b.dataset.act === 'more') {
     const open = $('#tut-intro .collapsible').classList.toggle('open');
     b.setAttribute('aria-expanded', String(open));
     b.textContent = open ? 'Show less' : 'Show more';
-  } else if (b.dataset.step) setStage(Number(b.dataset.step));
+  } else if (b.dataset.act === 'practise-stage') void startLesson('scramble', stageIdx);
+  else if (b.dataset.step) setStage(Number(b.dataset.step));
   else if (b.dataset.method) setMethod(b.dataset.method);
   else if (b === $('#btn-back-lesson')) void go('learn', 'guided');
   else if (b.closest('.case')) {
@@ -1528,7 +1538,7 @@ function onTutorialClick(e: Event) {
       return;
     }
     // on a phone the open case's card is the controller: tap it for the next move, tap a move to go back to it
-    if (phone() && s?.tutorial && sameCase(s.tutorial, ref) && !s.stale) {
+    if (phone() && s?.drill && sameCase(s.drill, ref) && !s.stale) {
       // a second tap within a moment is a bounce, not a wish for two moves
       if (!ctl && e.timeStamp - lastCardTap < 250) return;
       lastCardTap = e.timeStamp;
@@ -1729,7 +1739,7 @@ function bind() {
     if ((e.target as HTMLElement).closest('[data-act="mine"]')) void startLesson('mine');
   });
   $('#lesson').addEventListener('click', onLessonClick);
-  $('#tutorial').addEventListener('click', onTutorialClick);
+  $('#tutorial').addEventListener('click', onCourseClick);
   $('#case-card').addEventListener('click', onCaseCardClick);
   $('#btn-play').addEventListener('click', togglePlay);
   $('#btn-next').addEventListener('click', () => { playing = false; stepForward(); renderPlayback(); });

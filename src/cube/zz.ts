@@ -11,21 +11,21 @@
 // Once the edges are oriented, F and B quarter turns are never needed again — the rest of
 // the solve is turning L, U and R, which is what makes ZZ fast and easy to look ahead in.
 
-import type { Guide, GuideStep, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, State } from '../core/types';
 import { OCLL } from './algs';
 import { ollStep, pllStep } from './lastLayer';
 import { countMoves, EDGES, FACE_MOVES, lessonKit, macroMoves, onceOnly, plural, ROTATIONS, turns, WIDE_NOTATION, type Once } from './lessonKit';
 import type { CubeModel } from './model';
 
 export const ZZ_STAGES = [
-  { name: 'EOLine', goal: 'Edge Orientation plus a line: orient every edge, then line up the two white edges on the bottom, front and back.' },
-  { name: 'Left block', goal: 'Build a 1×2×3 block on the left, turning only L, U and R.' },
-  { name: 'Right block', goal: 'Build the matching block on the right with U and R: the first two layers.' },
-  { name: 'OCLL', goal: 'Orient the Corners of the Last Layer: the edges are oriented, so one of seven algorithms turns the top yellow.' },
-  { name: 'PLL', goal: 'Permute the Last Layer: one algorithm moves the top pieces to their spots.' },
+  { id: 'eoline', name: 'EOLine', goal: 'Edge Orientation plus a line: orient every edge, then line up the two white edges on the bottom, front and back.' },
+  { id: 'left-block', name: 'Left block', goal: 'Build a 1×2×3 block on the left, turning only L, U and R.' },
+  { id: 'right-block', name: 'Right block', goal: 'Build the matching block on the right with U and R: the first two layers.' },
+  { id: 'ocll', name: 'OCLL', goal: 'Orient the Corners of the Last Layer: the edges are oriented, so one of seven algorithms turns the top yellow.' },
+  { id: 'pll', name: 'PLL', goal: 'Permute the Last Layer: one algorithm moves the top pieces to their spots.' },
 ];
 
-export function zzGuide(M: CubeModel): Guide {
+export function zzMethod(M: CubeModel): Method {
   if (M.n !== 3) throw new Error('ZZ is for the 3×3');
   const K = lessonKit(M);
   const { at, center, apply, name, piece, plain, code } = K;
@@ -203,10 +203,11 @@ export function zzGuide(M: CubeModel): Guide {
     id: 'zz',
     name: 'ZZ',
     short: 'ZZ',
+    level: 'Advanced',
     intro: 'Orient all the edges first, and the rest of the solve needs only L, U and R turns: the EOLine (Edge Orientation plus a line), two blocks, then the last layer with fewer cases (OCLL: Orient the Corners of the Last Layer, then PLL: Permute the Last Layer).',
     notation: WIDE_NOTATION,
     stages: ZZ_STAGES,
-    steps: (state) => {
+    solve: (state) => {
       const steps: GuideStep[] = [];
       let s = eoLine(state, steps, onceOnly());
       const line = [...K.stickersOf('DF'), ...K.stickersOf('DB'), at('D', 'D')];

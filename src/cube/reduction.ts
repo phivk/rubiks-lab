@@ -18,7 +18,7 @@
 // edge are refused, by tracking which edge slots hold finished edges.
 
 import { parity } from '../core/perm';
-import type { Guide, GuideStep, Phrase, State, Vec3 } from '../core/types';
+import type { GuideStep, Method, Phrase, State, Vec3 } from '../core/types';
 import { beginnerStages, STAGES as BEGINNER_STAGES } from './beginner';
 import {
   alg, allRotations, stepMoves, EDGES, lessonKit, lessonNotes, macroMoves, onceOnly, sameSlot, TOP_CORNERS, TOP_EDGES, U_TURNS, type Macro,
@@ -41,7 +41,7 @@ const stageOf = (name: string) => BASE + BEGINNER_STAGES.findIndex((st) => st.na
 
 type CenterMacro = Macro & { to: readonly number[] };
 
-export function reductionGuide(M: CubeModel): Guide {
+export function reductionMethod(M: CubeModel): Method {
   const n = M.n;
   if (n !== 4 && n !== 5) throw new Error('The reduction lesson is for the 4×4 and 5×5');
   const odd = n % 2 === 1;
@@ -666,8 +666,8 @@ export function reductionGuide(M: CubeModel): Guide {
   // ---------- the lesson ----------
 
   const STAGES = [
-    { name: 'Centers', goal: odd ? 'Build each 3×3 center around its fixed center.' : 'Group the four center pieces of each color, in the right color order.' },
-    { name: 'Edges', goal: odd ? 'Join each edge’s three pieces into one long edge.' : 'Pair up the two pieces of each edge.' },
+    { id: 'centers', name: 'Centers', goal: odd ? 'Build each 3×3 center around its fixed center.' : 'Group the four center pieces of each color, in the right color order.' },
+    { id: 'edges', name: 'Edges', goal: odd ? 'Join each edge’s three pieces into one long edge.' : 'Pair up the two pieces of each edge.' },
     ...BEGINNER_STAGES.map((st) => {
       const extra = n === 4 && { 'Yellow cross': ' Fix OLL parity first if it shows up.', 'Yellow edges': ' Then check for PLL parity.' }[st.name];
       return extra ? { ...st, goal: st.goal + extra } : st;
@@ -678,10 +678,11 @@ export function reductionGuide(M: CubeModel): Guide {
     id: 'reduction',
     name: 'Reduction method',
     short: 'Beginner',
+    level: 'Beginner',
     notation: '<code>Rw</code> turns the right two layers together and <code>2R</code> just the second layer; <code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.',
     intro: `Turn the ${n}×${n} into a big 3×3: build the centers, pair up the edges, then solve it with the 3×3 beginner’s method${n === 4 ? ', plus two parity algorithms a 3×3 never needs' : ''}.`,
     stages: STAGES,
-    steps: (state) => {
+    solve: (state) => {
       const steps: GuideStep[] = [];
       notes = lessonNotes();
       let s = centersStage(state, steps);

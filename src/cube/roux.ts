@@ -13,7 +13,7 @@
 // step lines the centers up. Nothing is placed by algorithm until CMLL — the blocks are the
 // cheapest moves found by a search over the few pieces each step places.
 
-import type { Guide, GuideStep, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, State } from '../core/types';
 import { OCLL, PLL } from './algs';
 import { bestAlg, focusTopCorners, headlights } from './lastLayer';
 import {
@@ -22,18 +22,18 @@ import {
 import type { CubeModel } from './model';
 
 export const ROUX_STAGES = [
-  { name: 'First block', goal: 'Build a 1×2×3 block on the left: a square, then a corner–edge pair.' },
-  { name: 'Second block', goal: 'Build the matching block on the right, turning only U, R, r and M.' },
-  { name: 'CMLL', goal: 'Corners of the Last Layer, with the M slice still free: solve the four top corners without breaking the blocks.' },
-  { name: 'LSE: orient edges', goal: 'Last Six Edges, part 1: with M and U only, turn each edge the right way up.' },
-  { name: 'LSE: left & right edges', goal: 'Last Six Edges, part 2: put the top-left and top-right edges in place.' },
-  { name: 'LSE: middle slice', goal: 'Last Six Edges, part 3: finish the four edges and the centers in the M slice.' },
+  { id: 'first-block', name: 'First block', goal: 'Build a 1×2×3 block on the left: a square, then a corner–edge pair.' },
+  { id: 'second-block', name: 'Second block', goal: 'Build the matching block on the right, turning only U, R, r and M.' },
+  { id: 'cmll', name: 'CMLL', goal: 'Corners of the Last Layer, with the M slice still free: solve the four top corners without breaking the blocks.' },
+  { id: 'lse-orient-edges', name: 'LSE: orient edges', goal: 'Last Six Edges, part 1: with M and U only, turn each edge the right way up.' },
+  { id: 'lse-left-right-edges', name: 'LSE: left & right edges', goal: 'Last Six Edges, part 2: put the top-left and top-right edges in place.' },
+  { id: 'lse-middle-slice', name: 'LSE: middle slice', goal: 'Last Six Edges, part 3: finish the four edges and the centers in the M slice.' },
 ];
 
 const LSE_EDGES = ['UF', 'UB', 'UL', 'UR', 'DF', 'DB'];
 const MU = [...turns('M'), ...turns('U')];
 
-export function rouxGuide(M: CubeModel): Guide {
+export function rouxMethod(M: CubeModel): Method {
   if (M.n !== 3) throw new Error('Roux is for the 3×3');
   const K = lessonKit(M);
   const { at, center, apply, name, piece, plain, code } = K;
@@ -57,10 +57,11 @@ export function rouxGuide(M: CubeModel): Guide {
     id: 'roux',
     name: 'Roux',
     short: 'Roux',
+    level: 'Advanced',
     intro: 'Two blocks on the sides, the top corners (CMLL: Corners of the Last Layer, M slice free), then the last six edges (LSE) with just M and U turns. Few moves and few algorithms — most of it is figured out, not memorised.',
     notation: WIDE_NOTATION,
     stages: ROUX_STAGES,
-    steps: (state) => {
+    solve: (state) => {
       const steps: GuideStep[] = [];
       const white = 0;
       const once = onceOnly();

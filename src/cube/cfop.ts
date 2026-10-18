@@ -10,29 +10,73 @@
 //   4. PLL     in two looks: one of 2 algorithms puts the corners in place, then one of 4
 //              moves the edges home
 //
-// The last-layer steps name the tutorial case they are (GuideStep.caseId), so a lesson can
+// The last-layer steps name the case they are (GuideStep.caseId), so a guided solve can
 // send you to practise it.
 //
 // Like the beginner lesson it works on the actual state, so the text, phrases and highlights
-// always match the cube.
+// always match the cube. The course is the same four stages, with their cases (cases.ts).
 
-import type { Guide, GuideStep, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
 import { OLL_CORNERS, OLL_EDGES, PLL_CORNERS, PLL_EDGES, type TwoLookAlg } from './algs';
+import { cubeCases, SEXY } from './cases';
 import { bestAlg, edgeShape, focusTop, headlights, oriented, pllStep, yellowCorners } from './lastLayer';
 import { alg, countMoves, FACE_MOVES, lessonKit, list, macroMoves, onceOnly, plural, ROTATIONS, sameSet, SIDE_NAME, TOP_EDGES, U_TURNS, WIDE_NOTATION, type Once } from './lessonKit';
 import type { CubeModel } from './model';
 
-export const CFOP_STAGES = [
-  { name: 'Cross', goal: 'The four white edges on the bottom, matching the side centers — planned in one go.' },
-  { name: 'F2L', goal: 'First Two Layers: pair each white corner with its edge and insert them together.' },
-  { name: 'OLL', goal: 'Orient the Last Layer: make the whole top yellow, in two looks.' },
-  { name: 'PLL', goal: 'Permute the Last Layer: move the top pieces to their spots, in two looks.' },
+const CFOP_STAGES = [
+  { id: 'cross', name: 'Cross', goal: 'The four white edges on the bottom, matching the side centers — planned in one go.' },
+  { id: 'f2l', name: 'F2L', goal: 'First Two Layers: pair each white corner with its edge and insert them together.' },
+  { id: 'oll', name: 'OLL', goal: 'Orient the Last Layer: make the whole top yellow, in two looks.' },
+  { id: 'pll', name: 'PLL', goal: 'Permute the Last Layer: move the top pieces to their spots, in two looks.' },
 ];
 
 const SIDES = [...'FRBL'];
 const SLOT_PAIRS = [['F', 'R'], ['R', 'B'], ['B', 'L'], ['L', 'F']];
 
-export function cfopGuide(M: CubeModel): Guide {
+/** The course: each stage explained, with its cases. */
+function cfopCourse(M: CubeModel): Stage[] {
+  const C = cubeCases(M);
+  const [cross, f2l, oll, pll] = CFOP_STAGES;
+  return [
+    {
+      ...cross,
+      html: `<p>Hold the cube with the <b>white center down</b> and green in front. The cross is the four white edges on the bottom, each beside the center of its other color.</p>
+        <p>There’s no algorithm to learn here: the cross takes at most eight moves, and with practice you plan all of it while you inspect the cube. These examples show the usual ways to bring one edge home, the white–green one, without disturbing the others.</p>
+        <p class="muted">Tip: solve the cross on the bottom from the start, even though it’s harder to see. You’ll never have to flip the cube for the next stage.</p>`,
+      caseGroups: C.cross,
+      view: 'corner',
+    },
+    {
+      ...f2l,
+      html: `<p><b>F2L</b> stands for <b>F</b>irst <b>2</b> <b>L</b>ayers. Each white corner and the middle edge beside it go in together, as a pair, into the slot between their two centers.</p>
+        <p>Think of a corner and its edge as two halves of one block: bring them together in the top layer, then drop the block into its slot. Hold the slot you’re filling at the <b>front right</b>.</p>
+        <p>The cases below aren’t a list to learn by heart. They show that one idea from a few angles, so you can work out any pair yourself. Before you build a block, turn the top so your moves only pass through slots that aren’t done yet.</p>`,
+      caseGroups: C.f2l,
+      view: 'corner',
+    },
+    {
+      ...oll,
+      html: `<p><b>OLL</b> stands for <b>O</b>rient the <b>L</b>ast <b>L</b>ayer: with the first two layers solved, turn every top piece so yellow faces up.</p>
+        <p>Do it in two looks: first the edges, making a yellow cross, then the corners. That’s 10 algorithms instead of the 57 it takes in one go, for a few extra moves.</p>
+        <p>Hold the cube with yellow on top and look at it from above. The pictures show which stickers are yellow, on top and on the sides of the top layer. Turn the top until your cube matches one, then do its algorithm.</p>`,
+      caseGroups: [C.ollEdges, C.ollCorners],
+      view: 'top',
+      focus: C.focusTop,
+    },
+    {
+      ...pll,
+      html: `<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, move its pieces to their spots. Each case is a letter-named “perm”.</p>
+        <p>Again in two looks: first the corners, then the edges. That’s 6 algorithms instead of 21. The arrows show where each piece goes.</p>
+        <p>Look at the sides of the top layer. Two matching corner stickers on a side are <b>headlights</b>. Turn the top to match the picture, do the algorithm, and at the end turn the top to line it up with the rest.</p>`,
+      caseGroups: [C.pllCorners, C.pllEdges],
+      view: 'top',
+      arrows: C.pllArrows,
+      focus: C.focusTop,
+    },
+  ];
+}
+
+export function cfopMethod(M: CubeModel): Method {
   if (M.n !== 3) throw new Error('CFOP is for the 3×3');
   const K = lessonKit(M);
   const { at, center, find, apply, name, piece, plain, code } = K;
@@ -218,10 +262,12 @@ export function cfopGuide(M: CubeModel): Guide {
     id: 'cfop',
     name: 'CFOP',
     short: 'CFOP',
-    intro: 'The speedcuber’s method, named after its stages: Cross, F2L (First Two Layers, solved in corner–edge pairs), OLL (Orient the Last Layer) and PLL (Permute the Last Layer). It teaches OLL and PLL in two looks, the same cases as its case library: 16 algorithms instead of 78.',
+    level: 'Intermediate',
+    intro: 'The speedcuber’s method, named after its stages: Cross, F2L (First Two Layers, solved in corner–edge pairs), OLL (Orient the Last Layer) and PLL (Permute the Last Layer). OLL and PLL come in two looks: 16 algorithms instead of 78.',
     notation: WIDE_NOTATION,
-    stages: CFOP_STAGES,
-    steps: (state) => {
+    triggers: [{ name: 'sexy move', moves: SEXY }],
+    stages: cfopCourse(M),
+    solve: (state) => {
       const steps: GuideStep[] = [];
       const once = onceOnly();
       let s = crossStage(state, steps, once);

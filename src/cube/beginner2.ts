@@ -11,7 +11,7 @@
 // A 2×2 has no centers, so the corner the lesson starts from decides which color goes on
 // each side: every other corner is matched to it, and opposite faces get opposite colors.
 
-import type { Guide, GuideStep, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, State } from '../core/types';
 import { headlights } from './lastLayer';
 import {
   alg, allRotations, CORNERS, countMoves, lessonKit, lessonNotes, repeat, ROTATIONS, rounds, SIDE_NAME, TOP_CORNERS, U_TURNS,
@@ -25,12 +25,12 @@ const BOTTOM_CORNERS = CORNERS.slice(4);
 const OPPOSITE: Record<string, string> = { U: 'D', D: 'U', F: 'B', B: 'F', R: 'L', L: 'R' };
 
 export const STAGES = [
-  { name: 'White layer', goal: 'Four white corners on the bottom, their side colors matching.' },
-  { name: 'Yellow top', goal: 'Turn the top corners until the whole top is yellow.' },
-  { name: 'Swap corners', goal: 'Move the top corners to their spots.' },
+  { id: 'white-layer', name: 'White layer', goal: 'Four white corners on the bottom, their side colors matching.' },
+  { id: 'yellow-top', name: 'Yellow top', goal: 'Turn the top corners until the whole top is yellow.' },
+  { id: 'swap-corners', name: 'Swap corners', goal: 'Move the top corners to their spots.' },
 ];
 
-export function beginner2Guide(M: CubeModel): Guide {
+export function beginner2Method(M: CubeModel): Method {
   if (M.n !== 2) throw new Error('This lesson is for the 2×2');
   const K = lessonKit(M);
   const { at, colorsAt, stickersOf, find, focusOn, apply, name, piece, plain, code, first, rotatePhrase, topPhrase } = K;
@@ -224,10 +224,11 @@ export function beginner2Guide(M: CubeModel): Guide {
     id: 'beginner',
     name: 'Beginner method',
     short: 'Beginner',
+    level: 'Beginner',
     notation: '<code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.',
     intro: 'Solve the 2×2 layer by layer: the white layer with one short move you repeat, then the top with two algorithms.',
     stages: STAGES,
-    steps: (state) => {
+    solve: (state) => {
       const steps: GuideStep[] = [];
       notes = lessonNotes();
       let s = whiteLayer(state, steps);
