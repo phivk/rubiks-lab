@@ -114,3 +114,29 @@ export const PLL: PllAlg[] = [
   { name: 'Na', kind: DIAGONAL, alg: "F' R U R' U' R' F R2 F U' R' U' R U F' R'" },
   { name: 'Nb', kind: DIAGONAL, alg: "r' D' F r U' r' F' D r2 U r' U' r' F r F'" },
 ];
+
+/** A case of two-look OLL or PLL, by the id and name the tutorial shows it under. */
+export interface TwoLookAlg {
+  id: string;
+  name: string;
+  alg: string;
+}
+
+const pll = (name: string): TwoLookAlg => ({ id: `pll-${name}`, name: `${name} perm`, alg: PLL.find((p) => p.name === name)!.alg });
+
+/** two-look OLL, look 1: the three edge cases that make a yellow cross */
+export const OLL_EDGES: TwoLookAlg[] = [
+  { id: 'oll-line', name: 'Line', alg: "F R U R' U' F'" },
+  { id: 'oll-l', name: 'L', alg: "f R U R' U' f'" },
+  { id: 'oll-dot', name: 'Dot', alg: "F R U R' U' F' f R U R' U' f'" },
+];
+
+/** two-look OLL, look 2: the seven corner cases (OCLL), by their everyday names */
+export const OLL_CORNERS: TwoLookAlg[] = ([[27, 'Sune'], [26, 'Anti-Sune'], [21, 'H'], [22, 'Pi'], [23, 'Headlights'], [24, 'T'], [25, 'Bowtie']] as const)
+  .map(([n, name]) => ({ id: `oll-${n}`, name, alg: OLL.find((o) => o.n === n)!.alg }));
+
+/** two-look PLL, look 1: the corners, swapping two neighbours or two opposites */
+export const PLL_CORNERS: TwoLookAlg[] = ['T', 'Y'].map(pll);
+
+/** two-look PLL, look 2: the edges */
+export const PLL_EDGES: TwoLookAlg[] = ['Ua', 'Ub', 'H', 'Z'].map(pll);

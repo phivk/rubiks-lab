@@ -5,23 +5,28 @@
 //   2. F2L     corner and edge paired up in the top and inserted together, slot by slot;
 //              each pair is the cheapest run of R U R'-style triggers that keeps the cross
 //              and the finished slots (a search over the pair's two pieces)
-//   3. OLL     one of 57 algorithms makes the top yellow
-//   4. PLL     one of 21 algorithms moves the top pieces home
+//   3. OLL     in two looks, as the CFOP tutorial teaches it: one of 3 algorithms makes a
+//              yellow cross, then one of 7 turns the corners yellow
+//   4. PLL     in two looks: one of 2 algorithms puts the corners in place, then one of 4
+//              moves the edges home
+//
+// The last-layer steps name the tutorial case they are (GuideStep.caseId), so a lesson can
+// send you to practise it.
 //
 // Like the beginner lesson it works on the actual state, so the text, phrases and highlights
 // always match the cube.
 
 import type { Guide, GuideStep, Phrase, State } from '../core/types';
-import { OLL } from './algs';
-import { ollStep, pllStep } from './lastLayer';
-import { countMoves, FACE_MOVES, lessonKit, list, macroMoves, onceOnly, plural, ROTATIONS, sameSet, U_TURNS, WIDE_NOTATION, type Once } from './lessonKit';
+import { OLL_CORNERS, OLL_EDGES, PLL_CORNERS, PLL_EDGES, type TwoLookAlg } from './algs';
+import { bestAlg, edgeShape, focusTop, headlights, oriented, pllStep, yellowCorners } from './lastLayer';
+import { alg, countMoves, FACE_MOVES, lessonKit, list, macroMoves, onceOnly, plural, ROTATIONS, sameSet, SIDE_NAME, TOP_EDGES, U_TURNS, WIDE_NOTATION, type Once } from './lessonKit';
 import type { CubeModel } from './model';
 
 export const CFOP_STAGES = [
   { name: 'Cross', goal: 'The four white edges on the bottom, matching the side centers — planned in one go.' },
   { name: 'F2L', goal: 'First Two Layers: pair each white corner with its edge and insert them together.' },
-  { name: 'OLL', goal: 'Orient the Last Layer: one algorithm turns the whole top yellow.' },
-  { name: 'PLL', goal: 'Permute the Last Layer: one algorithm moves the top pieces to their spots.' },
+  { name: 'OLL', goal: 'Orient the Last Layer: make the whole top yellow, in two looks.' },
+  { name: 'PLL', goal: 'Permute the Last Layer: move the top pieces to their spots, in two looks.' },
 ];
 
 const SIDES = [...'FRBL'];
@@ -146,11 +151,74 @@ export function cfopGuide(M: CubeModel): Guide {
     return s;
   }
 
+  // ---------- 3 and 4. OLL and PLL, in two looks ----------
+
+  /** One look: the shortest algorithm from `set` that makes `ok` hold, as a step named after its case. */
+  function look(s: State, steps: GuideStep[], stage: number, set: TwoLookAlg[], ok: (t: State) => boolean, text: (a: TwoLookAlg, moves: string[], u: string, v: string) => string, after = false) {
+    const best = bestAlg(K, s, set, ok, after);
+    if (!best) throw new Error('cfop: no two-look case fits');
+    const { u, v, t } = best;
+    const a = best.a!;
+    const moves = alg(a.alg);
+    steps.push({
+      stage,
+      title: a.name,
+      html: text(a, moves, u, v),
+      phrases: [...K.topPhrase(u), { label: a.name, moves }, ...K.topPhrase(v, 'Line up the top')],
+      focus: focusTop(K),
+      caseId: a.id,
+    });
+    return t;
+  }
+
+  const OLL_ABOUT = '<p><b>OLL</b> stands for <b>O</b>rient the <b>L</b>ast <b>L</b>ayer: turn every top piece so yellow faces up. It’s done in two looks: first the edges make a yellow cross, then the corners. That’s 10 algorithms instead of the 57 it takes in one go.</p>';
+  const PLL_ABOUT = '<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, move its pieces to their spots. Again in two looks, corners then edges: 6 algorithms instead of 21. Each case is a letter-named “perm”.</p>';
+  const SHAPE = { dot: 'no edge shows yellow on top: just the center, a dot', line: 'two opposite edges show yellow: a line', L: 'two neighbouring edges show yellow: an L', cross: '' };
+  const turnThen = (u: string) => (u ? 'Turn the top until it matches the case’s picture, then do' : 'It’s already at the right angle. Do');
+  const edgesUp = (t: State) => TOP_EDGES.every((e) => t[at(e, 'U')] === center(t, 'U'));
+  const cornersDone = (t: State) => headlights(K, t).length === 4;
+
+  function ollStage(s: State, steps: GuideStep[], once: Once) {
+    if (!edgesUp(s)) {
+      s = look(s, steps, 2, OLL_EDGES, edgesUp, (a, moves, u) => once('oll', OLL_ABOUT) +
+        `<p><b>Look 1, the yellow cross.</b> Ignore the corners: ${SHAPE[edgeShape(K, s)]}. That’s the <b>${a.name}</b> case.</p>` +
+        `<p>${turnThen(u)} ${code(moves)}. Afterwards the top shows a yellow cross.</p>`);
+    }
+    if (!oriented(K, s)) {
+      const n = yellowCorners(K, s);
+      s = look(s, steps, 2, OLL_CORNERS, (t) => oriented(K, t), (a, moves, u) => once('oll', OLL_ABOUT) +
+        `<p><b>Look 2, the yellow corners.</b> With the cross done, ${n === 0 ? 'no corner shows yellow on top' : n === 1 ? 'one corner shows yellow on top' : 'two corners show yellow on top'}. That’s <b>${a.name}</b>.</p>` +
+        `<p>${turnThen(u)} ${code(moves)}. Afterwards the whole top is yellow.</p>`);
+    }
+    return s;
+  }
+
+  function pllStage(s: State, steps: GuideStep[], once: Once) {
+    if (!cornersDone(s)) {
+      const lights = headlights(K, s);
+      s = look(s, steps, 3, PLL_CORNERS, cornersDone, (a, moves, u) => once('pll', PLL_ABOUT) +
+        `<p><b>Look 1, the corners.</b> Ignore the edges and look for <b>headlights</b>, two matching corner stickers on a side. ` +
+        (lights.length ? `The ${list(lights.map((f) => SIDE_NAME[f]))} side has them, so two neighbouring corners swap: the <b>${a.name}</b>, with the headlights on the left.` : `No side has them, so two opposite corners swap: the <b>${a.name}</b>.`) + '</p>' +
+        `<p>${turnThen(u)} ${code(moves)}. Afterwards every side shows headlights.</p>`);
+    }
+    // only the top's angle left: pllStep lines it up
+    if (U_TURNS.some((u) => M.isSolved(K.apply(s, [u])))) {
+      const done = pllStep(K, s, 3, (t) => M.isSolved(t));
+      if (done.step) steps.push(done.step);
+      return done.s;
+    }
+    return look(s, steps, 3, PLL_EDGES, (t) => M.isSolved(t), (a, moves, u, v) => once('pll', PLL_ABOUT) +
+      `<p><b>Look 2, the edges.</b> Every side shows headlights now. ` +
+      (a.id === 'pll-H' || a.id === 'pll-Z' ? 'No side is all one color, so no edge is home yet' : 'One side is all one color: its edge is already home. Hold it at the back') +
+      `: that’s the <b>${a.name}</b>.</p>` +
+      `<p>${turnThen(u)} ${code(moves)}${v ? ', then turn the top to line it up with the rest' : ''}.</p>`, true);
+  }
+
   return {
     id: 'cfop',
     name: 'CFOP',
     short: 'CFOP',
-    intro: 'The speedcuber’s method, named after its stages: Cross, F2L (First Two Layers, solved in corner–edge pairs), OLL (Orient the Last Layer, 57 algorithms) and PLL (Permute the Last Layer, 21 algorithms).',
+    intro: 'The speedcuber’s method, named after its stages: Cross, F2L (First Two Layers, solved in corner–edge pairs), OLL (Orient the Last Layer) and PLL (Permute the Last Layer). It teaches OLL and PLL in two looks, as the Tutorial tab does: 16 algorithms instead of 78.',
     notation: WIDE_NOTATION,
     stages: CFOP_STAGES,
     steps: (state) => {
@@ -158,12 +226,9 @@ export function cfopGuide(M: CubeModel): Guide {
       const once = onceOnly();
       let s = crossStage(state, steps, once);
       s = f2lStage(s, steps, once);
-      const oll = ollStep(K, s, 2, OLL, 'OLL',
-        '<p><b>OLL</b> stands for <b>O</b>rient the <b>L</b>ast <b>L</b>ayer: turn every top piece so yellow faces up, without caring yet where the pieces are. There are 57 cases, each with its own algorithm.</p>');
-      if (oll.step) steps.push(oll.step);
-      const pll = pllStep(K, oll.s, 3, (t) => M.isSolved(t));
-      if (pll.step) steps.push(pll.step);
-      if (!M.isSolved(pll.s)) throw new Error('cfop: not solved');
+      s = ollStage(s, steps, once);
+      s = pllStage(s, steps, once);
+      if (!M.isSolved(s)) throw new Error('cfop: not solved');
       return steps;
     },
   };

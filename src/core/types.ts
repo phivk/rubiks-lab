@@ -113,6 +113,8 @@ export interface GuideStep {
   phrases: Phrase[];
   /** the stickers to keep lit while this step is on screen, for any state */
   focus: (s: State) => number[];
+  /** the tutorial case this step is, if it is one (a TutorialCase id) */
+  caseId?: string;
 }
 
 /** A method that solves a puzzle the way a person would, in explained steps. */
@@ -131,6 +133,8 @@ export interface Guide {
 
 /** One case of a tutorial step: a picture of it and the algorithm that solves it. */
 export interface TutorialCase {
+  /** for a case a lesson step can be (GuideStep.caseId) */
+  id?: string;
   name: string;
   moves: string[];
   /** the state the algorithm solves, held the way it starts; stickers that don't matter yet are unset */

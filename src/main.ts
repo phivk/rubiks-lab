@@ -16,13 +16,28 @@ const PUZZLES: Puzzle[] = [cube2, cube3, cube4, cube5, pyraminx];
 
 // ---------- state ----------
 
+/** A cube as it was before a change to the whole of it (a reset, scramble, scan or painted sticker), to undo back to. */
+interface Checkpoint {
+  state: State;
+  moveHistory: string[];
+  base: number;
+}
+
 /** Each puzzle keeps its own state and history, so switching back and forth loses nothing. */
 interface Session {
   state: State;
   moveHistory: string[];
   redoStack: string[];
+  /** how many moves at the start of the history are a scramble: undo takes it back all at once, not move by move */
+  base: number;
+  /** the whole-cube changes undo can take back, newest last */
+  checkpoints: Checkpoint[];
 }
-const sessions = new Map<string, Session>(PUZZLES.map((p) => [p.id, { state: p.solved(), moveHistory: [], redoStack: [] }]));
+const newSession = (p: Puzzle): Session => ({ state: p.solved(), moveHistory: [], redoStack: [], base: 0, checkpoints: [] });
+/** your cube, one per puzzle */
+const sessions = new Map<string, Session>(PUZZLES.map((p) => [p.id, newSession(p)]));
+/** the Tutorial's own cube, for puzzles with a tutorial: setting a case up never touches yours */
+const practice = new Map<string, Session>(PUZZLES.filter((p) => p.tutorial).map((p) => [p.id, newSession(p)]));
 
 let puzzle: Puzzle = cube3;
 let session = sessions.get(cube3.id)!;
@@ -38,8 +53,8 @@ interface Solution {
   elapsed: number;
   stale: boolean;
   /**
-   * A tutorial case the cube was turned away from: the turns since, the case's state they left
-   * and where they've taken it. Once that's back where it left, the case carries on.
+   * A lesson or tutorial case the cube was turned away from: the turns since, the state they
+   * left and where they've taken it. Once that's back where it left, it carries on.
    */
   drift?: { moves: string[]; from: State; now: State };
   /** a lesson: the method, its moves explained step by step, and the move each step starts at */
@@ -61,6 +76,14 @@ let tab: Tab = 'solve';
 let methodId = '';
 try { methodId = localStorage.getItem('method') ?? ''; } catch { /* storage unavailable */ }
 const currentGuide = () => puzzle.guides?.find((g) => g.id === methodId) ?? puzzle.guides?.[0];
+/** the cube a tab works on: the Tutorial's own, or yours */
+const sessionFor = (p: Puzzle, t: Tab) => (t === 'tutorial' && practice.get(p.id)) || sessions.get(p.id)!;
+/** where a solution belongs: the puzzle, the tab and, on Learn, the method */
+const placeKey = () => `${puzzle.id}:${tab}${tab === 'learn' ? ':' + currentGuide()?.id : ''}`;
+/** the solution each place was left with, to pick up on coming back to it */
+const parked = new Map<string, Solution>();
+/** the tutorial case was opened from a lesson step, so the Tutorial offers the way back */
+let fromLesson = false;
 /** the tutorial step on screen */
 let tutStep = 0;
 try { tutStep = Number(localStorage.getItem('tutorialStep')) || 0; } catch { /* storage unavailable */ }
@@ -110,6 +133,10 @@ const applyMove = (s: State, move: string) => puzzle.parseMove(move)!.perm.map((
 type Job = { move: string; duration: number; kind: 'user' | 'playback' };
 const queue: Job[] = [];
 let running = false;
+/** the state the turn being animated lands on */
+let landing: State | null = null;
+/** counts the times the cube was put in a new state outright, so a turn in flight from before doesn't land on it */
+let epoch = 0;
 
 function enqueue(job: Job) {
   queue.push(job);
@@ -124,8 +151,17 @@ async function runQueue() {
     // speed up when the queue backs up so input never feels laggy
     const hurry = queue.length > 2 ? 0.45 : queue.length > 0 ? 0.75 : 1;
     const turn = puzzle.parseMove(job.move)!;
+    landing = next;
+    const was = epoch;
     maps.forEach((m) => m.animateTurn(turn, next, job.duration * hurry));
     await view.animateTurn(turn, next, job.duration * hurry);
+    landing = null;
+    if (epoch !== was) {
+      // the cube was set outright meanwhile: show that, not this turn
+      view.setState(session.state);
+      onStateChanged();
+      continue;
+    }
     const wasSolved = puzzle.isSolved(session.state);
     session.state = next;
     onStateChanged();
@@ -136,10 +172,24 @@ async function runQueue() {
   if (pendingSolve) { pendingSolve = false; void startSolve(); }
 }
 
+/** the state once the queued turns have landed */
+const settled = () => queue.reduce((t, j) => applyMove(t, j.move), landing ?? session.state);
+const same = (a: State, b: State) => a.length === b.length && a.every((x, i) => x === b[i]);
+
 const idle = () => new Promise<void>((resolve) => {
   const check = () => (!running && queue.length === 0 ? resolve() : setTimeout(check, 30));
   check();
 });
+
+/** Land the queued turns at once rather than animate them all: the turn in progress finishes, the rest jump. */
+async function finishTurns() {
+  const rest = queue.splice(0);
+  await idle();
+  if (!rest.length) return;
+  session.state = rest.reduce((t, j) => applyMove(t, j.move), session.state);
+  view.setState(session.state);
+  onStateChanged();
+}
 
 /** Making the solution's next move yourself steps along it; any other move leaves it behind. */
 function follow(move: string, back = false) {
@@ -156,18 +206,20 @@ function follow(move: string, back = false) {
     playing = false;
     renderSolution();
   } else {
-    if (s?.tutorial && !s.searching) {
-      // a tutorial case picks up where it was once the stray turns cancel out (undone, or turned back by hand)
-      if (!s.stale || !s.drift) {
+    // a lesson or tutorial case picks up where it was once the stray turns cancel out (undone, or turned back by hand);
+    // one that went stale some other way (the cube changed while it was put aside) can't
+    if ((s?.tutorial || s?.lesson) && !s.searching && (!s.stale || s.drift)) {
+      if (!s.stale) {
         const from = s.moves.slice(0, s.index).reduce(applyMove, s.start);
         s.drift = { moves: [], from, now: from };
       }
+      const d = s.drift!;
       const turn = back ? puzzle.invertMove(move) : move;
       // a turn and its undo cancel, so the button only offers what's left to turn back
-      if (s.drift.moves.at(-1) === puzzle.invertMove(turn)) s.drift.moves.pop();
-      else s.drift.moves.push(turn);
-      s.drift.now = applyMove(s.drift.now, turn);
-      if (s.drift.now.every((x, i) => x === s.drift!.from[i])) {
+      if (d.moves.at(-1) === puzzle.invertMove(turn)) d.moves.pop();
+      else d.moves.push(turn);
+      d.now = applyMove(d.now, turn);
+      if (same(d.now, d.from)) {
         s.stale = false;
         s.drift = undefined;
         playing = false;
@@ -183,7 +235,7 @@ function follow(move: string, back = false) {
 /** whether the open case just picked up again, to draw once the turn that did it lands */
 let resumeOnTurn = false;
 
-/** Turn the cube back through the turns that left the open tutorial case, so it carries on. */
+/** Turn the cube back through the turns that left the lesson or open tutorial case, so it carries on. */
 function undoStray() {
   const d = solution?.stale && solution.drift;
   if (d) doMoves(d.moves.slice().reverse().map((m) => puzzle.invertMove(m)));
@@ -268,6 +320,10 @@ function doMoves(moves: string[], duration = BASE_MS / speed) {
 }
 
 function undo() {
+  if (session.moveHistory.length <= session.base) {
+    void restoreCheckpoint();
+    return;
+  }
   const m = session.moveHistory.pop();
   if (!m) return;
   follow(m, true);
@@ -284,21 +340,66 @@ function redo() {
   renderHistory();
 }
 
-function setStateDirect(s: State) {
+/** Remember the cube as it is, before a change to the whole of it, so undo can take that back. */
+function checkpoint() {
+  const c = session.checkpoints;
+  // the cube as it will be once the turns under way have landed: they're in the history already
+  c.push({ state: settled(), moveHistory: session.moveHistory.slice(), base: session.base });
+  if (c.length > 200) c.shift();
+}
+
+/** Undo the last whole-cube change: put the cube back as it was before it. */
+async function restoreCheckpoint() {
+  const s = session;
+  if (!s.checkpoints.length) return;
   queue.length = 0;
+  await idle();
+  const c = s.checkpoints.pop();
+  if (!c || s !== session) return;
+  s.state = c.state.slice();
+  s.moveHistory = c.moveHistory.slice();
+  s.base = c.base;
+  s.redoStack.length = 0;
+  view.setState(s.state);
+  invalidateSolution();
+  renderHistory();
+  onStateChanged();
+}
+
+/** A toast's Undo button: takes back the whole-cube change just made, as long as nothing has happened since. */
+function undoAction() {
+  const s = session;
+  const n = s.checkpoints.length;
+  return { label: 'Undo', run: () => { if (s === session && s.checkpoints.length === n && s.moveHistory.length <= s.base) void restoreCheckpoint(); } };
+}
+
+/**
+ * Put the cube in a new state; undo can take it back unless it's a tutorial case being set up.
+ * Returns a toast's Undo button for it, if there's anything to undo.
+ */
+function setStateDirect(s: State, undoable = true) {
+  // a change that changes nothing needs no undoing
+  const changed = !same(s, settled()) || session.moveHistory.length > 0;
+  if (undoable && changed) checkpoint();
+  queue.length = 0;
+  epoch++;
   session.state = s.slice();
   view.setState(session.state);
   session.moveHistory.length = 0;
+  session.base = 0;
   session.redoStack.length = 0;
   invalidateSolution(true);
   renderHistory();
   onStateChanged();
+  return undoable && changed ? undoAction() : undefined;
 }
 
 function scramble() {
   if (mode === 'paint') setMode('play');
   const moves = puzzle.scramble();
+  checkpoint();
   session.moveHistory.length = 0;
+  session.base = moves.length;
   session.redoStack.length = 0;
   invalidateSolution(true);
   for (const m of moves) {
@@ -306,7 +407,7 @@ function scramble() {
     enqueue({ move: m, duration: 110, kind: 'user' });
   }
   renderHistory();
-  toast(`Scrambled: ${moves.join(' ')}`);
+  toast(`Scrambled: ${moves.join(' ')}`, '', undoAction());
   fadeHint();
 }
 
@@ -316,10 +417,13 @@ async function switchPuzzle(p: Puzzle) {
   if (p === puzzle) return;
   queue.length = 0;
   await idle();
-  invalidateSolution(true);
+  park();
   puzzle.cancelSolve();
   puzzle = p;
-  session = sessions.get(p.id)!;
+  // a tab this puzzle doesn't have falls back to Solve
+  if (tab === 'tutorial' && !p.tutorial) tab = 'solve';
+  session = sessionFor(p, tab);
+  ($('#puzzle-select') as HTMLSelectElement).value = p.id;
   // on a phone the tabs scroll sideways
   selectTab('.puzzle-switch button', 'puzzle', p.id)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   document.body.dataset.puzzle = p.id;
@@ -336,6 +440,7 @@ async function switchPuzzle(p: Puzzle) {
   renderCubeKind();
   paintColor = p.paletteOrder[0];
   setMode(mode);
+  unpark();
   renderHistory();
   renderSolution();
   onStateChanged();
@@ -351,9 +456,11 @@ function paintSticker(i: number) {
     return;
   }
   if (session.state[i] === paintColor) return;
+  checkpoint();
   session.state = session.state.slice();
   session.state[i] = paintColor;
   session.moveHistory.length = 0;
+  session.base = 0;
   session.redoStack.length = 0;
   invalidateSolution(true);
   view.setState(session.state);
@@ -402,6 +509,8 @@ async function startSolve() {
     pendingSolve = true;
     return;
   }
+  // the Tutorial's cube only ever holds a case
+  if (tab === 'tutorial') return;
   if (tab === 'learn' && currentGuide()) return startLesson();
   if (!checkValid()) return;
   if (puzzle.isSolved(session.state)) {
@@ -422,14 +531,14 @@ function checkValid() {
 }
 
 /** Point out what's wrong with the puzzle and open paint mode to fix it. */
-function showInvalid(v: Validation & { ok: false }, prefix = '') {
+function showInvalid(v: Validation & { ok: false }, prefix = '', action?: ToastAction) {
   const bad = v.stickers;
   if (bad) {
     view.setHighlight(bad);
     view.flashHighlight();
     maps.forEach((m) => m.flash(bad));
   }
-  toast(prefix + (v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message), 'bad');
+  toast(prefix + (v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message), 'bad', action);
   if (mode !== 'paint') setMode('paint');
 }
 
@@ -471,15 +580,15 @@ function selectTab(selector: string, key: string, value: string) {
 
 function loadScan(state: State, kind: CubeKind) {
   setCubeKind(kind);
-  setStateDirect(state);
+  const undo = setStateDirect(state);
   const v = puzzle.validate(session.state);
   if (!v.ok) {
-    showInvalid(v, 'Scanned, but some colors need fixing: ');
+    showInvalid(v, 'Scanned, but some colors need fixing: ', undo);
     return;
   }
   setMode('play');
-  if (puzzle.isSolved(session.state)) toast('Scanned — your cube is already solved', 'good');
-  else toast('Scanned — hit Solve to find the way home', 'good');
+  if (puzzle.isSolved(session.state)) toast('Scanned — your cube is already solved', 'good', undo);
+  else toast(`Scanned — hit ${tab === 'learn' ? 'Start lesson' : 'Solve'} to ${tab === 'learn' ? 'learn how to solve it' : 'find the way home'}`, 'good', undo);
 }
 
 /** Walk through solving the puzzle as it is now (scrambling it first if it's solved). */
@@ -511,23 +620,63 @@ async function startLesson() {
   renderSolution(true);
 }
 
-function setTab(t: Tab) {
+async function setTab(t: Tab) {
   if (t === tab) return;
-  // a tutorial case blanks the stickers that don't matter yet; don't leave them behind
-  const blanked = tab === 'tutorial' && session.state.includes(puzzle.unset);
+  if (sessionFor(puzzle, t) !== session) {
+    // the queued turns belong to the cube on screen: land them before swapping cubes
+    playing = false;
+    await finishTurns();
+    if (t === tab) return;
+  }
+  park();
   tab = t;
+  if (t !== 'tutorial') fromLesson = false;
   try { localStorage.setItem('tab', t); } catch { /* storage unavailable */ }
-  if (blanked) setStateDirect(puzzle.solved());
-  invalidateSolution(true);
+  const was = session;
+  session = sessionFor(puzzle, t);
+  if (session !== was) {
+    view.setState(session.state);
+    renderHistory();
+    onStateChanged();
+  }
+  unpark();
   renderSolution();
 }
 
 function setMethod(id: string) {
   if (id === currentGuide()?.id) return;
+  park();
   methodId = id;
   try { localStorage.setItem('method', id); } catch { /* storage unavailable */ }
-  invalidateSolution(true);
+  unpark();
   renderSolution();
+}
+
+/** Put the solution on screen aside, to pick up on coming back to this puzzle, tab and method. */
+function park() {
+  if (!solution) return;
+  // a search in progress stops; what it found so far is no use without it
+  if (solution.searching) {
+    invalidateSolution(true);
+    return;
+  }
+  playing = false;
+  parked.set(placeKey(), solution);
+  solution = null;
+}
+
+/** Pick up the solution this place was left with: live if the cube is still where it was, out of date if not. */
+function unpark() {
+  const s = parked.get(placeKey());
+  if (!s) return;
+  parked.delete(placeKey());
+  const left = s.drift ? s.drift.now : s.moves.slice(0, s.index).reduce(applyMove, s.start);
+  if (!same(left, settled())) {
+    s.stale = true;
+    s.drift = undefined;
+  }
+  solution = s;
+  lessonStep = -1;
 }
 function runSolver(budgetMs: number) {
   const start = session.state.slice();
@@ -703,7 +852,7 @@ function flashMoveButton(move: string) {
 }
 
 function renderUndo() {
-  ($('#btn-undo') as HTMLButtonElement).disabled = session.moveHistory.length === 0;
+  ($('#btn-undo') as HTMLButtonElement).disabled = session.moveHistory.length <= session.base && session.checkpoints.length === 0;
   ($('#btn-redo') as HTMLButtonElement).disabled = session.redoStack.length === 0;
 }
 
@@ -764,9 +913,10 @@ function renderStatus() {
 
 function renderSolution(fresh = false) {
   const el = $('#solution');
-  if (tab === 'tutorial' && !puzzle.tutorial) tab = 'solve';
   const learn = tab === 'learn' && !!currentGuide();
   const tut = tab === 'tutorial';
+  // the method picker comes first, when there's a choice
+  $('#methods').classList.toggle('hidden', !learn || puzzle.guides!.length < 2);
   el.classList.toggle('learn', learn);
   el.classList.toggle('tutorial', tut);
   document.body.classList.toggle('tutorial', tut);
@@ -972,6 +1122,9 @@ document.addEventListener('visibilitychange', () => {
 
 /** the puzzle's move notation, and any extra moves a guide or tutorial uses */
 const notationText = (extra?: string) => `${puzzle.notationHtml}${extra ? ' ' + extra : ''}`;
+/** the notation, folded away until it's wanted */
+const notationHelp = (extra?: string) =>
+  `<details class="notation"><summary>How to read the moves</summary><p class="muted small">${notationText(extra)}</p></details>`;
 
 function renderTabs() {
   $('#sol-tabs').classList.toggle('hidden', !puzzle.guides?.length && !puzzle.tutorial);
@@ -996,15 +1149,16 @@ let lessonStep = -1;
 function renderLearn() {
   const guide = currentGuide()!;
   const solved = puzzle.isSolved(session.state);
+  const choice = puzzle.guides!.length > 1;
   $('#methods').innerHTML = puzzle.guides!.map((g) =>
     `<button role="tab" data-method="${g.id}" class="${g === guide ? 'active' : ''}" aria-selected="${g === guide}">${g.short}</button>`).join('');
-  $('.solve-label').textContent = solution ? 'Restart lesson' : 'Start lesson';
+  $('.solve-label').textContent = solution ? 'Restart lesson' : choice ? `Start ${guide.short} lesson` : 'Start lesson';
   $('#solve-sub').textContent = solved ? 'Scrambles it first, then teaches'
     : solution ? 'From the cube as it is now' : 'Walks you through solving this cube';
   $('#lesson-intro').innerHTML = `
     <p><b>${guide.name}.</b> ${guide.intro}</p>
-    <p class="muted small">Moves use standard notation: ${notationText(guide.notation)}</p>
-    <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along.</p>`;
+    <p class="muted small">Make the moves yourself, here or on a real cube, and the lesson follows along.</p>
+    ${notationHelp(guide.notation)}`;
   if (solution?.lesson) {
     renderLesson();
     renderPlayback();
@@ -1017,7 +1171,9 @@ function renderLesson() {
   const k = currentStep(s);
   lessonStep = k;
   const stale = s.stale
-    ? `<div class="lesson-stale">You turned the cube, so this lesson no longer fits it. <button class="link" data-act="resume">Continue from here</button></div>`
+    ? `<div class="lesson-stale">You turned the cube, so this lesson no longer fits it. ` +
+      (s.drift ? `<button class="link" data-act="undo">${undoLabel()}</button> to carry on, or <button class="link" data-act="resume">start again from here</button>` : '<button class="link" data-act="resume">Continue from here</button>') +
+      '</div>'
     : '';
   if (k >= steps.length) {
     $('#lesson').innerHTML = stale + `
@@ -1038,6 +1194,7 @@ function renderLesson() {
     <div class="lesson-title">${step.title}</div>
     <div class="lesson-text">${step.html}</div>
     <div class="phrases">${phrases}</div>
+    ${caseLink(step.caseId)}
     <div class="lesson-nav">
       <button class="btn small ghost" data-act="prev"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button>
       <button class="btn small ghost" data-act="next">Next step<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
@@ -1072,6 +1229,41 @@ function onLessonClick(e: Event) {
   else if (b.dataset.act === 'prev') jumpTo(starts[s.index > (starts[k] ?? s.moves.length) ? k : k - 1] ?? 0);
   else if (b.dataset.act === 'next') jumpTo(starts[k + 1] ?? s.moves.length);
   else if (b.dataset.act === 'resume' || b.dataset.act === 'again') void startSolve();
+  else if (b.dataset.act === 'undo') undoStray();
+  else if (b.dataset.act === 'case') void practiseCase(b.dataset.case!);
+}
+
+/** A lesson step's tutorial case: its picture, and a way to practise it. */
+function caseLink(id?: string) {
+  const ref = id ? findCase(id) : null;
+  if (!ref) return '';
+  const step = puzzle.tutorial!.steps[ref.step];
+  const group = step.groups[ref.group];
+  const c = group.cases[ref.index];
+  return `<button class="case-link" data-act="case" data-case="${id}">${diagram(step, c)}<span class="case-link-text"><b>${c.name}</b><small>${step.name} · ${group.name}</small><span class="case-link-go">Practise this case in the Tutorial ›</span></span></button>`;
+}
+
+/** the tutorial case with this id */
+function findCase(id: string): CaseRef | null {
+  const steps = puzzle.tutorial?.steps ?? [];
+  for (let step = 0; step < steps.length; step++) {
+    for (let group = 0; group < steps[step].groups.length; group++) {
+      const index = steps[step].groups[group].cases.findIndex((c) => c.id === id);
+      if (index >= 0) return { step, group, index };
+    }
+  }
+  return null;
+}
+
+/** Open a lesson step's case in the Tutorial, on the Tutorial's own cube; the lesson waits where it is. */
+async function practiseCase(id: string) {
+  const ref = findCase(id);
+  if (!ref) return;
+  await setTab('tutorial');
+  if (tab !== 'tutorial') return;
+  fromLesson = true;
+  setTutorialStep(ref.step);
+  await openCase(ref);
 }
 
 function onStageClick(e: Event) {
@@ -1150,7 +1342,7 @@ async function openCase(ref: CaseRef, resume = false) {
   await idle();
   if (tab !== 'tutorial' || puzzle.tutorial !== T) return;
   const k = resume ? caseProgress.get(caseKey(ref)) ?? 0 : 0;
-  setStateDirect(c.moves.slice(0, k).reduce(applyMove, c.setup));
+  setStateDirect(c.moves.slice(0, k).reduce(applyMove, c.setup), false);
   playing = false;
   solution = { start: c.setup.slice(), moves: c.moves.slice(), index: k, optimal: false, searching: false, elapsed: 0, stale: false, tutorial: ref };
   tutStep = ref.step;
@@ -1192,6 +1384,7 @@ function renderTutorial(fresh: boolean) {
       (next ? `<button class="btn small primary-soft" data-step="${tutStep + 1}">Next: ${next.name}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : '');
     $('#tutorial').scrollTop = 0;
   }
+  $('#btn-back-lesson').classList.toggle('hidden', !fromLesson);
   renderCaseCard();
   if (!solution) return;
   $('#sol-count').textContent = String(solution.moves.length);
@@ -1204,10 +1397,9 @@ function renderTutorial(fresh: boolean) {
 function renderCaseCard() {
   const T = puzzle.tutorial!;
   const el = $('#case-card');
-  const notation = `<p class="muted small">Moves use standard notation: ${notationText(T.notation)}</p>`;
   const ref = solution?.tutorial;
   if (!ref) {
-    el.innerHTML = `<div class="lesson-title">${T.name} tutorial</div><p class="lesson-text">${T.intro}</p>${notation}`;
+    el.innerHTML = `<div class="lesson-title">${T.name} tutorial</div><p class="lesson-text">${T.intro}</p>${notationHelp(T.notation)}`;
     return;
   }
   const step = T.steps[ref.step];
@@ -1283,17 +1475,33 @@ function followCurrentChip() {
 
 // ---------- chrome ----------
 
-function toast(message: string, kind: '' | 'good' | 'bad' = '') {
+type ToastAction = { label: string; run: () => void };
+
+/** A short message; with an action (Undo), a button for it, and a little longer to reach it. */
+function toast(message: string, kind: '' | 'good' | 'bad' = '', action?: ToastAction) {
   const el = document.createElement('div');
   el.className = `toast ${kind}`;
   el.textContent = message;
+  if (action) {
+    // only the newest change can be undone from a toast
+    $('#toasts').querySelectorAll('.has-action').forEach((t) => t.remove());
+    const b = document.createElement('button');
+    b.className = 'toast-action';
+    b.textContent = action.label;
+    b.addEventListener('click', () => {
+      action.run();
+      el.remove();
+    });
+    el.classList.add('has-action');
+    el.append(b);
+  }
   const box = $('#toasts');
   box.append(el);
   while (box.children.length > 3) box.firstElementChild!.remove();
   setTimeout(() => {
     el.classList.add('out');
     setTimeout(() => el.remove(), 300);
-  }, 2600);
+  }, action ? 5000 : 2600);
 }
 
 let hintFaded = false;
@@ -1312,9 +1520,13 @@ let urlTimer = 0;
 function saveToUrl() {
   clearTimeout(urlTimer);
   urlTimer = window.setTimeout(() => {
-    const solvedHome = puzzle.encode(session.state) === puzzle.encode(puzzle.solved());
-    const hash = solvedHome ? (puzzle === cube3 ? '' : `#${puzzle.id}`) : `#${puzzle.id}:${puzzle.encode(session.state)}`;
+    // your cube, never the Tutorial's
+    const code = puzzle.encode(sessions.get(puzzle.id)!.state);
+    const solvedHome = code === puzzle.encode(puzzle.solved());
+    const hash = solvedHome ? (puzzle === cube3 ? '' : `#${puzzle.id}`) : `#${puzzle.id}:${code}`;
     window.history.replaceState(null, '', location.pathname + location.search + hash);
+    // and kept for next time, for a link without the cube in it
+    try { localStorage.setItem(`cube:${puzzle.id}`, code); } catch { /* storage unavailable */ }
   }, 200);
 }
 
@@ -1342,7 +1554,11 @@ function bind() {
     b.append(p.name);
     b.addEventListener('click', () => void switchPuzzle(p));
     $('.puzzle-switch').append(b);
+    $('#puzzle-select').append(new Option(p.name, p.id));
   }
+  // on a phone the puzzles are a dropdown
+  const select = $('#puzzle-select') as HTMLSelectElement;
+  select.addEventListener('change', () => void switchPuzzle(PUZZLES.find((p) => p.id === select.value)!));
   $('#btn-scan').addEventListener('click', () => void startScan());
   document.querySelectorAll<HTMLButtonElement>('#mode-seg button').forEach((b) =>
     b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
@@ -1355,8 +1571,7 @@ function bind() {
   );
   $('#btn-scramble').addEventListener('click', scramble);
   $('#btn-reset').addEventListener('click', () => {
-    setStateDirect(puzzle.solved());
-    toast('Reset to solved');
+    toast('Reset to solved', '', setStateDirect(puzzle.solved()));
   });
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-redo').addEventListener('click', redo);
@@ -1385,11 +1600,14 @@ function bind() {
     $('#btn-more-moves').textContent = ex.classList.contains('hidden') ? puzzle.movePadExtraLabel ?? '' : 'Hide extras';
   });
   $('#btn-clear').addEventListener('click', () => {
-    setStateDirect(session.state.map((c, i) => (puzzle.lockedSticker?.(i) ? c : puzzle.unset)));
+    const undo = setStateDirect(session.state.map((c, i) => (puzzle.lockedSticker?.(i) ? c : puzzle.unset)));
     paintColor = puzzle.paletteOrder[0];
     renderPalette();
+    toast('Cleared every sticker', '', undo);
   });
-  $('#btn-solved').addEventListener('click', () => setStateDirect(puzzle.solved()));
+  $('#btn-solved').addEventListener('click', () => {
+    toast('Filled in solved', '', setStateDirect(puzzle.solved()));
+  });
 
   const algForm = $('#alg-form') as HTMLFormElement;
   const algInput = $('#alg-input') as HTMLInputElement;
@@ -1413,7 +1631,7 @@ function bind() {
     void startSolve();
   });
   document.querySelectorAll<HTMLButtonElement>('#sol-tabs button').forEach((b) =>
-    b.addEventListener('click', () => setTab(b.dataset.tab as Tab)),
+    b.addEventListener('click', () => void setTab(b.dataset.tab as Tab)),
   );
   $('#methods').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>('button');
@@ -1421,6 +1639,7 @@ function bind() {
   });
   $('#lesson').addEventListener('click', onLessonClick);
   $('#tutorial').addEventListener('click', onTutorialClick);
+  $('#btn-back-lesson').addEventListener('click', () => void setTab('learn'));
   $('#case-card').addEventListener('click', onCaseCardClick);
   $('#stages').addEventListener('click', onStageClick);
   $('#btn-play').addEventListener('click', togglePlay);
@@ -1482,6 +1701,14 @@ function bind() {
 
 // ---------- boot ----------
 
+// your cubes as you left them, unless the link brings one
+for (const p of PUZZLES) {
+  try {
+    const saved = localStorage.getItem(`cube:${p.id}`);
+    const s = saved ? p.decode(saved) : null;
+    if (s) sessions.get(p.id)!.state = s;
+  } catch { /* storage unavailable */ }
+}
 const fromUrl = loadFromUrl();
 let initial: Puzzle = cube3;
 if (fromUrl) initial = fromUrl.puzzle;
@@ -1503,6 +1730,6 @@ void switchPuzzle(initial).then(() => {
   // a returning learner shouldn't have to tap Tutorial again
   try {
     const t = localStorage.getItem('tab');
-    if ((t === 'learn' || t === 'tutorial') && document.querySelector(`#sol-tabs [data-tab="${t}"]`)) setTab(t);
+    if ((t === 'learn' || t === 'tutorial') && !document.querySelector(`#sol-tabs [data-tab="${t}"]`)?.classList.contains('hidden')) void setTab(t);
   } catch { /* storage unavailable */ }
 });

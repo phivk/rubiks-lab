@@ -5,6 +5,7 @@ import { beginnerGuide } from '../src/cube/beginner';
 import { beginner2Guide } from '../src/cube/beginner2';
 import { cfopGuide } from '../src/cube/cfop';
 import { stepMoves } from '../src/cube/lessonKit';
+import { cfopTutorial } from '../src/cube/tutorial';
 import { CubeModel } from '../src/cube/model';
 import { reductionGuide } from '../src/cube/reduction';
 import { rouxGuide } from '../src/cube/roux';
@@ -12,6 +13,9 @@ import { zzGuide } from '../src/cube/zz';
 import { pyraminxGuide } from '../src/pyraminx/lesson';
 import { applyAll as pyraApply, solved as pyraSolved } from '../src/pyraminx/model';
 import { scramble as pyraScramble } from '../src/pyraminx/solver';
+
+// a step that names a tutorial case must name one that exists
+const CASE_IDS = new Set(cfopTutorial(new CubeModel(3)).steps.flatMap((st) => st.groups.flatMap((g) => g.cases.map((x) => x.id))).filter(Boolean));
 
 const RUNS = Number(process.env.RUNS ?? 500);
 /** run only the lessons for this puzzle (3x3, 2x2, 4x4, 5x5, pyra) */
@@ -88,6 +92,8 @@ for (const c of cases) {
       if (steps.some((s) => !s.phrases.length || s.phrases.some((p) => p.moves.length === 0))) throw new Error('empty step or move group');
       const text = steps.map((s) => s.title + ' ' + s.html).join(' ') + ' ' + steps.map((s) => guide.stages[s.stage].name).join(' ');
       const html = steps.map((s) => s.html).join(' ').replace(/<[^>]*>/g, '');
+      const unknown = steps.find((s) => s.caseId && !CASE_IDS.has(s.caseId));
+      if (unknown) throw new Error(`step "${unknown.title}" names no tutorial case: ${unknown.caseId}`);
       for (const [word, meaning] of ACRONYMS) if (word.test(text) && !meaning.test(html)) throw new Error(`${word.source} is never spelled out`);
       lengths.push(moves.length);
       stepCounts.push(steps.length);

@@ -12,7 +12,7 @@
 // cases are all different, and each stage's setups leave the earlier stages alone.
 
 import type { State, Tutorial, TutorialCase, TutorialStep } from '../core/types';
-import { OLL, PLL } from './algs';
+import { OLL_CORNERS, OLL_EDGES, PLL_CORNERS, PLL_EDGES, type TwoLookAlg } from './algs';
 import { CFOP_STAGES } from './cfop';
 import { alg, CORNERS, EDGES, lessonKit, sameSet, TOP_CORNERS, TOP_EDGES, WIDE_NOTATION } from './lessonKit';
 import { invertAlg, UNSET, type CubeModel } from './model';
@@ -185,11 +185,14 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   const ollShown = (s: State) => ALL.filter((i) => inF2L(i) || s[i] === yellow);
   // look 1 is about the edges: their yellow stickers only, the corners blank
   const edgesShown = (s: State) => ALL.filter((i) => inF2L(i) || (TOP_EDGE_STICKERS.has(i) && s[i] === yellow));
-  const ocll = (n: number, name: string) => make(name, OLL.find((o) => o.n === n)!.alg, ollShown);
+  /** a two-look case, under the id a lesson step names it by */
+  const twoLook = (a: TwoLookAlg, shown?: (s: State) => number[], note?: string, after = ''): TutorialCase =>
+    ({ ...make(a.name, a.alg + after, shown, note), id: a.id });
+  const ollEdge = (id: string, note: string) => twoLook(OLL_EDGES.find((a) => a.id === id)!, edgesShown, note);
 
   const oll: TutorialStep = {
     name: 'OLL',
-    goal: 'Orient the Last Layer: make the whole top yellow, in two looks.',
+    goal: CFOP_STAGES[2].goal,
     html: `<p><b>OLL</b> stands for <b>O</b>rient the <b>L</b>ast <b>L</b>ayer: with the first two layers solved, turn every top piece so yellow faces up.</p>
       <p>Do it in two looks: first the edges, making a yellow cross, then the corners. That’s 10 algorithms instead of the 57 it takes in one go, for a few extra moves.</p>
       <p>Hold the cube with yellow on top and look at it from above. The pictures show which stickers are yellow, on top and on the sides of the top layer. Turn the top until your cube matches one, then do its algorithm.</p>`,
@@ -198,23 +201,15 @@ export function cfopTutorial(M: CubeModel): Tutorial {
         name: '1 · Yellow cross',
         about: 'Ignore the corners. The yellow edges on top make a line, an L or just the center dot.',
         cases: [
-          make('Line', "F R U R' U' F'", edgesShown, 'Hold the line left to right.'),
-          make('L', "f R U R' U' f'", edgesShown, 'Hold the L at the front right: yellow edges in front and on the right.'),
-          { ...make('Dot', "F R U R' U' F' f R U R' U' f'", edgesShown, 'The line algorithm, then the L one: the first leaves exactly the L above, the second makes the cross.'), breakAfter: 6 },
+          ollEdge('oll-line', 'Hold the line left to right.'),
+          ollEdge('oll-l', 'Hold the L at the front right: yellow edges in front and on the right.'),
+          { ...ollEdge('oll-dot', 'The line algorithm, then the L one: the first leaves exactly the L above, the second makes the cross.'), breakAfter: 6 },
         ],
       },
       {
         name: '2 · Yellow corners',
         about: 'With the cross done, count the yellow corners on top and look where the side ones face.',
-        cases: [
-          ocll(27, 'Sune'),
-          ocll(26, 'Anti-Sune'),
-          ocll(21, 'H'),
-          ocll(22, 'Pi'),
-          ocll(23, 'Headlights'),
-          ocll(24, 'T'),
-          ocll(25, 'Bowtie'),
-        ],
+        cases: OLL_CORNERS.map((a) => twoLook(a, ollShown)),
       },
     ],
     view: 'top',
@@ -226,11 +221,11 @@ export function cfopTutorial(M: CubeModel): Tutorial {
   // look 1 moves the corners: the top edges' side stickers are blank
   const cornersShown = (s: State) => ALL.filter((i) => !TOP_EDGE_STICKERS.has(i) || s[i] === yellow);
   const perm = (name: string, shown?: (s: State) => number[], note?: string, after = '') =>
-    make(`${name} perm`, PLL.find((p) => p.name === name)!.alg + after, shown, note);
+    twoLook([...PLL_CORNERS, ...PLL_EDGES].find((a) => a.id === `pll-${name}`)!, shown, note, after);
 
   const pll: TutorialStep = {
     name: 'PLL',
-    goal: 'Permute the Last Layer: move the top pieces to their spots, in two looks.',
+    goal: CFOP_STAGES[3].goal,
     html: `<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, move its pieces to their spots. Each case is a letter-named “perm”.</p>
       <p>Again in two looks: first the corners, then the edges. That’s 6 algorithms instead of 21. The arrows show where each piece goes.</p>
       <p>Look at the sides of the top layer. Two matching corner stickers on a side are <b>headlights</b>. Turn the top to match the picture, do the algorithm, and at the end turn the top to line it up with the rest.</p>`,
