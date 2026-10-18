@@ -233,6 +233,6 @@ export interface Puzzle {
   cancelSolve: () => void;
   /** tutorials that walk through solving this puzzle by hand, one per method */
   guides?: Guide[];
-  /** every case of a method's stages, with algorithms, on the Tutorial tab */
+  /** every case of a method's stages, with algorithms: the case library in Learn, for the guide with the same id */
   tutorial?: Tutorial;
 }

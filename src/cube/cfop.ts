@@ -218,7 +218,7 @@ export function cfopGuide(M: CubeModel): Guide {
     id: 'cfop',
     name: 'CFOP',
     short: 'CFOP',
-    intro: 'The speedcuber’s method, named after its stages: Cross, F2L (First Two Layers, solved in corner–edge pairs), OLL (Orient the Last Layer) and PLL (Permute the Last Layer). It teaches OLL and PLL in two looks, as the Tutorial tab does: 16 algorithms instead of 78.',
+    intro: 'The speedcuber’s method, named after its stages: Cross, F2L (First Two Layers, solved in corner–edge pairs), OLL (Orient the Last Layer) and PLL (Permute the Last Layer). It teaches OLL and PLL in two looks, the same cases as its case library: 16 algorithms instead of 78.',
     notation: WIDE_NOTATION,
     stages: CFOP_STAGES,
     steps: (state) => {

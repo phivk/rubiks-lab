@@ -118,6 +118,17 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .puzzle-switch button.active { background: rgba(255, 255, 255, 0.1); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
 .puzzle-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .puzzle-select { display: none; }
+.topbar-start { display: flex; align-items: center; gap: 16px; }
+/* the two places: a bigger, separate switch from the controls inside them */
+.places { display: flex; gap: 2px; padding: 3px; border-radius: 12px; background: rgba(20, 23, 31, 0.72); border: 1px solid var(--line); }
+.places button {
+  display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px;
+  border: 0; border-radius: 9px; background: transparent; color: var(--text-2); font: inherit; font-weight: 650; font-size: 14px; cursor: pointer;
+}
+.places button svg { width: 17px; height: 17px; }
+.places button:hover { color: var(--text); }
+.places button.active { background: var(--accent-soft); color: var(--text); box-shadow: 0 0 0 1px rgba(143, 123, 255, 0.35) inset; }
+.places button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .help-sub { display: contents; }
 .divider { width: 1px; height: 20px; background: var(--line-2); margin: 0 6px; }
 
@@ -456,9 +467,22 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* ---------- lessons ---------- */
 /* the Learn tab shares the player with Solve, and swaps the rest */
 .solution.learn { display: flex; flex-direction: column; gap: 14px; }
-.solution.learn .sol-empty, .solution.learn .sol-head, .solution.learn .chips { display: none; }
-.solution:not(.learn) .lesson, .solution:not(.learn) .lesson-sources, .solution:not(.learn) .lesson-intro, .solution:not(.learn) .stages, .solution:not(.learn) .methods,
-.solution.learn:not(.empty) .lesson-intro { display: none; }
+.solution.learn .sol-empty, .solution.learn .sol-meta, .solution.learn:not(.drill) .sol-head, .solution.learn:not(.drill) .chips { display: none; }
+.solution:not(.learn) .lesson, .solution:not(.learn) .lesson-sources, .solution:not(.learn) .lesson-intro,
+.solution.learn:not(.empty) .lesson-intro, .solution:not(.drill) .case-card, .solution.drill .lesson { display: none; }
+.solution.drill .chips { max-height: 160px; }
+/* in Learn the player stays in reach at the bottom of the panel while the step or case scrolls above it */
+.solution.learn .player {
+  position: sticky; bottom: -16px; z-index: 1; margin: 0 -16px -16px; padding: 10px 16px 16px;
+  background: var(--panel-solid); border-top: 1px solid var(--line);
+}
+.lesson-foot { display: flex; justify-content: center; gap: 18px; }
+.lesson-foot .link { font-size: 12.5px; }
+.case-done:not(:empty) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.case-done b { color: var(--good); margin-right: auto; }
+.use-mine, .learn-mine { align-self: flex-start; color: var(--accent-2); font-size: 13px; font-weight: 600; }
+.use-mine:hover, .learn-mine:hover { color: var(--text); }
+.learn-mine { align-self: center; }
 .methods { display: flex; gap: 4px; padding: 3px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; border: 1px solid var(--line); }
 .methods button {
   flex: 1; padding: 5px 4px; border: 0; background: transparent; border-radius: 7px; cursor: pointer;
@@ -515,28 +539,28 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .stages li.current { background: var(--accent-soft); }
 .stages li.current .num { background: var(--accent); color: #fff; }
 
-/* ---------- tutorial ---------- */
-/* the tutorial takes the left panel's place, wider, and the cube sits between the panels */
+/* ---------- learn ---------- */
+/* the course takes the left panel's place, wider, and the cube sits between the panels */
 .panel.tutorial { grid-column: 1; display: none; }
-body.tutorial .app { grid-template-columns: minmax(400px, 1.3fr) minmax(240px, 1fr) 340px; }
-body.tutorial .stage { grid-column: 2; }
-body.tutorial .panel.left { display: none; }
-body.tutorial .panel.tutorial { display: flex; }
-.solution.tutorial { display: flex; flex-direction: column; gap: 14px; }
-.solution.tutorial .sol-empty, .solution.tutorial .sol-meta, .solution.tutorial .lesson-intro { display: none; }
-.solution:not(.tutorial) .case-card { display: none; }
-.solution.tutorial .chips { max-height: 160px; }
+body.learn .app { grid-template-columns: minmax(400px, 1.3fr) minmax(240px, 1fr) 340px; }
+body.learn .stage { grid-column: 2; }
+body.learn .panel.left { display: none; }
+body.learn .panel.tutorial { display: flex; }
+.methods.single { background: none; border: 0; padding: 0; }
+.method-name { font-size: 15px; font-weight: 700; }
+.no-cases { margin: 0; padding: 12px; border-radius: 12px; border: 1px dashed var(--line-2); }
 /* the stages read as a sequence, ‹ one › after another, not as a second set of tabs */
 /* the stepper stays at the top of the panel while the cases scroll under it (12px below its edge: offsets count from inside the padding) */
 .tut-steps {
-  display: flex; gap: 12px; padding: 3px 0;
+  display: flex; gap: 12px; padding: 3px 0; overflow-x: auto; scrollbar-width: none;
   position: sticky; top: -4px; z-index: 1; box-shadow: 0 0 0 16px var(--panel-solid); background: var(--panel-solid);
 }
 .tut-steps button + button::before { content: '›'; position: absolute; left: -9px; color: var(--text-3); font-weight: 400; pointer-events: none; }
 /* cases scrolling under the stuck stepper fade out instead of being cut */
 .tut-steps.stuck::after { content: ''; position: absolute; left: -16px; right: -16px; top: calc(100% + 16px); height: 18px; background: linear-gradient(var(--panel-solid), transparent); pointer-events: none; }
+.tut-steps::-webkit-scrollbar { display: none; }
 .tut-steps button {
-  position: relative; flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 4px;
+  position: relative; flex: 1 0 auto; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 4px;
   border: 0; background: transparent; border-radius: 7px; cursor: pointer;
   font-size: 13px; font-weight: 600; color: var(--text-2); transition: background 0.2s, color 0.2s;
 }
@@ -548,6 +572,9 @@ body.tutorial .panel.tutorial { display: flex; }
   font-size: 10.5px; font-weight: 700; background: var(--chip-hover); font-variant-numeric: tabular-nums;
 }
 .tut-steps button.active .num { background: var(--accent); color: #fff; }
+/* how far a guided solve has got */
+.tut-steps button.done .num { background: rgba(61, 220, 151, 0.14); color: var(--good); }
+.tut-steps button.current:not(.active) .num { box-shadow: 0 0 0 2px var(--accent); }
 .tut-intro { display: flex; flex-direction: column; gap: 8px; }
 .tut-intro .more { display: none; align-self: flex-start; color: var(--accent-2); font-weight: 600; }
 .panel.tutorial code, .case-card code {
@@ -683,9 +710,15 @@ kbd {
 }
 
 /* ---------- responsive ---------- */
+@media (max-width: 1240px) { .brand-name { display: none; } }
+@media (max-width: 1100px) and (min-width: 861px) { .top-actions .label { display: none; } .top-actions .btn:has(.label) { width: 36px; padding: 0; } }
+@media (max-width: 1000px) and (min-width: 861px) {
+  .puzzle-switch button svg, #btn-camera, #btn-help, .divider { display: none; }
+  .puzzle-switch button { padding: 0 10px; }
+}
 @media (max-width: 1100px) {
   .app { grid-template-columns: 300px 1fr 300px; }
-  body.tutorial .app { grid-template-columns: minmax(330px, 1.2fr) minmax(200px, 1fr) 300px; }
+  body.learn .app { grid-template-columns: minmax(330px, 1.2fr) minmax(200px, 1fr) 300px; }
   .panel { margin: 4px 10px 10px; }
 }
 @media (max-width: 860px) {
@@ -698,13 +731,26 @@ kbd {
   .stage-hint { bottom: 10px; font-size: 11.5px; }
   .solved-badge { top: 12px; }
   .panel { margin: 0 16px 16px; max-height: none; overflow: visible; align-self: stretch; }
-  .panel.right { order: 3; }
-  .panel.left { order: 4; }
+  /* Cube: set the cube up first, then solve it; Learn: the step or how to start, then the course */
+  .panel.left { order: 3; }
+  .panel.right { order: 4; }
+  body.learn .panel.right { order: 3; }
   .panel.tutorial { order: 4; }
+  /* the places are a bar at the bottom of the screen, always in reach */
+  /* the topbar holds the bottom bar too: above the panels, which scroll under it */
+  .topbar { z-index: 30; }
+  .places {
+    position: fixed; z-index: 20; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom));
+    display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 16px;
+    background: var(--panel-solid); border-color: var(--line-2); box-shadow: var(--shadow);
+  }
+  .places button { justify-content: center; height: 44px; font-size: 15px; }
+  .app { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+  .solution.learn .player { bottom: calc(76px + env(safe-area-inset-bottom)); margin: 0 -16px; padding-bottom: 12px; border-radius: 0 0 20px 20px; }
   /* on a phone the page scrolls, under the sticky 3D view */
   .tut-steps { top: calc(max(46vh, 300px) + 12px); }
-  /* in the tutorial the case card in the list is the controller: no second copy, chips or player */
-  .solution.tutorial { display: none; }
+  /* with a case open the case card in the list is the controller: no second copy, chips or player */
+  body.drilling .panel.right { display: none; }
   .case .case-note { display: block; }
   .case.active .case-ctl { display: contents; }
   /* readable from the table */
