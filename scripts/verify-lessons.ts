@@ -15,7 +15,7 @@ import { applyAll as pyraApply, solved as pyraSolved } from '../src/pyraminx/mod
 import { scramble as pyraScramble } from '../src/pyraminx/solver';
 
 // a step that names a case must name one that exists
-const CASE_IDS = new Set(allCases(new CubeModel(3)).keys());
+const CASE_IDS = new Set([3, 2].flatMap((n) => [...allCases(new CubeModel(n)).keys()]));
 // methods whose courses don't have their cases yet
 const PENDING = new Set(['reduction', 'zz', 'roux']);
 

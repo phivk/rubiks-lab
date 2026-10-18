@@ -553,7 +553,7 @@ body.learn .panel.tutorial { display: flex; }
 /* the stepper stays at the top of the panel while the cases scroll under it (12px below its edge: offsets count from inside the padding) */
 .tut-steps {
   display: flex; gap: 12px; padding: 3px 0; overflow-x: auto; scrollbar-width: none;
-  position: sticky; top: -4px; z-index: 1; box-shadow: 0 0 0 16px var(--panel-solid); background: var(--panel-solid);
+  position: sticky; top: -4px; z-index: 3; box-shadow: 0 0 0 16px var(--panel-solid); background: var(--panel-solid);
 }
 .tut-steps button + button::before { content: '›'; position: absolute; left: -9px; color: var(--text-3); font-weight: 400; pointer-events: none; }
 /* cases scrolling under the stuck stepper fade out instead of being cut */

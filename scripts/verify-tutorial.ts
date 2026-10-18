@@ -12,12 +12,12 @@
 // Full OLL and PLL: 57 and 21 cases, each one a case of its kind that its algorithm finishes,
 // and no algorithm finishes another's case.
 //
-// Beginner: each case is one its stage meets, the guided solve does exactly its algorithm on
-// it, and names it.
+// Beginner (3×3 and 2×2): each case is one its stage meets, the guided solve does exactly its
+// algorithm on it, and names it. On the 2×2, the yellow-top cases are all seven shapes.
 import type { Case, GuideStep, Method } from '../src/core/types';
 import { beginnerMethod, beginnerStages } from '../src/cube/beginner';
-import { beginner2Method } from '../src/cube/beginner2';
-import { allCases, cubeCases } from '../src/cube/cases';
+import { beginner2Method, beginner2Stages } from '../src/cube/beginner2';
+import { allCases, cube2Cases, cubeCases } from '../src/cube/cases';
 import { cfopMethod } from '../src/cube/cfop';
 import { lessonKit, ROTATIONS, TOP_CORNERS as TOP_C, TOP_EDGES as TOP_E, U_TURNS } from '../src/cube/lessonKit';
 import { CubeModel, invertAlg, UNSET } from '../src/cube/model';
@@ -183,6 +183,49 @@ for (const [name, cases, n, needs, done] of fullSets) {
   });
 }
 
+// ---------- the 2×2's beginner's method ----------
+
+{
+  const M2 = new CubeModel(2);
+  const K2 = lessonKit(M2);
+  const B2 = beginner2Stages(M2);
+  const C2 = cube2Cases(M2);
+  const home2 = C2.home;
+  const BOTTOM = ['DRF', 'DFL', 'DLB', 'DBR'];
+  const TOP = ['UFR', 'URB', 'UBL', 'ULF'];
+  const homeAt = (s: number[], slot: string) => K2.stickersOf(slot).every((i) => s[i] === home2[i]);
+  const yellow2 = home2[K2.at('UFR', 'U')];
+  const topUp = (s: number[]) => TOP.every((c) => s[K2.at(c, 'U')] === yellow2);
+  const stages: [((s: number[], steps: GuideStep[]) => number[]), (full: number[]) => boolean][] = [
+    [B2.whiteLayer, (s) => BOTTOM.filter((c) => homeAt(s, c)).length === 3],
+    [B2.yellowTop, (s) => BOTTOM.every((c) => homeAt(s, c)) && !topUp(s)],
+    [B2.swapCorners, (s) => BOTTOM.every((c) => homeAt(s, c)) && topUp(s) && !U_TURNS.some((u) => M2.isSolved(K2.apply(s, [u])))],
+  ];
+  const course2 = beginner2Method(M2).stages;
+  course2.forEach((st, k) => {
+    const [run, isCase] = stages[k];
+    for (const c of (st.caseGroups ?? []).flatMap((g) => g.cases)) {
+      const full = K2.apply(home2, invertAlg(c.moves));
+      if (!isCase(full)) fail(`2×2 ${st.name}: ${c.name} isn't a case of the stage`);
+      const steps: GuideStep[] = [];
+      B2.reset();
+      run(full, steps);
+      const moves = steps.flatMap((x) => x.phrases.flatMap((p) => p.moves));
+      if (moves.join(' ') !== c.moves.join(' ')) fail(`2×2 ${st.name}: ${c.name} is ${c.moves.join(' ')}, but the guided solve does ${moves.join(' ')}`);
+      const named = steps.map((x) => x.caseId).filter(Boolean);
+      if (!named.includes(c.id)) fail(`2×2 ${st.name}: the guided solve's steps for ${c.name} name ${named.join(', ') || 'no case'}`);
+      if (named.some((id) => !allCases(M2).has(id!))) fail(`2×2 ${st.name}: a step for ${c.name} names a case that doesn't exist`);
+    }
+  });
+  // the yellow top: one case for each of the seven shapes a top can make
+  const shapes = new Set(course2[1].caseGroups!.flatMap((g) => g.cases).map((c) => {
+    const full = K2.apply(home2, invertAlg(c.moves));
+    return U_TURNS.map((u) => TOP.map((slot) => [...slot].find((f) => K2.apply(full, [u])[K2.at(slot, f)] === yellow2)).join('')).sort()[0];
+  }));
+  if (shapes.size !== 7) fail(`2×2 yellow top: ${shapes.size} different shapes, want 7`);
+  for (const c of course2[2].caseGroups!.flatMap((g) => g.cases)) if (!C2.arrows(c).length) fail(`2×2 ${c.name}: no arrows`);
+}
+
 // ---------- every case of every method ----------
 
 const ids = allCases(M);
@@ -206,7 +249,7 @@ for (const [Mn, m] of methods) {
         total++;
         if (seen.has(c.id)) fail(`${m.name}: two cases are ${c.id}`);
         seen.add(c.id);
-        if (Mn.n === 3 && ids.get(c.id)?.moves.join(' ') !== c.moves.join(' ')) fail(`${m.name}: ${c.id} isn't the case set's`);
+        if ((Mn.n === 3 ? ids : allCases(Mn)).get(c.id)?.moves.join(' ') !== c.moves.join(' ')) fail(`${m.name}: ${c.id} isn't the case set's`);
         if (c.moves.some((mv) => !Mn.parseMove(mv))) fail(`${m.name} ${c.name}: a move that isn't one`);
         const end = Mn.applyAll(c.setup, c.moves);
         const colorOf = new Map<string, number>();

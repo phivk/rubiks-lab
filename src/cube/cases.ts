@@ -11,6 +11,10 @@
 //                PLL: the 2 corner cases, then the 4 edge cases
 //   full         all 57 OLLs, by shape, and all 21 PLLs, by what moves
 //
+// The 2×2 has its own set (cube2Cases), for its beginner's method: the white corners as on the
+// 3×3, the seven shapes of the yellow top, each with the run of Sunes that solves it, and the
+// two corner swaps.
+//
 // A case has the same id in every set it's in (OLL 27 is oll-27, as two-look's Sune and as
 // full OLL's), and a guided solve's step names the case it is by that id (GuideStep.caseId).
 // scripts/verify-tutorial.ts checks every case.
@@ -405,8 +409,126 @@ function buildCases(M: CubeModel) {
   };
 }
 
+/** the 2×2 beginner's method's algorithms, as its guided solve (beginner2.ts) does them */
+export const BEGINNER2 = {
+  sune: alg("R U R' U R U2 R'"),
+  swap: alg("R' F R' B2 R F' R' B2 R2"),
+};
+
+/**
+ * The 2×2's yellow top, by shape: [name, corners showing yellow on top, the turns of the top
+ * between Sunes, note]. Each
+ * shape is solved by Sunes alone, held by the rule (one yellow corner up: it goes front left;
+ * none: the front-left corner's yellow faces left; two: it faces you), turning only the top in
+ * between; the turns are the ones the guided solve makes.
+ */
+const YELLOW_TOP: [string, number, string[], string][] = [
+  ['Sune', 1, [], 'One corner up, at the front left: one Sune does it.'],
+  ['Anti-Sune', 1, ['U2'], 'One corner up: hold it at the front left. A Sune leaves the Sune case, again with one corner up.'],
+  ['H', 0, [''], 'None up, yellow facing left and right in pairs. Hold one pair facing left; after one Sune it’s the Sune case.'],
+  ['Pi', 0, ["U'"], 'None up. Turn the top so the front-left corner’s yellow faces left; a Sune leaves one up.'],
+  ['Headlights', 2, ["U'", 'U2'], 'Two up, side by side. Turn the top so the front-left corner’s yellow faces you; it takes three Sunes.'],
+  ['T', 2, ['U', 'U2'], 'Two up, side by side, the other two facing out to either side. Three Sunes, by the same rule each time.'],
+  ['Bowtie', 2, ['', 'U2'], 'Two up, across from each other. Hold the cube so the front-left corner’s yellow faces you; three Sunes.'],
+];
+
+export type Cube2Cases = ReturnType<typeof build2>;
+const built2 = new WeakMap<CubeModel, Cube2Cases>();
+
+/** The 2×2's case sets, built once per model. */
+export function cube2Cases(M: CubeModel): Cube2Cases {
+  if (!built2.has(M)) built2.set(M, build2(M));
+  return built2.get(M)!;
+}
+
+function build2(M: CubeModel) {
+  if (M.n !== 2) throw new Error('these case sets are for the 2×2');
+  const K = lessonKit(M);
+  const { at, stickersOf, colorsAt } = K;
+  // set up with white down, as the guided solve holds it
+  const home = K.apply(M.solved(), ['z2']);
+  const yellow = home[at('UFR', 'U')];
+  const BOTTOM = CORNERS.slice(4);
+  const ALL = M.facelets.map((f) => f.index);
+  const whiteCorners = (s: State) => ALL.filter((i) => colorsAt(s, CORNERS.find((c) => stickersOf(c).includes(i))!).includes(home[at('DFR', 'D')]));
+  const bottomAndYellow = (s: State) => ALL.filter((i) => BOTTOM.some((c) => stickersOf(c).includes(i)) || s[i] === yellow);
+  const make = (id: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string): Case => {
+    const setup = K.apply(home, invertAlg(moves));
+    if (shown) {
+      const keep = new Set(shown(setup));
+      setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
+    }
+    return { id, name, moves, setup, note };
+  };
+  const sexy = (n: number) => repeat(SEXY, n);
+  const { sune, swap } = BEGINNER2;
+  const TOP_STICKERS = TOP_CORNERS.flatMap((slot) => stickersOf(slot));
+
+  /** An arrow from each top corner to its spot, which the white layer's colors say. */
+  function arrows(s: State): [number, number][] {
+    const side = (f: string) => s[at(BOTTOM.find((c) => c.includes(f))!, f)];
+    const out: [number, number][] = [];
+    for (const slot of TOP_CORNERS) {
+      if (colorsAt(s, slot).includes(UNSET)) continue;
+      const to = TOP_CORNERS.find((h) => sameSet(colorsAt(s, slot), [yellow, side(h[1]), side(h[2])]))!;
+      if (to !== slot) out.push([at(slot, 'U'), at(to, 'U')]);
+    }
+    return out;
+  }
+
+  const whiteLayer: CaseGroup[] = [
+    {
+      id: '2x2-white-corners-top',
+      name: 'Above its spot',
+      about: 'The other three white corners are in. This one is on top, right above its spot at the front right: repeat R U R′ U′ until it drops in with white facing down.',
+      cases: [
+        make('2x2-white-corner-white-facing-right', 'White facing right', sexy(1), whiteCorners, 'One round drops it in.'),
+        make('2x2-white-corner-white-facing-up', 'White facing up', sexy(3), whiteCorners, 'Three rounds.'),
+        make('2x2-white-corner-white-facing-front', 'White facing front', sexy(5), whiteCorners, 'Five rounds: the same four moves each time.'),
+      ],
+    },
+    {
+      id: '2x2-white-corners-stuck',
+      name: 'Twisted in its spot',
+      about: 'In its spot but twisted: hold it at the front right and do R U R′ U′ once to lift it to the top. Then it’s a case from above.',
+      cases: [
+        make('2x2-white-corner-in-its-spot-white-facing-right', 'White facing right', sexy(2), whiteCorners, 'The first round lifts it out, the second drops it in.'),
+        make('2x2-white-corner-in-its-spot-white-facing-front', 'White facing front', sexy(4), whiteCorners, 'The first round lifts it out with white facing up; three more drop it in.'),
+      ],
+    },
+  ];
+
+  const sunes = (turns: string[]) => [...sune, ...turns.flatMap((u) => [...(u ? [u] : []), ...sune])];
+  const up = (n: number) => YELLOW_TOP.filter(([, k]) => k === n).map(([name, , turns, note]) => {
+    const out = make(`2x2-yellow-top-${slug(name)}`, name, sunes(turns), bottomAndYellow, note);
+    // a long run of Sunes reads better a Sune to a line
+    return turns.length ? { ...out, breakAfter: sune.length } : out;
+  });
+  const yellowTop: CaseGroup[] = [
+    { id: '2x2-yellow-top-one', name: 'One corner up', about: 'Hold the yellow corner at the front left and do the Sune.', cases: up(1) },
+    { id: '2x2-yellow-top-none', name: 'No corner up', about: 'Turn the top until the front-left corner’s yellow faces left, then do the Sune.', cases: up(0) },
+    { id: '2x2-yellow-top-two', name: 'Two corners up', about: 'Turn the top until the front-left corner’s yellow faces you, then do the Sune.', cases: up(2) },
+  ];
+
+  const swapCorners: CaseGroup[] = [{
+    id: '2x2-swap',
+    name: 'Swap corners',
+    about: 'Look at the sides of the top layer: two matching stickers on a side are headlights. The algorithm swaps the two front corners; the arrows show where each corner goes.',
+    cases: [
+      make('2x2-swap-headlights', 'Headlights on one side', swap, undefined, 'Hold the headlights at the back. One go swaps the front two.'),
+      { ...make('2x2-swap-no-headlights', 'No headlights', [...swap, 'U', ...swap], undefined, 'Two corners across from each other swap. Do it once from any side, then there are headlights: hold them at the back (here U) and go again.'), breakAfter: 9 },
+    ],
+  }];
+
+  return { home, focusTop: () => TOP_STICKERS, arrows: (c: Case) => arrows(c.setup), whiteLayer, yellowTop, swapCorners };
+}
+
 /** Every case of every set, by id: what a guided solve's step can name. */
 export function allCases(M: CubeModel) {
+  if (M.n === 2) {
+    const C2 = cube2Cases(M);
+    return new Map([...C2.whiteLayer, ...C2.yellowTop, ...C2.swapCorners].flatMap((g) => g.cases).map((c) => [c.id, c]));
+  }
   const C = cubeCases(M);
   const groups = [...Object.values(C.beginner).flat(), ...C.cross, ...C.f2l, C.ollEdges, C.ollCorners, ...C.oll, C.pllCorners, C.pllEdges, ...C.pll];
   return new Map(groups.flatMap((g) => g.cases).map((c) => [c.id, c]));
