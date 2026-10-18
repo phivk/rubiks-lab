@@ -64,7 +64,7 @@ Dependency rule: everything may depend on `core/`; `core/` depends on nothing pu
 
 ## Steps
 
-Each step is its own commit and must leave `npm run verify`, `npm run build` and the
+Each step is its own commit and must leave `pnpm verify`, `pnpm build` and the
 headless browser check (scramble + solve + playback on every puzzle, no console errors) green.
 
 ### 1. Pure moves (no behaviour change)
