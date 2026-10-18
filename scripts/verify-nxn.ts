@@ -1,4 +1,4 @@
-// Sanity checks for the N×N model and the 2×2, 4×4 and 5×5 solvers. Run with `npm run verify`.
+// Sanity checks for the N×N model and the 2×2, 4×4 and 5×5 solvers. Run with `pnpm verify`.
 import { CORNER_FACELETS, EDGE_FACELETS, initSolver, solve } from '../src/cube/kociemba/solver';
 import type { Vec3 } from '../src/core/types';
 import { CubeModel, FACES } from '../src/cube/model';

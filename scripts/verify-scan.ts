@@ -1,6 +1,6 @@
 // Checks for camera scanning on the N×N cubes and the Pyraminx: the scan faces' sticker order
 // matches what a camera sees, and simulated photos of scrambled puzzles read back as the right state.
-// Run with `npm run verify`.
+// Run with `pnpm verify`.
 import { byIds } from '../src/core/colors';
 import type { Puzzle, State, Vec3 } from '../src/core/types';
 import { cross, dot, mean, rotate } from '../src/core/vec';

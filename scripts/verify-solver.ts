@@ -1,5 +1,5 @@
 // Sanity check: scramble many random states and confirm every solver answer really solves the cube.
-// Run with `npm run verify`.
+// Run with `pnpm verify`.
 import { initSolver, solve } from '../src/cube/kociemba/solver';
 import { CubeModel, FACES } from '../src/cube/model';
 

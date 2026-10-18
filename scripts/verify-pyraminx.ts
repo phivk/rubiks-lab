@@ -1,4 +1,4 @@
-// Sanity checks for the Pyraminx model and solver. Run with `npm run verify`.
+// Sanity checks for the Pyraminx model and solver. Run with `pnpm verify`.
 import { apply, applyAll, stickers } from '../src/pyraminx/model';
 import { pyraminx as P } from '../src/pyraminx/puzzle';
 import { solveOptimal } from '../src/pyraminx/solver';
