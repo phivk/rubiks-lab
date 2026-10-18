@@ -8,7 +8,7 @@
 
 import { COLORS, COLOR_NAMES } from '../core/colors';
 import type { GuideStep, Phrase, State, Vec3 } from '../core/types';
-import { FACES, invertMove, type CubeModel } from './model';
+import { CubeModel, FACES, invertMove } from './model';
 
 export const NORMAL: Record<string, Vec3> = { U: [0, 1, 0], D: [0, -1, 0], R: [1, 0, 0], L: [-1, 0, 0], F: [0, 0, 1], B: [0, 0, -1] };
 export const EDGES = ['UF', 'UR', 'UB', 'UL', 'FR', 'FL', 'BR', 'BL', 'DF', 'DR', 'DB', 'DL'];
@@ -409,6 +409,45 @@ export function lessonKit(M: CubeModel) {
     at, stickersOf, center, find, faceShowing, stickerOf, placed, inSpot, apply, focusOn, colorsAt, hold, dest,
     name, piece, plain, code, first, rotatePhrase, topPhrase,
     macros, route, table, keyTable, pairPhrases, pairWhere,
+  };
+}
+
+/**
+ * A big cube seen as a 3×3, as it is once its centers and edges are built: each 3×3 sticker
+ * stands for the big cube's stickers in its place (one for a corner, a row for an edge, a
+ * block for a center). Outer turns and whole-cube turns do the same on both.
+ */
+export type AsThree = ReturnType<typeof buildAsThree>;
+const asThreeCache = new WeakMap<CubeModel, AsThree>();
+export function asThree(M: CubeModel): AsThree {
+  if (!asThreeCache.has(M)) asThreeCache.set(M, buildAsThree(M));
+  return asThreeCache.get(M)!;
+}
+function buildAsThree(M: CubeModel) {
+  const cube3 = new CubeModel(3);
+  const m = M.n - 1;
+  // a 3×3 coordinate (-2, 0, 2) stands for the big cube's outer layer, or every inner one
+  const span = (x: number) => (x === 2 ? [m] : x === -2 ? [-m] : M.coords.filter((c) => Math.abs(c) < m));
+  const bigOf = cube3.facelets.map((f) => {
+    const out: number[] = [];
+    for (const x of span(f.pos[0])) for (const y of span(f.pos[1])) for (const z of span(f.pos[2])) {
+      const i = M.faceletAt([x, y, z] as Vec3, f.normal);
+      if (i !== undefined) out.push(i);
+    }
+    return out;
+  });
+  const of3 = new Int16Array(M.size);
+  bigOf.forEach((is, k) => is.forEach((i) => (of3[i] = k)));
+  return {
+    cube3,
+    /** the big cube's stickers each 3×3 sticker stands for */
+    bigOf,
+    /** the big cube as a 3×3 (by the first sticker of each place) */
+    reduce: (s: State) => bigOf.map((is) => s[is[0]]),
+    /** 3×3 stickers to the big cube's */
+    expand: (stickers: number[]) => stickers.flatMap((i) => bigOf[i]),
+    /** a 3×3 state as a big cube, every sticker of a place its color */
+    lift: (s3: State) => Array.from({ length: M.size }, (_, i) => s3[of3[i]]),
   };
 }
 

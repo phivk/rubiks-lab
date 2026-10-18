@@ -15,16 +15,20 @@
 // Beginner (3×3 and 2×2): each case is one its stage meets, the guided solve does exactly its
 // algorithm on it, and names it. On the 2×2, the yellow-top cases are all seven shapes.
 //
+// 4×4 and 5×5: the beginner's cases are the 3×3's on the big cube; the first centers, the
+// edges and the parities are each what the guided solve does on its setup, and named by it;
+// the side center is set up with the top and bottom done; PLL parity is two edges swapped.
+//
 // Pyraminx: each case solves its setup and is one its stage meets, the guided solve does
 // exactly its algorithm on it and names it, and the moving top-layer cases have arrows.
 import type { Case, GuideStep, Method } from '../src/core/types';
 import { beginnerMethod, beginnerStages } from '../src/cube/beginner';
 import { beginner2Method, beginner2Stages } from '../src/cube/beginner2';
-import { allCases, cube2Cases, cubeCases } from '../src/cube/cases';
+import { allCases, bigCubeCases, cube2Cases, cubeCases, REDUCTION } from '../src/cube/cases';
 import { cfopMethod } from '../src/cube/cfop';
-import { lessonKit, ROTATIONS, TOP_CORNERS as TOP_C, TOP_EDGES as TOP_E, U_TURNS } from '../src/cube/lessonKit';
-import { CubeModel, invertAlg, UNSET } from '../src/cube/model';
-import { reductionMethod } from '../src/cube/reduction';
+import { asThree, lessonKit, ROTATIONS, TOP_CORNERS as TOP_C, TOP_EDGES as TOP_E, U_TURNS } from '../src/cube/lessonKit';
+import { CubeModel, FACES, invertAlg, UNSET } from '../src/cube/model';
+import { reductionMethod, reductionStages } from '../src/cube/reduction';
 import { rouxMethod } from '../src/cube/roux';
 import { zzMethod } from '../src/cube/zz';
 import { allPyraminxCases } from '../src/pyraminx/cases';
@@ -232,6 +236,68 @@ for (const [name, cases, n, needs, done] of fullSets) {
   }));
   if (shapes.size !== 7) fail(`2×2 yellow top: ${shapes.size} different shapes, want 7`);
   for (const c of course2[2].caseGroups!.flatMap((g) => g.cases)) if (!C2.arrows(c).length) fail(`2×2 ${c.name}: no arrows`);
+}
+
+// ---------- the 4×4's and 5×5's reduction method ----------
+
+for (const n of [4, 5]) {
+  const Mn = new CubeModel(n);
+  const A = asThree(Mn);
+  const Kn = lessonKit(A.cube3);
+  const B = bigCubeCases(Mn);
+  const R = reductionStages(Mn);
+  const C3 = cubeCases(A.cube3);
+  const big = `${n}×${n}`;
+  // the beginner's cases: the 3×3's, on the big cube
+  const of3 = new Map(Object.values(C3.beginner).flat().flatMap((g) => g.cases).map((c) => [c.id, c]));
+  for (const c of Object.values(B.beginner).flat().flatMap((g) => g.cases)) {
+    const c3 = of3.get(c.id);
+    if (!c3 || c3.moves.join(' ') !== c.moves.join(' ') || A.reduce(c.setup).join() !== c3.setup.join() || c.setup.join() !== A.lift(c3.setup).join())
+      fail(`${big} ${c.name}: not the 3×3's case`);
+  }
+  const moves = (steps: GuideStep[]) => steps.flatMap((x) => x.phrases.flatMap((p) => p.moves)).join(' ');
+  const turnsOnly = (x: GuideStep) => x.phrases.every((p) => p.label === 'Turn the whole cube');
+  // the cases a guided solve's stage does exactly, from the state it's set up from
+  const guided: [string[], (s: number[], steps: GuideStep[]) => void, number[]][] = [
+    [['centers-first-front', 'centers-first-right'], R.centersStage, Mn.solved()],
+    [['edges-pair', 'edges-last-two', 'edge-parity'], R.edgesStage, B.home],
+    [['oll-parity-three-up', 'oll-parity-one-up'], (s, steps) => R.yellowCross(R.ollParity(s, steps), steps), B.home],
+  ];
+  const ids = allCases(Mn);
+  for (const [names, run, from] of guided) {
+    // the 4×4 has OLL parity, the 5×5 edge parity
+    for (const id of names.filter((x) => (x.startsWith('oll-parity') ? n === 4 : x === 'edge-parity' ? n === 5 : true))) {
+      const c = ids.get(id);
+      if (!c) {
+        fail(`${big}: no case ${id}`);
+        continue;
+      }
+      const full = Mn.applyAll(from, invertAlg(c.moves));
+      const steps: GuideStep[] = [];
+      R.reset();
+      run(full, steps);
+      // the centers stage turns the cube round for the centers that are done
+      const own = steps.filter((x) => !turnsOnly(x));
+      if (moves(own) !== c.moves.join(' ')) fail(`${big} ${c.name}: the case is ${c.moves.join(' ')}, but the guided solve does ${moves(own)}`);
+      const named = steps.map((x) => x.caseId).filter(Boolean);
+      if (!c.id.startsWith('centers') && !c.id.startsWith('edges') && !named.includes(c.id)) fail(`${big} ${c.name}: the guided solve's steps name ${named.join(', ') || 'no case'}`);
+    }
+  }
+  // the side center: the top and bottom done, the front not
+  const centersOn = (s: number[], f: string) => Mn.facelets.filter((x) => FACES[x.face] === f && x.pos.filter((p) => Math.abs(p) === n - 1).length === 1).map((x) => s[x.index]);
+  const done = (s: number[], f: string) => new Set(centersOn(s, f)).size === 1;
+  const side = ids.get('centers-side-right')!;
+  const sideFull = Mn.applyAll(Mn.applyAll(Mn.solved(), ['x2']), invertAlg(side.moves));
+  if (!done(sideFull, 'U') || !done(sideFull, 'D') || done(sideFull, 'F')) fail(`${big} ${side.name}: not a side center to build`);
+  // PLL parity: the top done but for its front and back edges, swapped
+  if (n === 4) {
+    const c = ids.get('pll-parity')!;
+    const t = A.reduce(Mn.applyAll(B.home, invertAlg(c.moves)));
+    const wrong = [...TOP_E, ...TOP_C].filter((slot) => !Kn.placed(t, slot));
+    if (wrong.join() !== 'UF,UB' || c.moves.slice(0, REDUCTION.pllParity.length).join(' ') !== REDUCTION.pllParity.join(' ')) fail(`${big} PLL parity: not the front and back edges swapped`);
+    const arrows = B.pllArrows(c);
+    if (arrows.length !== 2 || arrows[0].join() !== [...arrows[1]].reverse().join()) fail(`${big} PLL parity: arrows ${arrows.join(' ')}, want one swap`);
+  }
 }
 
 // ---------- the Pyraminx's layer-by-layer method ----------

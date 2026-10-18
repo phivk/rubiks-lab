@@ -15,13 +15,17 @@
 // 3×3, the seven shapes of the yellow top, each with the run of Sunes that solves it, and the
 // two corner swaps.
 //
+// The 4×4 and 5×5 have theirs (bigCubeCases), for the reduction method: example centers and
+// edges, the beginner's 3×3 cases on the big cube, and the parities: OLL and PLL parity on
+// the 4×4, edge parity on the 5×5.
+//
 // A case has the same id in every set it's in (OLL 27 is oll-27, as two-look's Sune and as
 // full OLL's), and a guided solve's step names the case it is by that id (GuideStep.caseId).
 // scripts/verify-tutorial.ts checks every case.
 
 import type { Case, CaseGroup, State } from '../core/types';
 import { OLL, OLL_CORNERS, OLL_EDGES, PLL, PLL_CORNERS, PLL_EDGES, type TwoLookAlg } from './algs';
-import { alg, CORNERS, EDGES, lessonKit, repeat, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
+import { alg, asThree, CORNERS, EDGES, lessonKit, repeat, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
 import { invertAlg, UNSET, type CubeModel } from './model';
 
 /**
@@ -523,11 +527,158 @@ function build2(M: CubeModel) {
   return { home, focusTop: () => TOP_STICKERS, arrows: (c: Case) => arrows(c.setup), whiteLayer, yellowTop, swapCorners };
 }
 
+/** the reduction method's own algorithms, as its guided solve (reduction.ts) does them */
+export const REDUCTION = {
+  /** joins the last two edges: flips the one at the front right */
+  flip: alg("R U R' F R' F' R"),
+  ollParity: alg("Rw U2 x Rw U2 Rw U2 Rw' U2 Lw U2 Rw' U2 Rw U2 Rw' U2 Rw'"),
+  pllParity: alg('2R2 U2 2R2 Uw2 2R2 Uw2'),
+  /** the 5×5's: swaps the outer pieces of the edge at the front of the top */
+  edgeParity: alg("Rw U2 x Rw U2 Rw U2 Rw' U2 Lw U2 3Rw' U2 Rw U2 Rw' U2 Rw'"),
+};
+
+export type BigCubeCases = ReturnType<typeof buildBig>;
+const builtBig = new WeakMap<CubeModel, BigCubeCases>();
+
+/** The 4×4's or 5×5's case sets, built once per model. */
+export function bigCubeCases(M: CubeModel): BigCubeCases {
+  if (!builtBig.has(M)) builtBig.set(M, buildBig(M));
+  return builtBig.get(M)!;
+}
+
+function buildBig(M: CubeModel) {
+  if (M.n !== 4 && M.n !== 5) throw new Error('these case sets are for the 4×4 and 5×5');
+  const odd = M.n === 5;
+  const m = M.n - 1;
+  const { cube3, bigOf, reduce, lift } = asThree(M);
+  const C3 = cubeCases(cube3);
+  // set up with white down, as the 3×3 stage holds it; the first center is built on top
+  const home = M.applyAll(M.solved(), ['z2']);
+  const up = M.solved();
+  const yellow = lessonKit(cube3).center(C3.home, 'U');
+  const make = (id: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string, from = home): Case => {
+    const setup = M.applyAll(from, invertAlg(moves));
+    if (shown) {
+      const keep = new Set(shown(setup));
+      setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
+    }
+    return { id, name, moves, setup, note };
+  };
+
+  const ALL = M.facelets.map((f) => f.index);
+  const outerAxes = (i: number) => M.facelets[i].pos.filter((x) => Math.abs(x) === m).length;
+  const CENTERS = ALL.filter((i) => outerAxes(i) === 1);
+  const EDGE_STICKERS = ALL.filter((i) => outerAxes(i) === 2);
+  const TOP_LAYER = ALL.filter((i) => M.facelets[i].pos[1] === m);
+  const centersOnly = () => CENTERS;
+  // the corners are for later: their stickers are blank
+  const noCorners = () => [...CENTERS, ...EDGE_STICKERS];
+  // the first two layers, and the yellow stickers of the top edges, as for the yellow cross
+  const edgesShown = (s: State) => ALL.filter((i) => M.facelets[i].pos[1] !== m || CENTERS.includes(i) || (EDGE_STICKERS.includes(i) && s[i] === yellow));
+
+  // ---------- centers ----------
+
+  const two = odd ? ' On a 5×5 the wide turn takes two layers, so it brings in two pieces at once, a corner piece and an edge piece of the center.' : '';
+  const centers: CaseGroup[] = [
+    {
+      id: 'centers-first',
+      name: 'The first center',
+      about: 'White goes on top. A white piece on a side comes up in three moves: a slice turn lifts it in, a turn of the top moves it out of the slice, and the slice turns back, bringing the top’s own pieces back with it.',
+      cases: [
+        make('centers-first-front', 'A piece on the front', alg("Rw U Rw'"), centersOnly, 'Rw lifts the right side of the front into the top. U moves the white piece out of its way, and Rw′ turns it back.' + two, up),
+        make('centers-first-right', 'A piece on the right', alg("Fw' U Fw"), centersOnly, 'The same from the right: Fw′ lifts the right side’s top half in.' + two, up),
+      ],
+    },
+    {
+      id: 'centers-sides',
+      name: 'The sides',
+      about: 'With the top and bottom built, each side is built on the front. The slices now turn sideways, Uw and Dw, so the top and bottom centers only spin in place.',
+      cases: [
+        make('centers-side-right', 'A piece on the right', alg("Uw F Uw'"), centersOnly, 'Uw brings it round to the front, F moves it out of the slice, and Uw′ turns the slice back.' + two, M.applyAll(up, ['x2'])),
+      ],
+    },
+  ];
+
+  // ---------- edges ----------
+
+  const { flip, ollParity, pllParity, edgeParity } = REDUCTION;
+  const edges: CaseGroup[] = [
+    {
+      id: 'edges-pair',
+      name: 'Pairing an edge',
+      about: `Set up ${odd ? 'the pieces of one edge' : 'the two pieces of an edge'} in the middle layer, at the front left and front right, at different heights. A slice turn joins them, R U R′ swaps the joined edge out for one from the top, and the slice turns back to fix the centers.`,
+      cases: [make('edges-pair', 'Join, swap out, slice back', alg(`Uw' R U R' Uw`), noCorners, 'Uw′ joins them at the front right; R U R′ takes the edge up and out of the slice; Uw puts the centers back.')],
+    },
+    {
+      id: 'edges-last-two',
+      name: 'The last two edges',
+      about: 'With two left there’s no unfinished edge to swap in. Join them with the slice as before, then flip the edge at the front right instead: that trades the halves between the two.',
+      cases: [{ ...make('edges-last-two', 'Join, flip, slice back', [`Uw'`, ...flip, 'Uw'], noCorners, `Uw′ joins one pair; ${flip.join(' ').replaceAll("'", '′')} flips the edge at the front right, which finishes both; Uw puts the centers back.`), breakAfter: 1 }],
+    },
+    ...(odd ? [{
+      id: 'edges-parity',
+      name: 'Edge parity',
+      about: 'On a 5×5 the last edge can end up with its two outer pieces swapped round its middle one. No pairing move fixes that: this algorithm swaps them back, at the front of the top.',
+      cases: [make('edge-parity', 'Outer pieces swapped', edgeParity, noCorners, 'Hold the edge at the front of the top. The algorithm keeps the centers and the other edges.')],
+    }] : []),
+  ];
+
+  // ---------- parity ----------
+
+  const crossAlg = BEGINNER.cross;
+  const parity: { oll: CaseGroup[]; pll: CaseGroup[] } = odd ? { oll: [], pll: [] } : {
+    oll: [{
+      id: 'oll-parity',
+      name: 'OLL parity',
+      about: 'One or three edges show yellow on top. On a 3×3 that can’t happen, but each 4×4 edge is two pieces. Hold an edge without yellow on top at the front and do the algorithm: it flips that edge and keeps the first two layers.',
+      cases: [
+        make('oll-parity-three-up', 'Three edges up', ollParity, edgesShown, 'The one without yellow on top goes at the front. One go makes the cross.'),
+        { ...make('oll-parity-one-up', 'One edge up', [...ollParity, 'U', ...crossAlg], edgesShown, 'Any edge without yellow on top goes at the front. Then two show yellow, here in a line: hold it left to right (U) and make the cross as usual.'), breakAfter: ollParity.length },
+      ],
+    }],
+    pll: [{
+      id: 'pll-parity',
+      name: 'PLL parity',
+      about: 'Before the corners, check them: if two would have to swap, or all four go round, the corner step can’t do it. Really two edges are swapped. The algorithm swaps the front and back edges; then line the edges up again.',
+      cases: [make('pll-parity', 'Front and back edges swapped', [...pllParity, 'U2'], undefined, 'Here the rest of the top is done, so this is all it does: it swaps the front and back edges, and turns the top halfway (U2 turns it back). In a solve you spot it earlier, by the corners.')],
+    }],
+  };
+
+  // ---------- the 3×3 stage ----------
+
+  /** the beginner's 3×3 cases, on the big cube */
+  const beginner = Object.fromEntries(Object.entries(C3.beginner).map(([k, groups]) =>
+    [k, groups.map((g) => ({ ...g, cases: g.cases.map((c) => ({ ...c, setup: lift(c.setup) })) }))])) as typeof C3.beginner;
+  // an arrow on the big cube for each on the 3×3: between the middle pieces of two edges on a
+  // 5×5, and between their nearest pieces on a 4×4 (the same pair either way round, so a swap
+  // stays one arrow)
+  const pos = (i: number) => M.facelets[i].pos;
+  const apart = (i: number, j: number) => pos(i).reduce((d, x, k) => d + (x - pos(j)[k]) ** 2, 0);
+  const nearest = (a: number, b: number): [number, number] => {
+    if (odd) return [bigOf[a][(bigOf[a].length - 1) / 2], bigOf[b][(bigOf[b].length - 1) / 2]];
+    const pairs = bigOf[a].flatMap((i) => bigOf[b].map((j): [number, number] => [i, j]));
+    return pairs.reduce((p, q) => (apart(...q) < apart(...p) || (apart(...q) === apart(...p) && Math.min(...q) < Math.min(...p)) ? q : p));
+  };
+  const bigArrows = (arrows: [number, number][]) => arrows.map(([a, b]) => nearest(a, b));
+
+  return {
+    home,
+    focusTop: () => TOP_LAYER,
+    pllArrows: (c: Case) => bigArrows(C3.pllArrows({ ...c, setup: reduce(c.setup) })),
+    centers, edges, beginner, parity,
+  };
+}
+
 /** Every case of every set, by id: what a guided solve's step can name. */
 export function allCases(M: CubeModel) {
   if (M.n === 2) {
     const C2 = cube2Cases(M);
     return new Map([...C2.whiteLayer, ...C2.yellowTop, ...C2.swapCorners].flatMap((g) => g.cases).map((c) => [c.id, c]));
+  }
+  if (M.n > 3) {
+    const B = bigCubeCases(M);
+    const groups = [...B.centers, ...B.edges, ...Object.values(B.beginner).flat(), ...B.parity.oll, ...B.parity.pll];
+    return new Map(groups.flatMap((g) => g.cases).map((c) => [c.id, c]));
   }
   const C = cubeCases(M);
   const groups = [...Object.values(C.beginner).flat(), ...C.cross, ...C.f2l, C.ollEdges, C.ollCorners, ...C.oll, C.pllCorners, C.pllEdges, ...C.pll];

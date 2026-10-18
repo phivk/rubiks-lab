@@ -16,9 +16,9 @@ import { applyAll as pyraApply, solved as pyraSolved } from '../src/pyraminx/mod
 import { scramble as pyraScramble } from '../src/pyraminx/solver';
 
 // a step that names a case must name one that exists
-const CASE_IDS = new Set([...[3, 2].flatMap((n) => [...allCases(new CubeModel(n)).keys()]), ...allPyraminxCases().keys()]);
+const CASE_IDS = new Set([...[3, 2, 4, 5].flatMap((n) => [...allCases(new CubeModel(n)).keys()]), ...allPyraminxCases().keys()]);
 // methods whose courses don't have their cases yet
-const PENDING = new Set(['reduction', 'zz', 'roux']);
+const PENDING = new Set(['zz', 'roux']);
 
 const RUNS = Number(process.env.RUNS ?? 500);
 /** run only the lessons for this puzzle (3x3, 2x2, 4x4, 5x5, pyra) */

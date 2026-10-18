@@ -17,7 +17,7 @@
 // from the white corners on names the case it is (GuideStep.caseId).
 
 import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
-import { BEGINNER, cubeCases, SEXY } from './cases';
+import { BEGINNER, cubeCases, SEXY, type CubeCases } from './cases';
 import {
   countMoves, FACE_MOVES, lessonKit, list, repeat, ROTATIONS, rounds, sameSet, SIDE_NAME, TOP_CORNERS, TOP_EDGES, U_TURNS,
 } from './lessonKit';
@@ -407,10 +407,9 @@ export function beginnerStages(M: CubeModel) {
   return { crossStage, cornersStage, middleStage, yellowCross, yellowEdges, cornerSpots, cornerTwists };
 }
 
-/** The course: each stage explained, with its cases. */
-function beginnerCourse(M: CubeModel): Stage[] {
-  const C = cubeCases(M).beginner;
-  const { focusTop, pllArrows } = cubeCases(M);
+/** The course: each stage explained, with its cases (the 3×3's, or the same on a big cube). */
+export function beginnerCourse(cases: Pick<CubeCases, 'beginner' | 'focusTop' | 'pllArrows'>): Stage[] {
+  const { beginner: C, focusTop, pllArrows } = cases;
   const [cross, corners, middle, yCross, yEdges, spots, twists] = STAGES;
   return [
     {
@@ -485,7 +484,7 @@ export function beginnerMethod(M: CubeModel): Method {
     notation: '<code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.',
     intro: 'Solve the cube layer by layer, the way most people first learn it: seven stages and a handful of short algorithms.',
     triggers: [{ name: 'sexy move', moves: SEXY }],
-    stages: beginnerCourse(M),
+    stages: beginnerCourse(cubeCases(M)),
     solve: (state) => {
       const steps: GuideStep[] = [];
       let s = state;
