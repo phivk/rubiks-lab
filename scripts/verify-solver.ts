@@ -1,9 +1,9 @@
 // Sanity check: scramble many random states and confirm every solver answer really solves the cube.
 // Run with `pnpm verify`.
 import { initSolver, solve } from '../src/cube/kociemba/solver';
-import { CubeModel, FACES } from '../src/cube/model';
+import { CUBE3, FACES } from '../src/cube/model';
 
-const M = new CubeModel(3);
+const M = CUBE3;
 const t = Date.now();
 initSolver((f) => M.apply(M.solved(), FACES[f]));
 console.log(`tables built in ${Date.now() - t} ms`);

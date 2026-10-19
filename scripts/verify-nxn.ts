@@ -1,7 +1,7 @@
 // Sanity checks for the N×N model and the 2×2, 4×4 and 5×5 solvers. Run with `pnpm verify`.
 import { CORNER_FACELETS, EDGE_FACELETS, initSolver, solve } from '../src/cube/kociemba/solver';
 import type { Vec3 } from '../src/core/types';
-import { CubeModel, FACES } from '../src/cube/model';
+import { CUBE3, CubeModel, FACES } from '../src/cube/model';
 import { Reducer } from '../src/cube/reduce';
 import { ringMap } from '../src/cube/rings';
 import { Solver2 } from '../src/cube/solve2';
@@ -125,7 +125,7 @@ for (const n of [2, 3, 4, 5]) {
 {
   // Kociemba reads corners and edges through fixed facelet tables: they must be the
   // model's corner and midge slots, with the same first sticker (it defines orientation).
-  const M = new CubeModel(3);
+  const M = CUBE3;
   const key = (fs: number[]) => fs.join();
   const slots = (o: number) => new Set(M.orbits[o].slots.map((x) => key(x.facelets)));
   const rotations = (fs: number[]) => fs.map((_, r) => key(fs.map((_, j) => fs[(j + r) % fs.length])));
@@ -162,7 +162,7 @@ for (const n of [2, 3, 4, 5]) {
 }
 
 // ---------- big cubes ----------
-const M3 = new CubeModel(3);
+const M3 = CUBE3;
 initSolver((f) => M3.apply(M3.solved(), FACES[f]));
 const BIG_MOVES: Record<number, string[]> = {
   4: ['U', 'R', 'F', 'D', 'L', 'B', 'Uw', 'Rw', 'Fw', '2U', '2R', '2F', 'x', 'y'],

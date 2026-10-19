@@ -26,9 +26,9 @@ import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
 import { beginnerCourse, beginnerStages, STAGES as BEGINNER_STAGES } from './beginner';
 import { bigCubeCases, REDUCTION, SEXY } from './cases';
 import {
-  allRotations, asThree, CUBE3, stepMoves, EDGES, lessonKit, lessonNotes, macroMoves, onceOnly, sameSlot, TOP_CORNERS, TOP_EDGES, U_TURNS, type Macro,
+  allRotations, asThree, stepMoves, EDGES, lessonKit, lessonNotes, macroMoves, onceOnly, sameSlot, TOP_CORNERS, TOP_EDGES, U_TURNS, type Macro,
 } from './lessonKit';
-import { CubeModel, FACES, invertMove, type LayerTurn } from './model';
+import { CUBE3, CubeModel, FACES, invertMove, type LayerTurn } from './model';
 
 const FACE_AXIS: Record<string, 0 | 1 | 2> = { R: 0, L: 0, U: 1, D: 1, F: 2, B: 2 };
 

@@ -6,7 +6,7 @@ import { beginner2Method } from '../src/cube/beginner2';
 import { cfopMethod } from '../src/cube/cfop';
 import { stepMoves } from '../src/cube/lessonKit';
 import { allCases } from '../src/cube/cases';
-import { CubeModel } from '../src/cube/model';
+import { CUBE3, CubeModel } from '../src/cube/model';
 import { reductionMethod } from '../src/cube/reduction';
 import { rouxMethod } from '../src/cube/roux';
 import { zzMethod } from '../src/cube/zz';
@@ -55,7 +55,7 @@ const cubeCase = (puzzle: string, M: CubeModel, method: Method, scramble: (i: nu
   solved: (s) => M.isSolved(s),
 });
 
-const M3 = new CubeModel(3);
+const M3 = CUBE3;
 // the solved cube, a few short scrambles, then long ones
 const scramble3 = (i: number) => (i === 0 ? [] : randomMoves(i < 20 ? (i % 4) + 1 : 25, FACES));
 const M2 = new CubeModel(2);

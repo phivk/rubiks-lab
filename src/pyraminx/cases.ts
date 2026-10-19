@@ -13,7 +13,7 @@
 // scripts/verify-tutorial.ts checks every case.
 
 import type { Case, CaseGroup, State } from '../core/types';
-import { alg } from '../cube/lessonKit';
+import { alg, caseMaker } from '../cube/lessonKit';
 import { CENTER, TIP, UNSET, applyAll, invertMove, piecesOf, solved, stickers } from './model';
 
 /**
@@ -68,14 +68,9 @@ function build() {
   const axial = [0, 1, 2, 3].flatMap((v) => [TIP(v), CENTER(v)]).flatMap(piecesOf);
   const BOTTOM_EDGES = [11, 12, 13];
   const TOP_EDGES = [8, 9, 10];
-  const make = (id: string, name: string, moves: string[], shown: number[] | null, note?: string): Case => {
-    const setup = applyAll(home, [...moves].reverse().map(invertMove));
-    if (shown) {
-      const keep = new Set(shown);
-      setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
-    }
-    return { id: `pyra-${id}`, name, moves, setup, note };
-  };
+  const makeCase = caseMaker((s, moves) => applyAll(s, [...moves].reverse().map(invertMove)), home, UNSET);
+  const make = (id: string, name: string, moves: string[], shown: number[] | null, note?: string) =>
+    makeCase(`pyra-${id}`, name, moves, shown ? () => shown : undefined, note);
 
   const tips: CaseGroup[] = [{
     id: 'pyra-tips',

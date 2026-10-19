@@ -7,8 +7,8 @@
 // corner sticker's position fixes where its piece is and which way it's turned.
 
 import { COLORS, COLOR_NAMES } from '../core/colors';
-import type { GuideStep, Phrase, State, Vec3 } from '../core/types';
-import { CubeModel, FACES, invertMove } from './model';
+import type { Case, GuideStep, Phrase, State, Vec3 } from '../core/types';
+import { CUBE3, CubeModel, FACES, invertMove } from './model';
 
 export const NORMAL: Record<string, Vec3> = { U: [0, 1, 0], D: [0, -1, 0], R: [1, 0, 0], L: [-1, 0, 0], F: [0, 0, 1], B: [0, 0, -1] };
 export const EDGES = ['UF', 'UR', 'UB', 'UL', 'FR', 'FL', 'BR', 'BL', 'DF', 'DR', 'DB', 'DL'];
@@ -36,6 +36,20 @@ export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' :
 export const macroMoves = (path: Macro[]) => path.flatMap((m) => m.moves);
 /** a step's moves, in order */
 export const stepMoves = (step: GuideStep) => step.phrases.flatMap((p) => p.moves);
+/**
+ * A puzzle's cases, each set up by undoing its algorithm (`undo`) on `home`, or on `from`.
+ * Stickers outside `shown` are blanked to `unset`, on the picture and the 3D puzzle alike:
+ * they're whatever a real puzzle has there at this stage.
+ */
+export const caseMaker = (undo: (s: State, moves: string[]) => State, home: State, unset: number) =>
+  (id: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string, from = home): Case => {
+    const setup = undo(from, moves);
+    if (shown) {
+      const keep = new Set(shown(setup));
+      setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = unset; });
+    }
+    return { id, name, moves, setup, note };
+  };
 /** the notation note for lessons with wide, slice and x turns */
 export const WIDE_NOTATION = 'Lowercase <code>r</code> turns the right two layers together, <code>M</code> turns the middle slice like <code>L</code>, and <code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.';
 /** the whole-cube turns that bring any face to any other */
@@ -419,8 +433,6 @@ export function lessonKit(M: CubeModel) {
  */
 export type AsThree = ReturnType<typeof buildAsThree>;
 const asThreeCache = new WeakMap<CubeModel, AsThree>();
-/** the one 3×3 model the big cubes are seen as, so its case sets are built once */
-export const CUBE3 = new CubeModel(3);
 export function asThree(M: CubeModel): AsThree {
   if (!asThreeCache.has(M)) asThreeCache.set(M, buildAsThree(M));
   return asThreeCache.get(M)!;

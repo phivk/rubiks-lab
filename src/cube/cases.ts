@@ -25,17 +25,8 @@
 
 import type { Case, CaseGroup, State } from '../core/types';
 import { OLL, OLL_CORNERS, OLL_EDGES, PLL, PLL_CORNERS, PLL_EDGES, type TwoLookAlg } from './algs';
-import { alg, asThree, CORNERS, EDGES, lessonKit, repeat, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
+import { alg, asThree, caseMaker, CORNERS, EDGES, lessonKit, repeat, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
 import { invertAlg, UNSET, type CubeModel } from './model';
-
-/** a case's setup, with the stickers outside `shown` blanked */
-function setUp(setup: State, shown?: (s: State) => number[]): State {
-  if (shown) {
-    const keep = new Set(shown(setup));
-    setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
-  }
-  return setup;
-}
 
 /**
  * F2L, for the front-right slot (white down, green front): [name, algorithm, note], grouped by
@@ -173,15 +164,10 @@ function buildCases(M: CubeModel) {
   const home = K.apply(M.solved(), ['z2']);
   const white = center(home, 'D');
   const yellow = center(home, 'U');
-  /**
-   * A case, set up by undoing its algorithm. Stickers outside `shown` are blanked, on the
-   * picture and the 3D cube alike: they're whatever a real cube has there at this stage.
-   */
-  const make = (id: string, name: string, text: string | string[], shown?: (s: State) => number[], note?: string, from = home): Case => {
-    const moves = typeof text === 'string' ? alg(text) : text;
-    const setup = setUp(K.apply(from, invertAlg(moves)), shown);
-    return { id, name, moves, setup, note };
-  };
+  const makeCase = caseMaker((s, moves) => K.apply(s, invertAlg(moves)), home, UNSET);
+  /** a case, its algorithm as text or as moves */
+  const make = (id: string, name: string, text: string | string[], shown?: (s: State) => number[], note?: string, from = home) =>
+    makeCase(id, name, typeof text === 'string' ? alg(text) : text, shown, note, from);
 
   const SLOTS = [...EDGES, ...CORNERS, ...'UDFRBL'];
   const slotOf: string[] = [];
@@ -461,10 +447,7 @@ function build2(M: CubeModel) {
   const ALL = M.facelets.map((f) => f.index);
   const whiteCorners = (s: State) => ALL.filter((i) => colorsAt(s, CORNERS.find((c) => stickersOf(c).includes(i))!).includes(home[at('DFR', 'D')]));
   const bottomAndYellow = (s: State) => ALL.filter((i) => BOTTOM.some((c) => stickersOf(c).includes(i)) || s[i] === yellow);
-  const make = (id: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string): Case => {
-    const setup = setUp(K.apply(home, invertAlg(moves)), shown);
-    return { id, name, moves, setup, note };
-  };
+  const make = caseMaker((s, moves) => K.apply(s, invertAlg(moves)), home, UNSET);
   const sexy = (n: number) => repeat(SEXY, n);
   const { sune, swap } = BEGINNER2;
   const TOP_STICKERS = TOP_CORNERS.flatMap((slot) => stickersOf(slot));
@@ -557,21 +540,20 @@ function buildBig(M: CubeModel) {
   const home = M.applyAll(M.solved(), ['z2']);
   const up = M.solved();
   const yellow = lessonKit(cube3).center(C3.home, 'U');
-  const make = (id: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string, from = home): Case => {
-    const setup = setUp(M.applyAll(from, invertAlg(moves)), shown);
-    return { id, name, moves, setup, note };
-  };
+  const make = caseMaker((s, moves) => M.applyAll(s, invertAlg(moves)), home, UNSET);
 
   const ALL = M.facelets.map((f) => f.index);
   const outerAxes = (i: number) => M.facelets[i].pos.filter((x) => Math.abs(x) === m).length;
   const CENTERS = ALL.filter((i) => outerAxes(i) === 1);
   const EDGE_STICKERS = ALL.filter((i) => outerAxes(i) === 2);
+  const CENTER_SET = new Set(CENTERS);
+  const EDGE_SET = new Set(EDGE_STICKERS);
   const TOP_LAYER = ALL.filter((i) => M.facelets[i].pos[1] === m);
   const centersOnly = () => CENTERS;
   // the corners are for later: their stickers are blank
   const noCorners = () => [...CENTERS, ...EDGE_STICKERS];
   // the first two layers, and the yellow stickers of the top edges, as for the yellow cross
-  const edgesShown = (s: State) => ALL.filter((i) => M.facelets[i].pos[1] !== m || outerAxes(i) === 1 || (outerAxes(i) === 2 && s[i] === yellow));
+  const edgesShown = (s: State) => ALL.filter((i) => M.facelets[i].pos[1] !== m || CENTER_SET.has(i) || (EDGE_SET.has(i) && s[i] === yellow));
 
   // ---------- centers ----------
 

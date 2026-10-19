@@ -27,7 +27,7 @@ import { beginner2Method, beginner2Stages } from '../src/cube/beginner2';
 import { allCases, bigCubeCases, cube2Cases, cubeCases, REDUCTION } from '../src/cube/cases';
 import { cfopMethod } from '../src/cube/cfop';
 import { asThree, lessonKit, ROTATIONS, stepMoves, TOP_CORNERS as TOP_C, TOP_EDGES as TOP_E, U_TURNS } from '../src/cube/lessonKit';
-import { CubeModel, FACES, invertAlg, UNSET } from '../src/cube/model';
+import { CUBE3, CubeModel, FACES, invertAlg, UNSET } from '../src/cube/model';
 import { reductionMethod, reductionStages } from '../src/cube/reduction';
 import { rouxMethod } from '../src/cube/roux';
 import { zzMethod } from '../src/cube/zz';
@@ -37,7 +37,7 @@ import * as P from '../src/pyraminx/model';
 
 const UNSET_P = P.UNSET;
 
-const M = new CubeModel(3);
+const M = CUBE3;
 const K = lessonKit(M);
 const C = cubeCases(M);
 const cfop = cfopMethod(M);
@@ -186,7 +186,7 @@ for (const [name, cases, n, needs, done] of fullSets) {
       if (!isCase(full)) fail(`Beginner ${st.name}: ${c.name} isn't a case of the stage`);
       const steps: GuideStep[] = [];
       run(full, steps);
-      const moves = steps.flatMap((x) => x.phrases.flatMap((p) => p.moves));
+      const moves = steps.flatMap(stepMoves);
       if (moves.join(' ') !== [...before, ...c.moves].join(' ')) fail(`Beginner ${st.name}: ${c.name} is ${c.moves.join(' ')}, but the guided solve does ${moves.join(' ')}`);
       // its steps name this case, or (where the case is several goes) the cases it passes through on the way
       const named = steps.map((x) => x.caseId).filter(Boolean);
@@ -222,7 +222,7 @@ for (const [name, cases, n, needs, done] of fullSets) {
       const steps: GuideStep[] = [];
       B2.reset();
       run(full, steps);
-      const moves = steps.flatMap((x) => x.phrases.flatMap((p) => p.moves));
+      const moves = steps.flatMap(stepMoves);
       if (moves.join(' ') !== c.moves.join(' ')) fail(`2×2 ${st.name}: ${c.name} is ${c.moves.join(' ')}, but the guided solve does ${moves.join(' ')}`);
       const named = steps.map((x) => x.caseId).filter(Boolean);
       if (!named.includes(c.id)) fail(`2×2 ${st.name}: the guided solve's steps for ${c.name} name ${named.join(', ') || 'no case'}`);
@@ -240,6 +240,8 @@ for (const [name, cases, n, needs, done] of fullSets) {
 
 // ---------- the 4×4's and 5×5's reduction method ----------
 
+// the 3×3's beginner's cases, by id: what the big cubes' beginner's cases must be
+const beginner3 = new Map(Object.values(C.beginner).flat().flatMap((g) => g.cases).map((c) => [c.id, c]));
 for (const n of [4, 5]) {
   const Mn = new CubeModel(n);
   const A = asThree(Mn);
@@ -248,9 +250,8 @@ for (const n of [4, 5]) {
   const R = reductionStages(Mn);
   const big = `${n}×${n}`;
   // the beginner's cases: the 3×3's, on the big cube
-  const of3 = allCases(A.cube3);
   for (const c of Object.values(B.beginner).flat().flatMap((g) => g.cases)) {
-    const c3 = of3.get(c.id);
+    const c3 = beginner3.get(c.id);
     if (!c3 || c3.moves.join(' ') !== c.moves.join(' ') || A.reduce(c.setup).join() !== c3.setup.join() || c.setup.join() !== A.lift(c3.setup).join())
       fail(`${big} ${c.name}: not the 3×3's case`);
   }
@@ -336,7 +337,7 @@ let pyraCount = 0;
         const steps: GuideStep[] = [];
         PS.reset();
         run(full, steps);
-        const moves = steps.flatMap((x) => x.phrases.flatMap((p) => p.moves));
+        const moves = steps.flatMap(stepMoves);
         if (moves.join(' ') !== c.moves.join(' ')) fail(`Pyraminx ${st.name}: ${c.name} is ${c.moves.join(' ')}, but the guided solve does ${moves.join(' ')}`);
         const named = steps.map((x) => x.caseId).filter(Boolean);
         if (!named.includes(c.id)) fail(`Pyraminx ${st.name}: the guided solve's steps for ${c.name} name ${named.join(', ') || 'no case'}`);
