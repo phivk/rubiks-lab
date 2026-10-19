@@ -419,12 +419,14 @@ export function lessonKit(M: CubeModel) {
  */
 export type AsThree = ReturnType<typeof buildAsThree>;
 const asThreeCache = new WeakMap<CubeModel, AsThree>();
+/** the one 3×3 model the big cubes are seen as, so its case sets are built once */
+export const CUBE3 = new CubeModel(3);
 export function asThree(M: CubeModel): AsThree {
   if (!asThreeCache.has(M)) asThreeCache.set(M, buildAsThree(M));
   return asThreeCache.get(M)!;
 }
 function buildAsThree(M: CubeModel) {
-  const cube3 = new CubeModel(3);
+  const cube3 = CUBE3;
   const m = M.n - 1;
   // a 3×3 coordinate (-2, 0, 2) stands for the big cube's outer layer, or every inner one
   const span = (x: number) => (x === 2 ? [m] : x === -2 ? [-m] : M.coords.filter((c) => Math.abs(c) < m));

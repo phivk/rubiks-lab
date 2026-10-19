@@ -26,7 +26,7 @@ import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
 import { beginnerCourse, beginnerStages, STAGES as BEGINNER_STAGES } from './beginner';
 import { bigCubeCases, REDUCTION, SEXY } from './cases';
 import {
-  allRotations, asThree, stepMoves, EDGES, lessonKit, lessonNotes, macroMoves, onceOnly, sameSlot, TOP_CORNERS, TOP_EDGES, U_TURNS, type Macro,
+  allRotations, asThree, CUBE3, stepMoves, EDGES, lessonKit, lessonNotes, macroMoves, onceOnly, sameSlot, TOP_CORNERS, TOP_EDGES, U_TURNS, type Macro,
 } from './lessonKit';
 import { CubeModel, FACES, invertMove, type LayerTurn } from './model';
 
@@ -34,7 +34,7 @@ const FACE_AXIS: Record<string, 0 | 1 | 2> = { R: 0, L: 0, U: 1, D: 1, F: 2, B: 
 
 const { ollParity: OLL_PARITY, pllParity: PLL_PARITY, flip: FLIP, edgeParity: EDGE_PARITY_5 } = REDUCTION;
 
-const cube3 = new CubeModel(3);
+const cube3 = CUBE3;
 const K3 = lessonKit(cube3);
 /** the stages of the 3×3 beginner's method this lesson finishes with, and where they start in its own list */
 const B = beginnerStages(cube3);

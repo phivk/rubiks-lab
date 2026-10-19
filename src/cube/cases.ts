@@ -28,6 +28,15 @@ import { OLL, OLL_CORNERS, OLL_EDGES, PLL, PLL_CORNERS, PLL_EDGES, type TwoLookA
 import { alg, asThree, CORNERS, EDGES, lessonKit, repeat, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
 import { invertAlg, UNSET, type CubeModel } from './model';
 
+/** a case's setup, with the stickers outside `shown` blanked */
+function setUp(setup: State, shown?: (s: State) => number[]): State {
+  if (shown) {
+    const keep = new Set(shown(setup));
+    setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
+  }
+  return setup;
+}
+
 /**
  * F2L, for the front-right slot (white down, green front): [name, algorithm, note], grouped by
  * where the corner and edge are. The long ones say to learn them as algorithms.
@@ -170,11 +179,7 @@ function buildCases(M: CubeModel) {
    */
   const make = (id: string, name: string, text: string | string[], shown?: (s: State) => number[], note?: string, from = home): Case => {
     const moves = typeof text === 'string' ? alg(text) : text;
-    const setup = K.apply(from, invertAlg(moves));
-    if (shown) {
-      const keep = new Set(shown(setup));
-      setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
-    }
+    const setup = setUp(K.apply(from, invertAlg(moves)), shown);
     return { id, name, moves, setup, note };
   };
 
@@ -457,11 +462,7 @@ function build2(M: CubeModel) {
   const whiteCorners = (s: State) => ALL.filter((i) => colorsAt(s, CORNERS.find((c) => stickersOf(c).includes(i))!).includes(home[at('DFR', 'D')]));
   const bottomAndYellow = (s: State) => ALL.filter((i) => BOTTOM.some((c) => stickersOf(c).includes(i)) || s[i] === yellow);
   const make = (id: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string): Case => {
-    const setup = K.apply(home, invertAlg(moves));
-    if (shown) {
-      const keep = new Set(shown(setup));
-      setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
-    }
+    const setup = setUp(K.apply(home, invertAlg(moves)), shown);
     return { id, name, moves, setup, note };
   };
   const sexy = (n: number) => repeat(SEXY, n);
@@ -557,11 +558,7 @@ function buildBig(M: CubeModel) {
   const up = M.solved();
   const yellow = lessonKit(cube3).center(C3.home, 'U');
   const make = (id: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string, from = home): Case => {
-    const setup = M.applyAll(from, invertAlg(moves));
-    if (shown) {
-      const keep = new Set(shown(setup));
-      setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = UNSET; });
-    }
+    const setup = setUp(M.applyAll(from, invertAlg(moves)), shown);
     return { id, name, moves, setup, note };
   };
 
@@ -574,7 +571,7 @@ function buildBig(M: CubeModel) {
   // the corners are for later: their stickers are blank
   const noCorners = () => [...CENTERS, ...EDGE_STICKERS];
   // the first two layers, and the yellow stickers of the top edges, as for the yellow cross
-  const edgesShown = (s: State) => ALL.filter((i) => M.facelets[i].pos[1] !== m || CENTERS.includes(i) || (EDGE_STICKERS.includes(i) && s[i] === yellow));
+  const edgesShown = (s: State) => ALL.filter((i) => M.facelets[i].pos[1] !== m || outerAxes(i) === 1 || (outerAxes(i) === 2 && s[i] === yellow));
 
   // ---------- centers ----------
 
@@ -656,8 +653,9 @@ function buildBig(M: CubeModel) {
   const apart = (i: number, j: number) => pos(i).reduce((d, x, k) => d + (x - pos(j)[k]) ** 2, 0);
   const nearest = (a: number, b: number): [number, number] => {
     if (odd) return [bigOf[a][(bigOf[a].length - 1) / 2], bigOf[b][(bigOf[b].length - 1) / 2]];
-    const pairs = bigOf[a].flatMap((i) => bigOf[b].map((j): [number, number] => [i, j]));
-    return pairs.reduce((p, q) => (apart(...q) < apart(...p) || (apart(...q) === apart(...p) && Math.min(...q) < Math.min(...p)) ? q : p));
+    // the closest pair, the lowest sticker breaking ties
+    const pairs = bigOf[a].flatMap((i) => bigOf[b].map((j) => ({ ij: [i, j] as [number, number], d: apart(i, j), lo: Math.min(i, j) })));
+    return pairs.reduce((p, q) => (q.d < p.d || (q.d === p.d && q.lo < p.lo) ? q : p)).ij;
   };
   const bigArrows = (arrows: [number, number][]) => arrows.map(([a, b]) => nearest(a, b));
 

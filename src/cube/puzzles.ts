@@ -6,6 +6,7 @@ import { SolverClient } from '../core/worker';
 import { beginnerMethod } from './beginner';
 import { beginner2Method } from './beginner2';
 import { cfopMethod } from './cfop';
+import { CUBE3 } from './lessonKit';
 import { CubeModel, FACES, UNSET, invertMove, type LayerTurn } from './model';
 import { reductionMethod } from './reduction';
 import { ringMap } from './rings';
@@ -229,7 +230,7 @@ export const cube2: Puzzle = {
 
 // ---------- 3×3 ----------
 
-const model3 = new CubeModel(3);
+const model3 = CUBE3;
 const solver3 = new SolverClient(() => new Worker(new URL('./workers/3x3.worker.ts', import.meta.url), { type: 'module' }));
 
 export const cube3: Puzzle = {

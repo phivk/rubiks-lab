@@ -26,7 +26,7 @@ import { beginnerMethod, beginnerStages } from '../src/cube/beginner';
 import { beginner2Method, beginner2Stages } from '../src/cube/beginner2';
 import { allCases, bigCubeCases, cube2Cases, cubeCases, REDUCTION } from '../src/cube/cases';
 import { cfopMethod } from '../src/cube/cfop';
-import { asThree, lessonKit, ROTATIONS, TOP_CORNERS as TOP_C, TOP_EDGES as TOP_E, U_TURNS } from '../src/cube/lessonKit';
+import { asThree, lessonKit, ROTATIONS, stepMoves, TOP_CORNERS as TOP_C, TOP_EDGES as TOP_E, U_TURNS } from '../src/cube/lessonKit';
 import { CubeModel, FACES, invertAlg, UNSET } from '../src/cube/model';
 import { reductionMethod, reductionStages } from '../src/cube/reduction';
 import { rouxMethod } from '../src/cube/roux';
@@ -246,16 +246,15 @@ for (const n of [4, 5]) {
   const Kn = lessonKit(A.cube3);
   const B = bigCubeCases(Mn);
   const R = reductionStages(Mn);
-  const C3 = cubeCases(A.cube3);
   const big = `${n}×${n}`;
   // the beginner's cases: the 3×3's, on the big cube
-  const of3 = new Map(Object.values(C3.beginner).flat().flatMap((g) => g.cases).map((c) => [c.id, c]));
+  const of3 = allCases(A.cube3);
   for (const c of Object.values(B.beginner).flat().flatMap((g) => g.cases)) {
     const c3 = of3.get(c.id);
     if (!c3 || c3.moves.join(' ') !== c.moves.join(' ') || A.reduce(c.setup).join() !== c3.setup.join() || c.setup.join() !== A.lift(c3.setup).join())
       fail(`${big} ${c.name}: not the 3×3's case`);
   }
-  const moves = (steps: GuideStep[]) => steps.flatMap((x) => x.phrases.flatMap((p) => p.moves)).join(' ');
+  const moves = (steps: GuideStep[]) => steps.flatMap(stepMoves).join(' ');
   const turnsOnly = (x: GuideStep) => x.phrases.every((p) => p.label === 'Turn the whole cube');
   // the cases a guided solve's stage does exactly, from the state it's set up from
   const guided: [string[], (s: number[], steps: GuideStep[]) => void, number[]][] = [
