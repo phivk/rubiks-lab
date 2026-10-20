@@ -602,6 +602,16 @@ body.learn .panel.tutorial { display: flex; }
 .case .diagram { width: 84px; height: 84px; }
 .case-name { font-size: 12px; font-weight: 650; }
 .alias { color: var(--text-2); font-weight: 500; white-space: nowrap; }
+/* practised cases: a tick on the card, and counts on the stepper and the method picker */
+.case-tick {
+  display: none; position: absolute; top: 6px; right: 7px; width: 16px; height: 16px; border-radius: 50%;
+  place-items: center; font-size: 10px; font-weight: 700; background: rgba(61, 220, 151, 0.14); color: var(--good);
+}
+.case.practised .case-tick { display: grid; }
+.count { margin-left: 2px; font-size: 10.5px; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.count.full { color: var(--good); }
+.methods button .count { margin-left: 5px; }
+.method-name + .count { margin-left: 6px; font-size: 12px; }
 .level { display: inline-block; margin: 0 4px 0 2px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: #d6ceff; font-size: 11px; font-weight: 600; vertical-align: 1px; }
 .panel.tutorial .case-alg {
   font-size: 10.5px; padding: 0; background: none; color: var(--text-2); white-space: normal; line-height: 1.35;

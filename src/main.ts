@@ -8,7 +8,7 @@ import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 import { RingView } from './view/rings';
 import { Scanner } from './view/scanner';
-import { drillControlsHtml, drillStatus, markCode, movesHtml, offPlanHtml, stepperHtml, trigClass, triggerRuns } from './view/course';
+import { countHtml, courseProgress, drillControlsHtml, drillStatus, markCode, movesHtml, offPlanHtml, stepperHtml, trigClass, triggerRuns } from './view/course';
 import { snapshot } from './view/snapshot';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -1102,12 +1102,21 @@ function renderDrilling() {
     const k = s!.index;
     if (k > 0 && k < s!.moves.length) caseProgress.set(caseKey(s!.drill!), k);
     else caseProgress.delete(caseKey(s!.drill!));
+    // played through to the end: practised, on the cards, the stepper and the method picker
+    const id = caseAt(s!.drill!).id;
+    if (k >= s!.moves.length && !playing && !practisedIds().has(id)) {
+      practisedIds().add(id);
+      savePractised();
+      renderMethods();
+      renderStepper();
+    }
   }
   keepAwake(on);
   document.querySelectorAll<HTMLElement>('#tut-groups .case').forEach((card) => {
     const open = on && sameCase(s!.drill!, cardRef(card));
     const here = open && !s!.stale;
     card.classList.toggle('active', open);
+    card.classList.toggle('practised', practisedIds().has(card.dataset.id!));
     card.querySelectorAll<HTMLElement>('.mv').forEach((m) => {
       const i = Number(m.dataset.mv);
       m.classList.toggle('done', here && i < s!.index);
@@ -1239,10 +1248,12 @@ function renderLearn(fresh: boolean) {
   $('#solve-sub').textContent = 'On a new scramble, step by step';
   const mine = sessions.get(puzzle.id)!.state;
   const useMine = !puzzle.isSolved(mine) && puzzle.validate(mine).ok;
+  const { all } = progressOf(method);
   // only when it changes: an opened "How to read the moves" stays open as the cube turns
   setHtml($('#lesson-intro'), `
     <p><b>${method.name}</b> <span class="level">${method.level}</span> ${method.intro}</p>
-    ${method.stages.some((st) => st.caseGroups) ? '<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube.</p>' : ''}
+    ${all.total ? `<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube. ` +
+      (all.done ? `You’ve practised ${all.done} of ${all.total}. <button class="link" data-act="clear-progress">Start counting again</button>` : 'Each one you play through to the end gets a tick.') + '</p>' : ''}
     <p class="muted small">Make the moves yourself, here or on a real cube, and the guided solve follows along.</p>
     ${useMine ? '<button class="link use-mine" data-act="mine">Use my cube instead ›</button>' : ''}
     ${notationHelp(method.notation)}`);
@@ -1399,6 +1410,26 @@ function setStage(k: number, scroll = true) {
   }
 }
 
+/**
+ * The cases you've played through to the end, per puzzle, by id: a case counts in every
+ * course that has it (Sune in CFOP's OLL and in ZZ's OCLL). Kept across visits.
+ */
+const practised = new Map<string, Set<string>>();
+const practisedKey = () => `practised:${puzzle.id}`;
+function practisedIds() {
+  let ids = practised.get(puzzle.id);
+  if (!ids) {
+    try { ids = new Set(JSON.parse(localStorage.getItem(practisedKey()) ?? '[]') as string[]); } catch { ids = new Set(); }
+    practised.set(puzzle.id, ids);
+  }
+  return ids;
+}
+function savePractised() {
+  try { localStorage.setItem(practisedKey(), JSON.stringify([...practisedIds()])); } catch { /* storage unavailable */ }
+}
+/** how many of a method's cases you've practised, stage by stage and in all */
+const progressOf = (m: Method) => courseProgress(m.stages, (id) => practisedIds().has(id));
+
 /** how far into each case you got this session, so coming back to one resumes it */
 const caseProgress = new Map<string, number>();
 const caseKey = (r: CaseRef) => `${puzzle.id}:${currentMethod()?.id}:${r.stage}:${r.group}:${r.index}`;
@@ -1427,13 +1458,9 @@ async function openCase(ref: CaseRef, resume = false) {
 /** Learn's left panel: the method, its stages, and the stage on screen with its cases if it has any. */
 function renderCourse() {
   const method = currentMethod()!;
-  const methods = puzzle.methods!;
   stageIdx = Math.min(stageIdx, method.stages.length - 1);
   const stage = method.stages[stageIdx];
-  // the method picker, or the method's name when there's no choice
-  $('#methods').classList.toggle('single', methods.length < 2);
-  $('#methods').innerHTML = methods.length < 2 ? `<span class="method-name">${method.name}</span>` : methods.map((m) =>
-    `<button role="tab" data-method="${m.id}" class="${m === method ? 'active' : ''}" aria-selected="${m === method}" title="${m.name} · ${m.level}">${m.short}</button>`).join('');
+  renderMethods();
   // practising a case with a guided solve put aside: the way back to it
   const g = practiceKind === 'cases' ? guidedLesson() : null;
   const back = $('#btn-back-lesson');
@@ -1461,7 +1488,8 @@ function renderCourse() {
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${plural(g.cases.length, 'case')}</span></div>
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
-          <div class="case" data-group="${gi}" data-index="${i}">
+          <div class="case" data-group="${gi}" data-index="${i}" data-id="${c.id}">
+            <span class="case-tick" title="Practised" aria-label="Practised">✓</span>
             <button class="case-hit" title="Set up ${c.name}" aria-label="Set up ${c.name}"></button>
             ${diagram(stage, c)}<span class="case-name">${caseName(c)}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, method.triggers, c.breakAfter)}</code>${drillControlsHtml()}
           </div>`).join('')}</div>
@@ -1474,9 +1502,35 @@ function renderCourse() {
   renderDrilling();
 }
 
-/** The method's stages, ‹ one › after another: the one on screen, and how far a guided solve has got. */
+/** The method's stages, ‹ one › after another: the one on screen, how far a guided solve has got, and how many cases you've practised. */
 function renderStepper() {
-  setHtml($('#tut-steps'), stepperHtml(currentMethod()!.stages, stageIdx, lessonStage(guidedLesson())));
+  const method = currentMethod()!;
+  setHtml($('#tut-steps'), stepperHtml(method.stages, stageIdx, lessonStage(guidedLesson()), progressOf(method).stages));
+}
+
+/** The method picker, or the method's name when there's no choice, each with how many of its cases you've practised. */
+function renderMethods() {
+  const method = currentMethod()!;
+  const methods = puzzle.methods!;
+  $('#methods').classList.toggle('single', methods.length < 2);
+  setHtml($('#methods'), methods.length < 2 ? `<span class="method-name">${method.name}</span>${countHtml(progressOf(method).all)}` : methods.map((m) => {
+    const { all } = progressOf(m);
+    const title = `${m.name} · ${m.level}${all.total ? ` · ${all.done} of ${all.total} cases practised` : ''}`;
+    return `<button role="tab" data-method="${m.id}" class="${m === method ? 'active' : ''}" aria-selected="${m === method}" title="${title}">${m.short}${all.done ? countHtml(all) : ''}</button>`;
+  }).join(''));
+}
+
+/** Forget which of this puzzle's cases you've practised, with an undo. */
+function clearProgress() {
+  const before = [...practisedIds()];
+  const restore = (ids: string[]) => {
+    practised.set(puzzle.id, new Set(ids));
+    savePractised();
+    renderSolution();
+    renderDrilling();
+  };
+  restore([]);
+  toast(`Ticks cleared for the ${puzzle.name}`, '', { label: 'Undo', run: () => restore(before) });
 }
 
 /** The open case, big, with what's next once it's done. */
@@ -1684,6 +1738,7 @@ function bind() {
   $('#btn-about').addEventListener('click', showAbout);
   $('#lesson-intro').addEventListener('click', (e) => {
     if ((e.target as HTMLElement).closest('[data-about]')) showAbout();
+    if ((e.target as HTMLElement).closest('[data-act="clear-progress"]')) clearProgress();
   });
   $('#btn-share').addEventListener('click', async () => {
     saveToUrl();

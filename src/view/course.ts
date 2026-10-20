@@ -1,5 +1,6 @@
 // The pieces Learn builds its pages from, for any method: the stage stepper, a move sequence
-// with its triggers marked, a case's drill controls, and the banner for a cube turned off plan.
+// with its triggers marked, a case's drill controls, the banner for a cube turned off plan, and
+// how many of a course's cases you've practised.
 // Each returns HTML; main.ts puts it on screen and handles the clicks (data-act, data-ctl).
 
 import type { Method, Stage } from '../core/types';
@@ -40,14 +41,34 @@ export function movesHtml(moves: string[], triggers: Triggers, breakAfter?: numb
 export const markCode = (html: string, triggers: Triggers) =>
   html.replace(/<code>([^<]*)<\/code>/g, (_, text: string) => `<code>${movesHtml(text.split(' ').filter(Boolean), triggers)}</code>`);
 
+export interface Progress {
+  done: number;
+  total: number;
+}
+
 /**
- * The method's stages, one after another: the one on screen, and how far a guided solve has
- * got (`reached`, the stage it's in, the number of stages once it's done, or -1 without one).
+ * How many of a course's cases are `practised`, stage by stage and in all. A case counts once
+ * however many stages have it.
  */
-export function stepperHtml(stages: Stage[], active: number, reached: number) {
+export function courseProgress(stages: Stage[], practised: (id: string) => boolean) {
+  const count = (ids: Set<string>): Progress => ({ done: [...ids].filter(practised).length, total: ids.size });
+  const idsOf = (st: Stage) => new Set((st.caseGroups ?? []).flatMap((g) => g.cases.map((c) => c.id)));
+  return { stages: stages.map((st) => count(idsOf(st))), all: count(new Set(stages.flatMap((st) => [...idsOf(st)]))) };
+}
+
+/** "3/7", for a count shown beside a stage or method name; nothing without cases */
+export const countHtml = (p: Progress) =>
+  p.total ? `<span class="count${p.done === p.total ? ' full' : ''}" title="${p.done} of ${p.total} cases practised">${p.done}/${p.total}</span>` : '';
+
+/**
+ * The method's stages, one after another: the one on screen, how far a guided solve has got
+ * (`reached`, the stage it's in, the number of stages once it's done, or -1 without one), and
+ * how many of each stage's cases you've practised.
+ */
+export function stepperHtml(stages: Stage[], active: number, reached: number, progress: Progress[] = []) {
   return stages.map((st, i) => {
     const state = reached < 0 ? '' : i < reached ? ' done' : i === reached ? ' current' : '';
-    return `<button role="tab" data-step="${i}" class="${i === active ? 'active' : ''}${state}" aria-selected="${i === active}"><span class="num">${state === ' done' ? '✓' : i + 1}</span>${st.name}</button>`;
+    return `<button role="tab" data-step="${i}" class="${i === active ? 'active' : ''}${state}" aria-selected="${i === active}"><span class="num">${state === ' done' ? '✓' : i + 1}</span>${st.name}${progress[i] ? countHtml(progress[i]) : ''}</button>`;
   }).join('');
 }
 
