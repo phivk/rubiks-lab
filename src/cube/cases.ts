@@ -11,6 +11,11 @@
 //                PLL: the 2 corner cases, then the 4 edge cases
 //   full         all 57 OLLs, by shape, and all 21 PLLs, by what moves
 //
+// ZZ and Roux build blocks rather than a cross: a block's last pair is an F2L pair turned with
+// R and U only (or, mirrored, L and U), so those F2L cases come up in both. ZZ adds example
+// edge orientations and line edges; Roux the two-look CMLL (OLL's corner cases, then the T or
+// Y perm, with the M slice and top edges blank) and examples of the last six edges.
+//
 // The 2×2 has its own set (cube2Cases), for its beginner's method: the white corners as on the
 // 3×3, the seven shapes of the yellow top, each with the run of Sunes that solves it, and the
 // two corner swaps.
@@ -392,6 +397,127 @@ function buildCases(M: CubeModel) {
     }],
   };
 
+  // ---------- blocks: ZZ's and Roux's ----------
+
+  // a block's last pair goes in like an F2L pair, but turning only R and U (or, on the left, L
+  // and U): the F2L cases that do, and their mirror images
+  const RU = (text: string) => alg(text).every((m) => /^[RU]['2]?$/.test(m));
+  const rightPairs = F2L_GROUPS.map((g) => ({ ...g, cases: g.cases.filter(([, a]) => RU(a)) })).filter((g) => g.cases.length);
+  const mirrorMove = (m: string) => (m[0] === 'R' ? 'L' : m[0]) + (m[1] === '2' ? '2' : m[1] ? '' : "'");
+  /** a name or note for the mirror image: left for right (but not “already right”), and each move mirrored */
+  const mirrorText = (text: string) => text
+    .replace(/(?<!already )\b(right|left)\b/g, (w) => (w === 'right' ? 'left' : 'right'))
+    .replace(/(?<![A-Za-z])([RU])(′|2)?(?![A-Za-z0-9′])/g, (_, f: string, x = '') => (f === 'R' ? 'L' : f) + (x === '2' ? '2' : x ? '' : '′'));
+  const slots = (names: string[]) => names.flatMap((slot) => stickersOf(slot));
+  const kept = (fixed: string[], pieces: number[][]) => (s: State) => [...slots(fixed), ...focusOn(pieces)(s)];
+  const rightPair = [[white, center(home, 'F'), center(home, 'R')], [center(home, 'F'), center(home, 'R')]];
+  const leftPair = [[white, center(home, 'F'), center(home, 'L')], [center(home, 'F'), center(home, 'L')]];
+  /** the last pair of a block, at the front right or (mirrored) the front left, with `fixed` done */
+  const pairGroups = (side: 'R' | 'L', prefix: string, fixed: string[]): CaseGroup[] => rightPairs.map(({ id, name, about, cases }) => (side === 'R'
+    ? { id: `${prefix}-${id}`, name, about, cases: cases.map(([n, a, note]) => make(`f2l-${slug(n)}`, n, a, kept(fixed, rightPair), note)) }
+    : {
+      id: `${prefix}-${id}`, name, about: mirrorText(about),
+      cases: cases.map(([n, a, note]) => make(`left-pair-${slug(mirrorText(n))}`, mirrorText(n), alg(a).map(mirrorMove), kept(fixed, leftPair), mirrorText(note))),
+    }));
+  const LINE = ['DF', 'DB'];
+  const LEFT_SQUARE = ['DL', 'BL', 'DLB'];
+  const LEFT_BLOCK = [...LEFT_SQUARE, 'FL', 'DFL'];
+  const RIGHT_SQUARE = ['DR', 'BR', 'DBR'];
+  const RIGHT_BLOCK = [...RIGHT_SQUARE, 'FR', 'DRF'];
+
+  // ---------- ZZ ----------
+
+  /** ZZ's edge orientation, in the guided solve's words: [name, algorithm, note] */
+  const EO_CASES: [string, string, string][] = [
+    ['Four on the front', 'F', 'One quarter turn of the front flips all four.'],
+    ['Three on the front, one on top', 'U F', 'U brings the top one round to the front, then F flips all four.'],
+    ['One on the front, one on top', 'F U F', 'F flips the front four, which leaves three bad there and the top one still bad. U brings the top one round to the front, and F flips all four.'],
+    ['Two on top, side by side', "F R' F", 'F leaves three bad on the front and one at the right of the top. R′ brings that one down to the front, and F flips all four.'],
+    ['Four on the front, four on the back', 'F B', 'F flips the front four, B the back four.'],
+  ];
+  /** the line: the white–green edge, with every edge good, from where it can be [name, algorithm, note] */
+  const LINE_CASES: [string, string, string][] = [
+    ['On top, above its spot', 'F2', 'A half turn of the front brings it down. Half turns keep every edge good.'],
+    ['On top, to one side', 'U F2', 'U brings it above its spot first.'],
+    ['In the middle layer', 'R U F2', 'R lifts it to the top, U brings it above its spot, and F2 brings it down.'],
+    ['On the bottom, to one side', 'R2 U F2', 'R2 lifts it to the top; the rest is as from the top. D would move the other line edge.'],
+  ];
+  const allEdges = () => [...centers, ...EDGES.flatMap((slot) => stickersOf(slot))];
+  const lineEdges = [...'FB'].map((f) => [white, center(home, f)]);
+  const zz = {
+    eoLine: [
+      {
+        id: 'zz-eo',
+        name: 'Orienting the edges',
+        about: 'Bad edges, held white down. A quarter turn of F or B flips the four edges on that face: gather bad ones there with the other faces, and flip them four at a time.',
+        cases: EO_CASES.map(([n, a, note]) => make(`zz-eo-${slug(n)}`, n, a, allEdges, note)),
+      },
+      {
+        id: 'zz-line',
+        name: 'The line',
+        about: 'Every edge is good now, so no more quarter turns of F or B. The white–green edge goes on the bottom at the front, white facing down; the white–blue one goes at the back the same way.',
+        cases: LINE_CASES.map(([n, a, note]) => make(`zz-line-${slug(n)}`, n, a, lit(lineEdges), note)),
+      },
+    ],
+    leftBlock: pairGroups('L', 'zz-left', [...'UDFRBL', ...LINE, ...LEFT_SQUARE]),
+    rightBlock: pairGroups('R', 'zz-right', [...'UDFRBL', ...LINE, ...LEFT_BLOCK, ...RIGHT_SQUARE]),
+  };
+
+  // ---------- Roux ----------
+
+  const BLOCKS = [...'LR', ...LEFT_BLOCK, ...RIGHT_BLOCK];
+  // the centers too, which the arrows go by (from above, only the top one shows)
+  const BLOCK_STICKERS = [...slots(BLOCKS), ...centers];
+  // the M slice's edges and the top edges are free until the end: only the blocks and the top corners show
+  const cmllOrient = (s: State) => [...BLOCK_STICKERS, ...[...TOP_CORNER_STICKERS].filter((i) => s[i] === yellow)];
+  const cmllSwap = () => [...BLOCK_STICKERS, ...TOP_CORNER_STICKERS];
+  /** the last six edges: [name, algorithm, note] */
+  const LSE_CASES: Record<'eo' | 'lr' | 'm', [string, string, string][]> = {
+    eo: [
+      ['All four in the slice', "M'", 'The centers are a quarter turn off too. One M′ flips all four and turns the centers back.'],
+      ['Arrow', "M' U M", 'Three bad on top and one at the bottom front. M′ leaves bad edges at the sides of the top and in the bottom; U turns the side ones into the slice, and M flips all four.'],
+      ['Four on top', 'M2 U M', 'The centers are a quarter turn off. M2 leaves bad edges at the sides of the top and in the bottom; U turns the side ones into the slice, and M flips all four.'],
+      ['Two on top, side by side', "M' U' M' U M", 'The centers are a quarter turn off. M′ U′ makes the Arrow, and M′ U M finishes it.'],
+    ],
+    lr: [
+      ['Both on the bottom', 'M2 U', 'M2 brings both up, to the front and back of the top; U turns them to the sides.'],
+      ['One on top, one below', "M' U2 M' U", 'M′ U2 M′ brings the bottom one up opposite the other and keeps every edge good; U turns them to the sides.'],
+    ],
+    m: [
+      ['Slice upside down', 'M2', 'The top and bottom edges and centers have swapped: M2 turns the slice back.'],
+      ['Bottom back done, three to cycle', "M' U2 M U2", 'The two U2s swap the top edges round M′ and M, which cycles the other three.'],
+      ['Bottom front done, three to cycle', "M U2 M' U2", 'The mirror image: M, then M′, with the top edges swapped in between.'],
+      ['Both pairs swapped', 'U2 M2 U2 M2', 'The top two edges swap, and so do the bottom two.'],
+    ],
+  };
+  const lse = (key: keyof typeof LSE_CASES) => LSE_CASES[key].map(([n, a, note]) => make(`lse-${slug(n)}`, n, a, undefined, note));
+  const roux = {
+    firstBlock: pairGroups('L', 'roux-first', ['L', 'R', ...LEFT_SQUARE]),
+    secondBlock: pairGroups('R', 'roux-second', ['L', 'R', ...LEFT_BLOCK, ...RIGHT_SQUARE]),
+    cmll: [
+      {
+        id: 'cmll-orient',
+        name: '1 · Orient the corners',
+        about: 'Look only at the four top corners: how many show yellow on top, and where the others face. The algorithms are OLL’s corner cases; the top edges don’t matter.',
+        cases: OLL_CORNERS.map((a) => twoLook(a, cmllOrient)),
+      },
+      {
+        id: 'cmll-swap',
+        name: '2 · Swap the corners',
+        about: 'All four corners are yellow on top. Look for headlights: two matching corner colors on a side.',
+        cases: [
+          perm('T', cmllSwap, 'Headlights on one side: hold them on the left. The two corners on the right swap.'),
+          perm('Y', cmllSwap, 'No headlights: two opposite corners swap.'),
+        ],
+      },
+    ],
+    lse: [
+      { id: 'lse-eo', name: 'Orient the edges', about: 'An edge is bad when its yellow or white sticker faces a side. M flips the four slice edges: bring bad ones into the slice with U, and flip them.', cases: lse('eo') },
+      { id: 'lse-lr', name: 'Left and right edges', about: 'Every edge is good. The two edges that belong at the left and right of the top go there, matching the corners beside them. Turn M only by halves, or in pairs like M′ U2 M′, so every edge stays good.', cases: lse('lr') },
+      { id: 'lse-m', name: 'The middle slice', about: 'Only the four slice edges and the centers are left: M turns, and U2 to swap the top two.', cases: lse('m') },
+    ],
+  };
+
   return {
     home,
     /** the top layer, to keep lit while a last-layer case plays */
@@ -401,6 +527,7 @@ function buildCases(M: CubeModel) {
     cross, f2l,
     ollEdges, ollCorners, oll,
     pllCorners, pllEdges, pll,
+    zz, roux,
   };
 }
 
@@ -661,6 +788,9 @@ export function allCases(M: CubeModel) {
     return new Map(groups.flatMap((g) => g.cases).map((c) => [c.id, c]));
   }
   const C = cubeCases(M);
-  const groups = [...Object.values(C.beginner).flat(), ...C.cross, ...C.f2l, C.ollEdges, C.ollCorners, ...C.oll, C.pllCorners, C.pllEdges, ...C.pll];
+  const groups = [
+    ...Object.values(C.beginner).flat(), ...C.cross, ...C.f2l, C.ollEdges, C.ollCorners, ...C.oll, C.pllCorners, C.pllEdges, ...C.pll,
+    ...Object.values(C.zz).flat(), ...Object.values(C.roux).flat(),
+  ];
   return new Map(groups.flatMap((g) => g.cases).map((c) => [c.id, c]));
 }

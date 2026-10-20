@@ -10,20 +10,72 @@
 //
 // Once the edges are oriented, F and B quarter turns are never needed again — the rest of
 // the solve is turning L, U and R, which is what makes ZZ fast and easy to look ahead in.
+//
+// The course is the same five stages, with their cases (cases.ts): example edge orientations
+// and line edges, each block's last pair (the F2L pairs that go in with L and U, or R and U),
+// then OCLL's seven cases and all 21 PLLs. The last-layer steps name their case.
 
-import type { GuideStep, Method, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
 import { OCLL } from './algs';
+import { cubeCases } from './cases';
 import { ollStep, pllStep } from './lastLayer';
 import { countMoves, EDGES, FACE_MOVES, lessonKit, macroMoves, onceOnly, plural, ROTATIONS, turns, WIDE_NOTATION, type Once } from './lessonKit';
 import type { CubeModel } from './model';
 
-export const ZZ_STAGES = [
+const ZZ_STAGES = [
   { id: 'eoline', name: 'EOLine', goal: 'Edge Orientation plus a line: orient every edge, then line up the two white edges on the bottom, front and back.' },
   { id: 'left-block', name: 'Left block', goal: 'Build a 1×2×3 block on the left, turning only L, U and R.' },
   { id: 'right-block', name: 'Right block', goal: 'Build the matching block on the right with U and R: the first two layers.' },
   { id: 'ocll', name: 'OCLL', goal: 'Orient the Corners of the Last Layer: the edges are oriented, so one of seven algorithms turns the top yellow.' },
   { id: 'pll', name: 'PLL', goal: 'Permute the Last Layer: one algorithm moves the top pieces to their spots.' },
 ];
+
+/** The course: each stage explained, with its cases. */
+function zzCourse(M: CubeModel): Stage[] {
+  const C = cubeCases(M);
+  const [eoline, left, right, ocll, pll] = ZZ_STAGES;
+  return [
+    {
+      ...eoline,
+      html: `<p>Hold the cube with the <b>white center down</b> and green in front. An edge is <b>bad</b> if it can’t get home without a quarter turn of F or B; the EOLine makes every edge good, then puts the white–green and white–blue edges on the bottom, front and back: the line.</p>
+        <p>To spot a bad edge, look at its sticker on the top or bottom face, or, in the middle layer, on the front or back. If that sticker is the left or right center’s color, the edge is bad. If it’s the front or back center’s, the edge is bad when its other sticker is yellow or white.</p>
+        <p>A quarter turn of F or B flips the four edges on that face, so bring bad ones there and flip them in fours. The examples show the usual ways; in a solve you plan the whole EOLine while you inspect the cube.</p>`,
+      caseGroups: C.zz.eoLine,
+      view: 'corner',
+    },
+    {
+      ...left,
+      html: `<p>The <b>left block</b> is 1×2×3: the white–red edge on the bottom, plus the two corners and two edges beside it on the left. Build it as a square at the back, then a corner–edge pair at the front, turning only L, U and R so every edge stays good.</p>
+        <p>The square has no algorithm: join pieces that are close. The pair goes in like an F2L pair, mirrored: the cases below are the ones that need only L and U.</p>`,
+      caseGroups: C.zz.leftBlock,
+      view: 'left',
+    },
+    {
+      ...right,
+      html: `<p>The <b>right block</b> is the same on the right, turning only U and R: anything else would break the left block. With it the first two layers are done.</p>
+        <p>Build a square at the back, then put the last pair in at the front. These are the F2L pairs that go in with only R and U.</p>`,
+      caseGroups: C.zz.rightBlock,
+      view: 'corner',
+    },
+    {
+      ...ocll,
+      html: `<p><b>OCLL</b> stands for <b>O</b>rient the <b>C</b>orners of the <b>L</b>ast <b>L</b>ayer. The edges were oriented in the EOLine, so the top already shows a yellow cross: only the seven corner cases of OLL can come up.</p>
+        <p>Count the yellow corners on top and look where the side ones face, turn the top until your cube matches a picture, and do its algorithm.</p>`,
+      caseGroups: [C.ollCorners],
+      view: 'top',
+      focus: C.focusTop,
+    },
+    {
+      ...pll,
+      html: `<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, move its pieces to their spots, in one algorithm. There are 21, each a letter-named “perm”; the arrows show where each piece goes.</p>
+        <p>Look at the sides of the top layer: two matching corner stickers on a side are <b>headlights</b>, and a side that’s all one color is a solved bar. Turn the top to match a picture, do the algorithm, and line the top up.</p>`,
+      caseGroups: C.pll,
+      view: 'top',
+      arrows: C.pllArrows,
+      focus: C.focusTop,
+    },
+  ];
+}
 
 export function zzMethod(M: CubeModel): Method {
   if (M.n !== 3) throw new Error('ZZ is for the 3×3');
@@ -206,7 +258,7 @@ export function zzMethod(M: CubeModel): Method {
     level: 'Advanced',
     intro: 'Orient all the edges first, and the rest of the solve needs only L, U and R turns: the EOLine (Edge Orientation plus a line), two blocks, then the last layer with fewer cases (OCLL: Orient the Corners of the Last Layer, then PLL: Permute the Last Layer).',
     notation: WIDE_NOTATION,
-    stages: ZZ_STAGES,
+    stages: zzCourse(M),
     solve: (state) => {
       const steps: GuideStep[] = [];
       let s = eoLine(state, steps, onceOnly());

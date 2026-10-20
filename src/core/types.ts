@@ -148,8 +148,8 @@ export interface Stage {
   /** the course's explanation, as HTML; without it the course shows the goal */
   html?: string;
   caseGroups?: CaseGroup[];
-  /** how a case is pictured: the puzzle from its usual angle, or its top from above */
-  view?: 'corner' | 'top';
+  /** how a case is pictured: the puzzle from its usual angle, from the front left, or its top from above */
+  view?: 'corner' | 'left' | 'top';
   /** arrows on a case's picture, from sticker to sticker */
   arrows?: (c: Case) => [number, number][];
   /** the stickers to keep lit on the 3D cube while a case plays, for any state, if not all */

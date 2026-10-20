@@ -12,16 +12,21 @@
 // blocks; every goal is a position on the cube rather than "match the center", and the last
 // step lines the centers up. Nothing is placed by algorithm until CMLL — the blocks are the
 // cheapest moves found by a search over the few pieces each step places.
+//
+// The course is the same stages, with their cases (cases.ts): each block's last pair (the F2L
+// pairs that go in with L and U, or R and U), two-look CMLL, whose steps name their case, and
+// examples of each part of the last six edges.
 
-import type { GuideStep, Method, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
 import { OCLL, PLL } from './algs';
+import { cubeCases } from './cases';
 import { bestAlg, focusTopCorners, headlights } from './lastLayer';
 import {
   alg, countMoves, FACE_MOVES, lessonKit, list, macroMoves, onceOnly, plural, ROTATIONS, TOP_CORNERS, turns, WIDE_NOTATION, type Macro,
 } from './lessonKit';
 import type { CubeModel } from './model';
 
-export const ROUX_STAGES = [
+const ROUX_STAGES = [
   { id: 'first-block', name: 'First block', goal: 'Build a 1×2×3 block on the left: a square, then a corner–edge pair.' },
   { id: 'second-block', name: 'Second block', goal: 'Build the matching block on the right, turning only U, R, r and M.' },
   { id: 'cmll', name: 'CMLL', goal: 'Corners of the Last Layer, with the M slice still free: solve the four top corners without breaking the blocks.' },
@@ -32,6 +37,56 @@ export const ROUX_STAGES = [
 
 const LSE_EDGES = ['UF', 'UB', 'UL', 'UR', 'DF', 'DB'];
 const MU = [...turns('M'), ...turns('U')];
+
+/** The course: each stage explained, with its cases. */
+function rouxCourse(M: CubeModel): Stage[] {
+  const C = cubeCases(M);
+  const [first, second, cmll, eo, lr, slice] = ROUX_STAGES;
+  return [
+    {
+      ...first,
+      html: `<p>Hold the cube with the <b>white center down</b>. The <b>first block</b> is 1×2×3, on the left: the white–red edge on the bottom, plus the two corners and two edges beside it. The middle slice and the right side are free, so any move goes.</p>
+        <p>Build a 2×2 square at the back first; there’s no algorithm for it, just join pieces that are close. Then the last corner–edge pair goes in at the front, like an F2L pair mirrored: the cases below are the ones that need only L and U.</p>`,
+      caseGroups: C.roux.firstBlock,
+      view: 'left',
+    },
+    {
+      ...second,
+      html: `<p>The <b>second block</b> matches it on the right. Turn only U, R, r and M: none of them touches the first block. The middle slice is still free, so its centers may be off for now.</p>
+        <p>Again a square at the back, then a pair at the front. These are the F2L pairs that go in with only R and U; M and r help bring pieces up from the bottom of the slice.</p>`,
+      caseGroups: C.roux.secondBlock,
+      view: 'corner',
+    },
+    {
+      ...cmll,
+      html: `<p><b>CMLL</b> stands for <b>C</b>orners of the <b>L</b>ast <b>L</b>ayer, with the <b>M</b> slice still free: the four top corners go home, and the top edges may move however the algorithm moves them.</p>
+        <p>Full CMLL has 42 algorithms; this is the two-look version. First turn all four corners yellow up with one of OLL’s seven corner algorithms, then swap two of them with the T or Y perm. The pictures show only the corners and the blocks.</p>`,
+      caseGroups: C.roux.cmll,
+      view: 'top',
+      arrows: C.pllArrows,
+      focus: C.focusTop,
+    },
+    {
+      ...eo,
+      html: `<p><b>LSE</b> stands for <b>L</b>ast <b>S</b>ix <b>E</b>dges: the four top edges and the two in the bottom of the M slice, plus the middle centers. From here on only M and U turn.</p>
+        <p>First orient them. An edge is <b>bad</b> when its yellow or white sticker faces a side instead of up or down. M flips the four edges in the slice: bring bad ones there with U turns, then flip them. Finish with yellow or white on top.</p>`,
+      caseGroups: [C.roux.lse[0]],
+      view: 'corner',
+    },
+    {
+      ...lr,
+      html: `<p>Next, the edges that belong at the left and right of the top. A common way: bring one to the bottom of the slice, turn the top so its partner is opposite, and bring both up with M2. Then U turns them to the sides.</p>`,
+      caseGroups: [C.roux.lse[1]],
+      view: 'corner',
+    },
+    {
+      ...slice,
+      html: `<p>Last, the four edges and the centers in the M slice: M turns, with U2 to swap the two top edges.</p>`,
+      caseGroups: [C.roux.lse[2]],
+      view: 'corner',
+    },
+  ];
+}
 
 export function rouxMethod(M: CubeModel): Method {
   if (M.n !== 3) throw new Error('Roux is for the 3×3');
@@ -60,7 +115,7 @@ export function rouxMethod(M: CubeModel): Method {
     level: 'Advanced',
     intro: 'Two blocks on the sides, the top corners (CMLL: Corners of the Last Layer, M slice free), then the last six edges (LSE) with just M and U turns. Few moves and few algorithms — most of it is figured out, not memorised.',
     notation: WIDE_NOTATION,
-    stages: ROUX_STAGES,
+    stages: rouxCourse(M),
     solve: (state) => {
       const steps: GuideStep[] = [];
       const white = 0;
@@ -189,6 +244,7 @@ export function rouxMethod(M: CubeModel): Method {
             `<p>${best.u ? 'Turn the top to the starting angle, then do' : 'Do'} ${code(moves)} to turn all four ${name(ref.U)}-side up. It keeps both blocks.</p>`,
           phrases: [...K.topPhrase(best.u), { label: o.name, moves }],
           focus: focusTopCorners(K),
+          caseId: o.id,
         });
         s = best.t;
       }
@@ -210,6 +266,7 @@ export function rouxMethod(M: CubeModel): Method {
               : `<p>No side shows headlights${lights.length ? '' : ' (two matching corner colors)'}, so two opposite corners need to swap. Do ${code(alg(p.alg))} (the Y-perm, borrowed from PLL — Permute the Last Layer; it moves top edges too, which is fine).</p>`),
           phrases,
           focus: focusTopCorners(K),
+          caseId: p?.id,
         });
         s = best.t;
       }

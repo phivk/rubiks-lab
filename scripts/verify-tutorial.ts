@@ -21,6 +21,11 @@
 //
 // Pyraminx: each case solves its setup and is one its stage meets, the guided solve does
 // exactly its algorithm on it and names it, and the moving top-layer cases have arrows.
+//
+// ZZ and Roux: the edge-orientation cases start with bad edges and end with none, the line
+// and later cases keep every edge good, a block's pairs turn only R and U (or L and U) and are
+// F2L's cases (or their mirror images), the last six edges' cases are each one of their part,
+// and the guided solve names each last-layer case on its setup.
 import type { Case, GuideStep, Method } from '../src/core/types';
 import { beginnerMethod, beginnerStages } from '../src/cube/beginner';
 import { beginner2Method, beginner2Stages } from '../src/cube/beginner2';
@@ -348,6 +353,59 @@ let pyraCount = 0;
     }
   });
   if (pyraCount !== ids.size) fail(`Pyraminx: the course has ${pyraCount} cases, the set ${ids.size}`);
+}
+
+// ---------- ZZ and Roux ----------
+
+{
+  const zz = zzMethod(M), roux = rouxMethod(M);
+  const full = (c: Case) => K.apply(home, invertAlg(c.moves));
+  const ref = Object.fromEntries([...'URFDLB'].map((f) => [f, K.center(home, f)]));
+  const ud = [ref.U, ref.D], fb = [ref.F, ref.B];
+  const EDGES = ['UF', 'UR', 'UB', 'UL', 'FR', 'FL', 'BR', 'BL', 'DF', 'DR', 'DB', 'DL'];
+  /** ZZ's bad edges: the key sticker (top or bottom color, else front or back) off the slot's key face */
+  const zzBad = (s: number[]) => EDGES.filter((slot) => {
+    const key = [...slot].find((f) => 'UD'.includes(f)) ?? [...slot].find((f) => 'FB'.includes(f))!;
+    const a = s[K.at(slot, key)], b = s[K.at(slot, [...slot].find((f) => f !== key)!)];
+    return !(ud.includes(a) || (!ud.includes(b) && fb.includes(a)));
+  }).length;
+  const groups = (m: Method, k: number) => m.stages[k].caseGroups!.flatMap((g) => g.cases);
+  for (const c of groups(zz, 0)) {
+    const t = full(c);
+    if (c.id.startsWith('zz-eo-') && (!zzBad(t) || zzBad(K.apply(t, c.moves.slice(0, -1))) === 0)) fail(`ZZ ${c.name}: not an edge-orientation case`);
+    if (c.id.startsWith('zz-line-') && (zzBad(t) || c.moves.some((m) => /^[FB]'?$/.test(m)))) fail(`ZZ ${c.name}: breaks the edge orientation`);
+  }
+  // a block's pairs: F2L's, or their mirror images, with the right turns
+  const f2lMoves = new Map(C.f2l.flatMap((g) => g.cases).map((c) => [c.id, c.moves.join(' ')]));
+  const mirror = (m: string) => (m[0] === 'L' ? 'R' : m[0]) + (m[1] === '2' ? '2' : m[1] ? '' : "'");
+  for (const [m, left, right] of [[zz, 1, 2], [roux, 0, 1]] as const) {
+    for (const c of groups(m, left)) {
+      if (c.moves.some((x) => !/^[LU]['2]?$/.test(x))) fail(`${m.name} ${c.name}: turns more than L and U`);
+      if (![...f2lMoves.values()].includes(c.moves.map(mirror).join(' '))) fail(`${m.name} ${c.name}: not an F2L case mirrored`);
+    }
+    for (const c of groups(m, right)) {
+      if (c.moves.some((x) => !/^[RU]['2]?$/.test(x))) fail(`${m.name} ${c.name}: turns more than R and U`);
+      if (f2lMoves.get(c.id) !== c.moves.join(' ')) fail(`${m.name} ${c.name}: not F2L's ${c.id}`);
+    }
+  }
+  // the last six edges: bad edges for the first part, then every edge good with the corners
+  // home and, for the middle slice, the left and right edges home too
+  const LSE = ['UF', 'UB', 'UL', 'UR', 'DF', 'DB'];
+  const lseBad = (t: number[]) => LSE.filter((slot) => !ud.includes(t[K.at(slot, [...slot].find((f) => 'UD'.includes(f))!)])).length;
+  // home is where the blocks say, whatever the slice's centers do
+  const home3 = (t: number[], slots: string[]) => same(t, slots.flatMap((slot) => K.stickersOf(slot)));
+  groups(roux, 3).forEach((c) => { if (!lseBad(full(c))) fail(`Roux ${c.name}: no bad edges`); });
+  groups(roux, 4).forEach((c) => { const t = full(c); if (lseBad(t) || upTo(t, (x) => home3(x, ['UL', 'UR', ...TOP_C]))) fail(`Roux ${c.name}: not a left-and-right case`); });
+  groups(roux, 5).forEach((c) => { if (lseBad(full(c)) || !home3(full(c), ['UL', 'UR', ...TOP_C])) fail(`Roux ${c.name}: not a middle-slice case`); });
+  // the last layer: the guided solve names each case on its setup
+  for (const [m, stages] of [[zz, [3, 4]], [roux, [2]]] as const) {
+    for (const k of stages) {
+      for (const c of groups(m, k)) {
+        const named = m.solve!(full(c)).map((x) => x.caseId);
+        if (!named.includes(c.id)) fail(`${m.name} ${c.name}: the guided solve names ${named.filter(Boolean).join(', ') || 'no case'}`);
+      }
+    }
+  }
 }
 
 // ---------- every case of every method ----------
