@@ -1,0 +1,497 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-06T19:09:37.858Z",
+  "title": "Design System: Rubik's Lab",
+  "extensions": {
+    "colorMeta": {
+      "accent-violet": {
+        "role": "primary",
+        "displayName": "Workbench Violet",
+        "canonical": "oklch(66.4% 0.189 287)",
+        "tonalRamp": [
+          "#130044",
+          "#290071",
+          "#431f9c",
+          "#6045c4",
+          "#7f6ae9",
+          "#a090ff",
+          "#c3b8ff",
+          "#e9e3ff"
+        ]
+      },
+      "accent-sky": {
+        "role": "primary",
+        "displayName": "Skylight Blue",
+        "canonical": "oklch(79.2% 0.125 234)",
+        "tonalRamp": [
+          "#000b2d",
+          "#002952",
+          "#004978",
+          "#006a9d",
+          "#148dc0",
+          "#51b0e2",
+          "#84d4ff",
+          "#bdf8ff"
+        ]
+      },
+      "good-mint": {
+        "role": "secondary",
+        "displayName": "Solved Mint",
+        "canonical": "oklch(79.7% 0.164 160)",
+        "tonalRamp": [
+          "#001700",
+          "#003703",
+          "#00581f",
+          "#007b3e",
+          "#009e5f",
+          "#30c183",
+          "#73e3ab",
+          "#b3ffd7"
+        ]
+      },
+      "warn-amber": {
+        "role": "secondary",
+        "displayName": "Warning Amber",
+        "canonical": "oklch(86.1% 0.142 83)",
+        "tonalRamp": [
+          "#200000",
+          "#421800",
+          "#653600",
+          "#885600",
+          "#ab7800",
+          "#cd9c33",
+          "#eec26d",
+          "#ffeaac"
+        ]
+      },
+      "bad-coral": {
+        "role": "secondary",
+        "displayName": "Error Coral",
+        "canonical": "oklch(69.6% 0.196 16)",
+        "tonalRamp": [
+          "#340000",
+          "#610002",
+          "#8c001c",
+          "#b60239",
+          "#dd405a",
+          "#ff6d7e",
+          "#ff9ba6",
+          "#ffced3"
+        ]
+      },
+      "sticker-red": {
+        "role": "tertiary",
+        "displayName": "Sticker Red",
+        "canonical": "oklch(58.9% 0.214 23)",
+        "tonalRamp": [
+          "#380000",
+          "#660000",
+          "#920000",
+          "#bd001f",
+          "#e53543",
+          "#ff6769",
+          "#ff9794",
+          "#ffcbc6"
+        ]
+      },
+      "sticker-white": {
+        "role": "tertiary",
+        "displayName": "Sticker White",
+        "canonical": "oklch(96.6% 0.007 107)",
+        "tonalRamp": [
+          "#0b0b09",
+          "#252522",
+          "#42423e",
+          "#61615d",
+          "#83837e",
+          "#a5a5a1",
+          "#c9c9c5",
+          "#efefec"
+        ]
+      },
+      "sticker-green": {
+        "role": "tertiary",
+        "displayName": "Sticker Green",
+        "canonical": "oklch(64.3% 0.162 153)",
+        "tonalRamp": [
+          "#001600",
+          "#003600",
+          "#00570b",
+          "#00792e",
+          "#009c51",
+          "#4cbf76",
+          "#82e2a0",
+          "#bcffcf"
+        ]
+      },
+      "sticker-yellow": {
+        "role": "tertiary",
+        "displayName": "Sticker Yellow",
+        "canonical": "oklch(87.7% 0.174 93)",
+        "tonalRamp": [
+          "#1e0100",
+          "#401a00",
+          "#623900",
+          "#845900",
+          "#a67c00",
+          "#c8a000",
+          "#e9c64f",
+          "#ffed9a"
+        ]
+      },
+      "sticker-blue": {
+        "role": "tertiary",
+        "displayName": "Sticker Blue",
+        "canonical": "oklch(54.7% 0.206 261)",
+        "tonalRamp": [
+          "#04004e",
+          "#00017d",
+          "#002faa",
+          "#0d54d3",
+          "#367af9",
+          "#5ea0ff",
+          "#8bc7ff",
+          "#c0efff"
+        ]
+      },
+      "sticker-orange": {
+        "role": "tertiary",
+        "displayName": "Sticker Orange",
+        "canonical": "oklch(72.5% 0.186 49)",
+        "tonalRamp": [
+          "#310000",
+          "#5c0000",
+          "#850000",
+          "#ae2e00",
+          "#d45600",
+          "#f77f31",
+          "#ffaa6c",
+          "#ffd8ab"
+        ]
+      },
+      "night-bg": {
+        "role": "neutral",
+        "displayName": "Night Ground",
+        "canonical": "oklch(15.9% 0.011 268)",
+        "tonalRamp": [
+          "#0a0b0f",
+          "#23252a",
+          "#3f4248",
+          "#5e6168",
+          "#7f8289",
+          "#a2a5ac",
+          "#c6c9cf",
+          "#eceef3"
+        ]
+      },
+      "night-bg-raised": {
+        "role": "neutral",
+        "displayName": "Raised Night",
+        "canonical": "oklch(19.1% 0.015 267)",
+        "tonalRamp": [
+          "#090b10",
+          "#22252c",
+          "#3e424a",
+          "#5d616a",
+          "#7e828b",
+          "#a1a5ae",
+          "#c5c9d1",
+          "#eceef5"
+        ]
+      },
+      "stage-glow": {
+        "role": "neutral",
+        "displayName": "Stage Glow",
+        "canonical": "oklch(23.7% 0.026 271)",
+        "tonalRamp": [
+          "#080b14",
+          "#212531",
+          "#3d4150",
+          "#5c6170",
+          "#7d8292",
+          "#9fa5b4",
+          "#c4c9d7",
+          "#eaeef9"
+        ]
+      },
+      "panel-solid": {
+        "role": "neutral",
+        "displayName": "Solid Panel",
+        "canonical": "oklch(21.0% 0.018 270)",
+        "tonalRamp": [
+          "#090b11",
+          "#22252d",
+          "#3e424c",
+          "#5d616c",
+          "#7e828e",
+          "#a1a5b0",
+          "#c5c9d3",
+          "#ebeef6"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(95.5% 0.007 269)",
+        "tonalRamp": [
+          "#0a0b0e",
+          "#242528",
+          "#404246",
+          "#5f6165",
+          "#808287",
+          "#a3a5a9",
+          "#c7c9cd",
+          "#edeef1"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "canonical": "oklch(73.6% 0.022 271)",
+        "tonalRamp": [
+          "#080b13",
+          "#21252f",
+          "#3e424e",
+          "#5c616e",
+          "#7d8290",
+          "#a0a5b2",
+          "#c5c9d5",
+          "#ebeef8"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3",
+        "canonical": "oklch(55.0% 0.029 271)",
+        "tonalRamp": [
+          "#080b15",
+          "#202432",
+          "#3c4151",
+          "#5b6172",
+          "#7c8294",
+          "#9fa5b6",
+          "#c3c9d9",
+          "#eaeefb"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The move count of a solution: the page's one big number."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Lesson step titles, dialog titles and the Solve label."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The brand name and scan prompts."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Panel copy, lesson text and button labels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase section eyebrows in Ink 3."
+      },
+      "move": {
+        "displayName": "Move",
+        "purpose": "Every move, algorithm and count, in JetBrains Mono."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-lift",
+        "value": "0 20px 50px -20px rgba(0,0,0,.7), 0 1px 0 rgba(255,255,255,.04) inset",
+        "purpose": "Panels, dialogs and toasts."
+      },
+      {
+        "name": "active-control",
+        "value": "0 1px 2px rgba(0,0,0,.4)",
+        "purpose": "The selected segment in a segmented control."
+      },
+      {
+        "name": "solve-glow",
+        "value": "0 10px 30px -10px rgba(120,110,255,.8), 0 1px 0 rgba(255,255,255,.35) inset",
+        "purpose": "The Solve button only."
+      },
+      {
+        "name": "current-move-halo",
+        "value": "0 0 0 3px rgba(143,123,255,.15)",
+        "purpose": "The move chip being performed."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press",
+        "value": "transform .08s (scale .97 on :active)",
+        "purpose": "Every button presses in."
+      },
+      {
+        "name": "state",
+        "value": ".15s to .2s ease",
+        "purpose": "Hover and active fills, borders and color."
+      },
+      {
+        "name": "pop",
+        "value": ".4s cubic-bezier(.2,1.4,.4,1)",
+        "purpose": "The Solved badge arriving."
+      },
+      {
+        "name": "toast-in",
+        "value": ".25s cubic-bezier(.2,1.2,.4,1)",
+        "purpose": "Toasts arriving."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "1100px"
+      },
+      {
+        "name": "single-column",
+        "value": "860px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "The everyday control: a translucent chip with a hairline that brightens on hover and presses in.",
+      "html": "<button class=\"ds-btn\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 12a9 9 0 1 0 3-6.7L3 8\"/><path d=\"M3 3v5h5\"/></svg>Reset</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.05);color:#eef0f5;font:550 13.5px Inter,system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s,transform .08s}.ds-btn:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.12)}.ds-btn:active{transform:scale(.97)}.ds-btn:focus-visible{outline:2px solid #8f7bff;outline-offset:2px}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Borderless, low-contrast: top bar, transport and Copy.",
+      "html": "<button class=\"ds-ghost\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"9\" y=\"9\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M5 15V5a2 2 0 0 1 2-2h10\"/></svg>Copy</button>",
+      "css": ".ds-ghost{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:10px;border:1px solid transparent;background:transparent;color:#a4a9b8;font:550 12.5px Inter,system-ui,sans-serif;cursor:pointer;transition:background .15s,color .15s}.ds-ghost:hover{background:rgba(255,255,255,.05);color:#eef0f5}.ds-ghost:focus-visible{outline:2px solid #8f7bff;outline-offset:2px}"
+    },
+    {
+      "name": "Soft Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary-soft",
+      "description": "A 16% violet tint for the main action in a tools panel (Scramble).",
+      "html": "<button class=\"ds-soft\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m19 2 3 3-3 3\"/><path d=\"M2 18h3.5a4 4 0 0 0 3.3-1.8l6.4-9.4A4 4 0 0 1 18.5 5H22\"/></svg>Scramble</button>",
+      "css": ".ds-soft{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:10px;border:1px solid rgba(143,123,255,.28);background:rgba(143,123,255,.16);color:#d6ceff;font:550 13.5px Inter,system-ui,sans-serif;cursor:pointer;transition:background .15s}.ds-soft:hover{background:rgba(143,123,255,.24)}.ds-soft:active{transform:scale(.97)}.ds-soft:focus-visible{outline:2px solid #8f7bff;outline-offset:2px}"
+    },
+    {
+      "name": "Solve Button",
+      "kind": "button",
+      "refersTo": "button-solve",
+      "description": "The hero action: the system's one gradient and its one glow.",
+      "html": "<button class=\"ds-solve\"><span class=\"ds-solve-label\">Solve</span><span class=\"ds-solve-sub\">Finds the shortest route home</span></button>",
+      "css": ".ds-solve{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;padding:16px;border:0;border-radius:14px;background:linear-gradient(135deg,#9a82ff 0%,#6f7bff 45%,#4fb6ff 100%);color:#fff;box-shadow:0 10px 30px -10px rgba(120,110,255,.8),0 1px 0 rgba(255,255,255,.35) inset;font-family:Inter,system-ui,sans-serif;cursor:pointer}.ds-solve:hover{filter:brightness(1.05)}.ds-solve:active{transform:scale(.97)}.ds-solve:focus-visible{outline:2px solid #8f7bff;outline-offset:2px}.ds-solve-label{font-size:17px;font-weight:700;letter-spacing:-.01em}.ds-solve-sub{font-size:12px;font-weight:500;opacity:.85}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "nav",
+      "refersTo": "segmented-control",
+      "description": "A dark inset track with equal segments; the active one lifts to a 9% white fill.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-b active\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12a9 9 0 1 1-3-6.7\"/><path d=\"M21 4v5h-5\"/></svg>Turn</button><button class=\"ds-seg-b\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9 15l.2-3z\"/></svg>Paint</button></div>",
+      "css": ".ds-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;padding:4px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.07);border-radius:12px;width:240px}.ds-seg-b{display:flex;align-items:center;justify-content:center;gap:8px;height:34px;border:0;border-radius:9px;background:transparent;color:#a4a9b8;font:600 14px Inter,system-ui,sans-serif;cursor:pointer;transition:background .2s,color .2s}.ds-seg-b:hover{color:#eef0f5}.ds-seg-b.active{background:rgba(255,255,255,.09);color:#eef0f5;box-shadow:0 1px 2px rgba(0,0,0,.4)}.ds-seg-b:focus-visible{outline:2px solid #8f7bff;outline-offset:2px}"
+    },
+    {
+      "name": "Move Key",
+      "kind": "chip",
+      "refersTo": "move-key",
+      "description": "A mono key with a 2px bar in the turned face's color; six per row on the move pad.",
+      "html": "<div class=\"ds-keys\"><button class=\"ds-key\" style=\"--c:#e02a3c\">R</button><button class=\"ds-key\" style=\"--c:#14a85a\">F</button><button class=\"ds-key\" style=\"--c:#ffd21f\">U'</button></div>",
+      "css": ".ds-keys{display:flex;gap:5px}.ds-key{position:relative;overflow:hidden;width:44px;height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.05);color:#eef0f5;font:600 13px 'JetBrains Mono',ui-monospace,Menlo,monospace;cursor:pointer;transition:background .12s,transform .08s}.ds-key::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:var(--c);opacity:.9}.ds-key:hover{background:rgba(255,255,255,.09)}.ds-key:active{transform:scale(.94)}.ds-key:focus-visible{outline:2px solid #8f7bff;outline-offset:2px}"
+    },
+    {
+      "name": "Move Chips",
+      "kind": "chip",
+      "refersTo": "move-chip-current",
+      "description": "The solution as chips: finished ones fade, the current one takes the violet tint and halo.",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip done\">R</span><span class=\"ds-chip done\">U</span><span class=\"ds-chip current\">R'</span><span class=\"ds-chip\">U'</span></div>",
+      "css": ".ds-chips{display:flex;gap:6px}.ds-chip{display:inline-flex;justify-content:center;min-width:44px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.05);color:#eef0f5;font:600 14px 'JetBrains Mono',ui-monospace,Menlo,monospace;cursor:pointer;transition:all .15s}.ds-chip:hover{background:rgba(255,255,255,.09)}.ds-chip.done{opacity:.38}.ds-chip.current{background:rgba(143,123,255,.16);border-color:rgba(143,123,255,.6);color:#fff;box-shadow:0 0 0 3px rgba(143,123,255,.15)}"
+    },
+    {
+      "name": "Algorithm Field",
+      "kind": "input",
+      "refersTo": "button-default",
+      "description": "A mono text field with a quiet focus: the border goes 60% violet.",
+      "html": "<form class=\"ds-alg\"><input class=\"ds-alg-in\" placeholder=\"Type moves, e.g. R U R' U'\" spellcheck=\"false\" aria-label=\"Algorithm\"/><button type=\"button\" class=\"ds-alg-go\" aria-label=\"Apply\"><svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></button></form>",
+      "css": ".ds-alg{display:flex;gap:6px;width:280px}.ds-alg-in{flex:1;min-width:0;height:38px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.25);color:#eef0f5;font:13px 'JetBrains Mono',ui-monospace,Menlo,monospace;outline:none;transition:border-color .15s}.ds-alg-in:focus{border-color:rgba(143,123,255,.6)}.ds-alg-in::placeholder{color:#6b7183;font-family:Inter,sans-serif}.ds-alg-go{width:38px;height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.05);color:#eef0f5;cursor:pointer;display:grid;place-items:center}.ds-alg-go:hover{background:rgba(255,255,255,.09)}"
+    },
+    {
+      "name": "Lesson Stages",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "The numbered method outline: done rows go mint, the current row takes the violet tint.",
+      "html": "<ol class=\"ds-stages\"><li class=\"done\"><span class=\"n\">1</span><span class=\"t\"><b>White cross</b><small>The edges around the white center</small></span></li><li class=\"current\"><span class=\"n\">2</span><span class=\"t\"><b>White corners</b><small>Complete the first layer</small></span></li><li><span class=\"n\">3</span><span class=\"t\"><b>Middle layer</b><small>Fill in the four side edges</small></span></li></ol>",
+      "css": ".ds-stages{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;width:280px;font-family:Inter,system-ui,sans-serif;color:#eef0f5}.ds-stages li{display:flex;gap:10px;align-items:flex-start;padding:6px 8px;border-radius:10px}.ds-stages .n{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;background:rgba(255,255,255,.09);color:#a4a9b8}.ds-stages .t{display:flex;flex-direction:column;padding-top:1px}.ds-stages b{font-size:13px;font-weight:600}.ds-stages small{font-size:12px;color:#a4a9b8}.ds-stages .done .n{background:rgba(61,220,151,.14);color:#3ddc97}.ds-stages .done b{color:#a4a9b8}.ds-stages .current{background:rgba(143,123,255,.16)}.ds-stages .current .n{background:#8f7bff;color:#fff}"
+    },
+    {
+      "name": "Glass Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "The frosted container for every tool group, shown over the stage glow.",
+      "html": "<div class=\"ds-stage\"><div class=\"ds-panel\"><span class=\"ds-eyebrow\">Moves</span><p class=\"ds-copy\">Panels are translucent glass over the 3D stage.</p></div></div>",
+      "css": ".ds-stage{padding:24px;border-radius:12px;background:radial-gradient(400px 260px at 50% 45%,#1a1e2b 0%,transparent 70%),#0b0d12}.ds-panel{width:260px;padding:16px;border-radius:20px;border:1px solid rgba(255,255,255,.07);background:rgba(20,23,31,.72);backdrop-filter:blur(18px) saturate(1.3);box-shadow:0 20px 50px -20px rgba(0,0,0,.7),0 1px 0 rgba(255,255,255,.04) inset;font-family:Inter,system-ui,sans-serif}.ds-eyebrow{font-size:11px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:#6b7183}.ds-copy{margin:8px 0 0;font-size:13px;line-height:1.45;color:#a4a9b8}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Workbench",
+    "overview": "A dim bench with one lit object on it. The 3D puzzle fills the whole viewport, lit by a soft studio environment, and everything else is a tool laid beside it: frosted glass panels left and right, a floating puzzle switcher at top center, small chips and keys within reach. The interface is calm, focused and dark. Its chrome is deliberately low-contrast gray-blue, so the six sticker colors are the only fully saturated things on screen.\n\nControls are soft and tactile: translucent fills that brighten on hover, a small press-in on click, rounded corners, and thin hairlines instead of heavy borders. Move notation is set in a monospace, like labels on a tool. One violet-to-sky gradient is reserved for the Solve action and the progress bar; it is the only decoration the system allows itself.",
+    "keyCharacteristics": [
+      "The puzzle is the hero. UI is translucent glass over a dark radial-gradient stage, never competing with the stickers.",
+      "Near-black, slightly blue neutrals (`#0b0d12` to `#151821`); no pure black or white in the chrome.",
+      "One accent family (violet to sky), used for state (current move, active field, focus) and a single gradient.",
+      "Moves and algorithms in JetBrains Mono; everything else in Inter.",
+      "Hairline borders (7 to 12% white) and tonal fills, with one soft drop shadow under panels.",
+      "Sticker colors appear in the chrome only as identity (the 3×3 logo, the empty-state dots, color names in lesson text, paint swatches)."
+    ],
+    "rules": [
+      {
+        "name": "The Stickers-Are-Loudest Rule",
+        "body": "No chrome element is more saturated than a sticker. The accent is a tint (16% violet) or a thin line; a full-strength violet fill is reserved for the Solve button and the current stage number.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tonal Layering Rule",
+        "body": "Depth comes from white at 5 to 12% alpha over dark, never from lighter solid grays or colored fills.",
+        "section": "colors"
+      },
+      {
+        "name": "The Notation Is Mono Rule",
+        "body": "Anything the learner will perform with their hands (a move, an algorithm, a count) is monospaced; anything explaining it is Inter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Quiet Label Rule",
+        "body": "Uppercase tracked labels are only for 11px section eyebrows; headings are sentence case.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Glow Rule",
+        "body": "Only the Solve button, the solved dot and the \"searching\" dot may glow. Nothing else gets a colored shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep chrome in the near-black blue neutrals and let the sticker colors be the only saturated elements.",
+      "**Do** build depth with white-alpha fills (5% rest, 9% hover, 12% strong) and 7 to 12% hairlines.",
+      "**Do** set every move, algorithm and count in JetBrains Mono, and everything else in Inter.",
+      "**Do** use the violet soft fill (16%) for \"current\" states, and keep the full gradient for Solve and progress.",
+      "**Do** give every interactive element a 2px violet focus outline with a 2px offset.",
+      "**Do** keep controls at 34 to 38px tall, with a press-in (scale 0.97) on click.",
+      "**Do** honor `prefers-reduced-motion`, and keep other motion short (120 to 400ms)."
+    ],
+    "donts": [
+      "**Don't** put solid light or colored fills on panels; panels are translucent glass over the stage.",
+      "**Don't** use pure black or pure white in the chrome (the Play button's Ink fill is the one light exception).",
+      "**Don't** add a second accent hue; use mint, amber and coral only for success, caution and error.",
+      "**Don't** add decorative glows, gradients or illustrations beyond the Solve button, progress fill and the three-dot empty state.",
+      "**Don't** compete with the 3D puzzle for attention, or cover the center of the stage with UI.",
+      "**Don't** write headings in uppercase; only 11px eyebrows are tracked caps."
+    ]
+  }
+}
