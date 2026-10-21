@@ -20,7 +20,7 @@ import { headlights } from './lastLayer';
 import {
   allRotations, CORNERS, countMoves, lessonKit, lessonNotes, repeat, ROTATIONS, rounds, SIDE_NAME, TOP_CORNERS, U_TURNS,
 } from './lessonKit';
-import { invertAlg, type CubeModel } from './model';
+import type { CubeModel } from './model';
 
 const { sune: SUNE, swap: APERM } = BEGINNER2;
 /** the white-corner case that takes this many rounds of R U R' U' */
@@ -165,7 +165,8 @@ export function beginner2Stages(M: CubeModel) {
     return TOP_CORNERS.map((c) => [...c].find((f) => v[at(c, f)] === yellow)).join('');
   }).sort()[0];
   /** the yellow-top case each shape is */
-  const shapes = new Map(cube2Cases(M).yellowTop.flatMap((g) => g.cases).map((c) => [shape(apply(cube2Cases(M).home, invertAlg(c.moves))), c.id]));
+  // a case's setup blanks some stickers, but never the yellow ones `shape` reads
+  const shapes = new Map(cube2Cases(M).yellowTop.flatMap((g) => g.cases).map((c) => [shape(c.setup), c.id]));
 
   function yellowTop(s: State, steps: GuideStep[]) {
     for (let round = 0; top(s).length < 4; round++) {

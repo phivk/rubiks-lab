@@ -431,12 +431,17 @@ export function lessonKit(M: CubeModel) {
  * stands for the big cube's stickers in its place (one for a corner, a row for an edge, a
  * block for a center). Outer turns and whole-cube turns do the same on both.
  */
-export type AsThree = ReturnType<typeof buildAsThree>;
-const asThreeCache = new WeakMap<CubeModel, AsThree>();
-export function asThree(M: CubeModel): AsThree {
-  if (!asThreeCache.has(M)) asThreeCache.set(M, buildAsThree(M));
-  return asThreeCache.get(M)!;
+/** `build`, run once per model and kept */
+export function perModel<T>(build: (M: CubeModel) => T): (M: CubeModel) => T {
+  const built = new WeakMap<CubeModel, T>();
+  return (M) => {
+    if (!built.has(M)) built.set(M, build(M));
+    return built.get(M)!;
+  };
 }
+
+export type AsThree = ReturnType<typeof buildAsThree>;
+export const asThree = perModel(buildAsThree);
 function buildAsThree(M: CubeModel) {
   const cube3 = CUBE3;
   const m = M.n - 1;

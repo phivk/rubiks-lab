@@ -30,7 +30,8 @@
 
 import type { Case, CaseGroup, State } from '../core/types';
 import { OLL, OLL_CORNERS, OLL_EDGES, PLL, PLL_CORNERS, PLL_EDGES, type TwoLookAlg } from './algs';
-import { alg, asThree, caseMaker, CORNERS, EDGES, lessonKit, repeat, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
+import { alg, asThree, caseMaker, CORNERS, EDGES, lessonKit, perModel, repeat, sameSet, TOP_CORNERS, TOP_EDGES, U_TURNS } from './lessonKit';
+import { focusTop } from './lastLayer';
 import { invertAlg, UNSET, type CubeModel } from './model';
 
 /**
@@ -153,13 +154,8 @@ const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, '-').re
 const capital = (text: string) => text[0].toUpperCase() + text.slice(1);
 
 export type CubeCases = ReturnType<typeof buildCases>;
-const built = new WeakMap<CubeModel, CubeCases>();
-
 /** The 3×3's case sets, built once per model. */
-export function cubeCases(M: CubeModel): CubeCases {
-  if (!built.has(M)) built.set(M, buildCases(M));
-  return built.get(M)!;
-}
+export const cubeCases = perModel(buildCases);
 
 function buildCases(M: CubeModel) {
   if (M.n !== 3) throw new Error('the case sets are for the 3×3');
@@ -179,7 +175,7 @@ function buildCases(M: CubeModel) {
   for (const slot of SLOTS) for (const i of stickersOf(slot)) slotOf[i] = slot;
   const centers = [...'UDFRBL'].map((f) => at(f, f));
   const TOP = [...TOP_EDGES, ...TOP_CORNERS];
-  const TOP_STICKERS = [at('U', 'U'), ...TOP.flatMap((slot) => stickersOf(slot))];
+  const TOP_STICKERS = focusTop(K)();
 
   /** An arrow from each top piece to its spot, as top stickers: where it is, where it goes. */
   function pllArrows(s: State): [number, number][] {
@@ -254,8 +250,10 @@ function buildCases(M: CubeModel) {
   // ---------- PLL ----------
 
   /** the turn of the top an algorithm ends with, if it ends a turn off: it lines the top up, so the arrows show only the swaps */
-  const lineUp = (text: string, shown?: (s: State) => number[]) =>
-    U_TURNS.reduce((best, u) => (pllArrows(make('', '', `${text} ${u}`, shown).setup).length < pllArrows(make('', '', `${text} ${best}`, shown).setup).length ? u : best));
+  const lineUp = (text: string, shown?: (s: State) => number[]) => {
+    const arrows = U_TURNS.map((u) => pllArrows(make('', '', `${text} ${u}`, shown).setup).length);
+    return U_TURNS[arrows.indexOf(Math.min(...arrows))];
+  };
   const perm = (name: string, shown?: (s: State) => number[], note?: string) => {
     const a = [...PLL_CORNERS, ...PLL_EDGES].find((x) => x.id === `pll-${name}`)!;
     const u = lineUp(a.alg, shown);
@@ -295,8 +293,9 @@ function buildCases(M: CubeModel) {
   // ---------- the beginner's method ----------
 
   const { right, left, cross: crossAlg, sune, niklas, twist } = BEGINNER;
-  const whiteCorners = [['F', 'R'], ['R', 'B'], ['B', 'L'], ['L', 'F']].map(([a, b]) => [white, center(home, a), center(home, b)]);
-  const middleEdges = [['F', 'R'], ['R', 'B'], ['B', 'L'], ['L', 'F']].map(([a, b]) => [center(home, a), center(home, b)]);
+  const sides = [['F', 'R'], ['R', 'B'], ['B', 'L'], ['L', 'F']];
+  const whiteCorners = sides.map(([a, b]) => [white, center(home, a), center(home, b)]);
+  const middleEdges = sides.map(([a, b]) => [center(home, a), center(home, b)]);
   const firstLayer = [...crossEdges, ...whiteCorners];
   const lit = (pieces: number[][]) => (s: State) => [...centers, ...focusOn(pieces)(s)];
   const TOP_CORNER_STICKERS = new Set(TOP_CORNERS.flatMap((slot) => stickersOf(slot)));
@@ -410,11 +409,10 @@ function buildCases(M: CubeModel) {
     .replace(/(?<![A-Za-z])([RU])(′|2)?(?![A-Za-z0-9′])/g, (_, f: string, x = '') => (f === 'R' ? 'L' : f) + (x === '2' ? '2' : x ? '' : '′'));
   const slots = (names: string[]) => names.flatMap((slot) => stickersOf(slot));
   const kept = (fixed: string[], pieces: number[][]) => (s: State) => [...slots(fixed), ...focusOn(pieces)(s)];
-  const rightPair = [[white, center(home, 'F'), center(home, 'R')], [center(home, 'F'), center(home, 'R')]];
   const leftPair = [[white, center(home, 'F'), center(home, 'L')], [center(home, 'F'), center(home, 'L')]];
   /** the last pair of a block, at the front right or (mirrored) the front left, with `fixed` done */
   const pairGroups = (side: 'R' | 'L', prefix: string, fixed: string[]): CaseGroup[] => rightPairs.map(({ id, name, about, cases }) => (side === 'R'
-    ? { id: `${prefix}-${id}`, name, about, cases: cases.map(([n, a, note]) => make(`f2l-${slug(n)}`, n, a, kept(fixed, rightPair), note)) }
+    ? { id: `${prefix}-${id}`, name, about, cases: cases.map(([n, a, note]) => make(`f2l-${slug(n)}`, n, a, kept(fixed, pair), note)) }
     : {
       id: `${prefix}-${id}`, name, about: mirrorText(about),
       cases: cases.map(([n, a, note]) => make(`left-pair-${slug(mirrorText(n))}`, mirrorText(n), alg(a).map(mirrorMove), kept(fixed, leftPair), mirrorText(note))),
@@ -555,13 +553,8 @@ const YELLOW_TOP: [string, number, string[], string][] = [
 ];
 
 export type Cube2Cases = ReturnType<typeof build2>;
-const built2 = new WeakMap<CubeModel, Cube2Cases>();
-
 /** The 2×2's case sets, built once per model. */
-export function cube2Cases(M: CubeModel): Cube2Cases {
-  if (!built2.has(M)) built2.set(M, build2(M));
-  return built2.get(M)!;
-}
+export const cube2Cases = perModel(build2);
 
 function build2(M: CubeModel) {
   if (M.n !== 2) throw new Error('these case sets are for the 2×2');
@@ -649,13 +642,8 @@ export const REDUCTION = {
 };
 
 export type BigCubeCases = ReturnType<typeof buildBig>;
-const builtBig = new WeakMap<CubeModel, BigCubeCases>();
-
 /** The 4×4's or 5×5's case sets, built once per model. */
-export function bigCubeCases(M: CubeModel): BigCubeCases {
-  if (!builtBig.has(M)) builtBig.set(M, buildBig(M));
-  return builtBig.get(M)!;
-}
+export const bigCubeCases = perModel(buildBig);
 
 function buildBig(M: CubeModel) {
   if (M.n !== 4 && M.n !== 5) throw new Error('these case sets are for the 4×4 and 5×5');

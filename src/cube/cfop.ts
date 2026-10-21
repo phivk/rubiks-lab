@@ -20,7 +20,7 @@ import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
 import { OLL_CORNERS, OLL_EDGES, PLL_CORNERS, PLL_EDGES, type TwoLookAlg } from './algs';
 import { cubeCases, SEXY } from './cases';
 import { bestAlg, edgeShape, focusTop, headlights, oriented, pllStep, yellowCorners } from './lastLayer';
-import { alg, countMoves, FACE_MOVES, lessonKit, list, macroMoves, onceOnly, plural, ROTATIONS, sameSet, SIDE_NAME, TOP_EDGES, U_TURNS, WIDE_NOTATION, type Once } from './lessonKit';
+import { alg, countMoves, FACE_MOVES, lessonKit, list, macroMoves, onceOnly, plural, ROTATIONS, sameSet, SIDE_NAME, U_TURNS, WIDE_NOTATION, type Once } from './lessonKit';
 import type { CubeModel } from './model';
 
 const CFOP_STAGES = [
@@ -219,7 +219,7 @@ export function cfopMethod(M: CubeModel): Method {
   const PLL_ABOUT = '<p><b>PLL</b> stands for <b>P</b>ermute the <b>L</b>ast <b>L</b>ayer: with the top all yellow, move its pieces to their spots. Again in two looks, corners then edges: 6 algorithms instead of 21. Each case is a letter-named “perm”.</p>';
   const SHAPE = { dot: 'no edge shows yellow on top: just the center, a dot', line: 'two opposite edges show yellow: a line', L: 'two neighbouring edges show yellow: an L', cross: '' };
   const turnThen = (u: string) => (u ? 'Turn the top until it matches the case’s picture, then do' : 'It’s already at the right angle. Do');
-  const edgesUp = (t: State) => TOP_EDGES.every((e) => t[at(e, 'U')] === center(t, 'U'));
+  const edgesUp = (t: State) => edgeShape(K, t) === 'cross';
   const cornersDone = (t: State) => headlights(K, t).length === 4;
 
   function ollStage(s: State, steps: GuideStep[], once: Once) {

@@ -391,6 +391,14 @@ function undoAction() {
   return { label: 'Undo', run: () => { if (s === session && s.checkpoints.length === n && s.moveHistory.length <= s.base) void restoreCheckpoint(); } };
 }
 
+/** A fresh start for the cube's history, its first `base` moves the scramble's; any solution is now off. */
+function resetHistory(base = 0) {
+  session.moveHistory.length = 0;
+  session.base = base;
+  session.redoStack.length = 0;
+  invalidateSolution(true);
+}
+
 /**
  * Put the cube in a new state; undo can take it back unless it's a practice cube being set up.
  * Returns a toast's Undo button for it, if there's anything to undo.
@@ -403,10 +411,7 @@ function setStateDirect(s: State, undoable = true) {
   epoch++;
   session.state = s.slice();
   view.setState(session.state);
-  session.moveHistory.length = 0;
-  session.base = 0;
-  session.redoStack.length = 0;
-  invalidateSolution(true);
+  resetHistory();
   renderHistory();
   onStateChanged();
   return undoable && changed ? undoAction() : undefined;
@@ -416,10 +421,7 @@ function scramble(undoable = true) {
   if (mode === 'paint') setMode('play');
   const moves = puzzle.scramble();
   checkpoint();
-  session.moveHistory.length = 0;
-  session.base = moves.length;
-  session.redoStack.length = 0;
-  invalidateSolution(true);
+  resetHistory(moves.length);
   for (const m of moves) {
     session.moveHistory.push(m);
     enqueue({ move: m, duration: 110, kind: 'user' });
@@ -476,10 +478,7 @@ function paintSticker(i: number) {
   checkpoint();
   session.state = session.state.slice();
   session.state[i] = paintColor;
-  session.moveHistory.length = 0;
-  session.base = 0;
-  session.redoStack.length = 0;
-  invalidateSolution(true);
+  resetHistory();
   view.setState(session.state);
   onStateChanged();
   renderHistory();
@@ -876,8 +875,8 @@ function onStateChanged() {
     resumeOnTurn = false;
     renderSolution();
   } else if (solution && !solution.stale) renderPlayback();
-  // whether to offer to learn to solve your cube, or to use it for a guided solve
-  else if (!solution) renderSolution();
+  // in Learn, whether to use your cube for a guided solve; elsewhere, only when the offer to learn to solve it changes
+  else if (!solution && (place === 'learn' || offerMine() !== mineOffered)) renderSolution();
   view.setHighlight([]);
   renderUndo();
   saveToUrl();
@@ -982,6 +981,11 @@ function renderStatus() {
   }
 }
 
+/** your cube, ready to solve: you could learn to solve it yourself instead */
+const offerMine = () => !puzzle.isSolved(session.state) && puzzle.validate(session.state).ok && !!puzzle.methods?.some((m) => m.solve);
+/** whether the offer is showing */
+let mineOffered = false;
+
 function renderSolution(fresh = false) {
   const el = $('#solution');
   const learn = place === 'learn' && !!currentMethod();
@@ -994,9 +998,8 @@ function renderSolution(fresh = false) {
   el.classList.toggle('empty', !solution);
   el.classList.toggle('stale', !!solution?.stale);
   renderPlaces();
-  // your cube, ready to solve: you could learn to solve it yourself instead
-  const mine = !learn && !puzzle.isSolved(session.state) && puzzle.validate(session.state).ok;
-  $('#btn-learn-mine').classList.toggle('hidden', !mine || !puzzle.methods?.some((m) => m.solve));
+  mineOffered = !learn && offerMine();
+  $('#btn-learn-mine').classList.toggle('hidden', !mineOffered);
   if (!(solution?.lesson || solution?.drill) || solution.stale) view.setFocus(null);
   renderDrilling();
   if (learn) {
@@ -1168,7 +1171,13 @@ function nextCase(r: CaseRef): CaseRef | null {
   if (r.group + 1 < groups.length) return { stage: r.stage, group: r.group + 1, index: 0 };
   return null;
 }
-const caseAt = (r: CaseRef) => currentMethod()!.stages[r.stage].caseGroups![r.group].cases[r.index];
+/** where a case is in the course: its stage and group, and the case */
+function caseIn(r: CaseRef) {
+  const stage = currentMethod()!.stages[r.stage];
+  const group = stage.caseGroups![r.group];
+  return { stage, group, c: group.cases[r.index] };
+}
+const caseAt = (r: CaseRef) => caseIn(r).c;
 /** a case's name, with its number in the full list: Sune (OLL 27) */
 const caseName = (c: Case) => c.name + (c.alias ? ` <span class="alias">(${c.alias})</span>` : '');
 
@@ -1360,9 +1369,7 @@ function onLessonClick(e: Event) {
 function caseLink(id?: string) {
   const ref = id ? findCase(id) : null;
   if (!ref) return '';
-  const stage = currentMethod()!.stages[ref.stage];
-  const group = stage.caseGroups![ref.group];
-  const c = group.cases[ref.index];
+  const { stage, group, c } = caseIn(ref);
   return `<button class="case-link" data-act="case" data-case="${id}">${diagram(stage, c)}<span class="case-link-text"><b>${caseName(c)}</b><small>${stage.name} · ${group.name}</small><span class="case-link-go">Practise this case ›</span></span></button>`;
 }
 
@@ -1537,9 +1544,7 @@ function clearProgress() {
 function renderCaseCard() {
   const el = $('#case-card');
   const ref = solution!.drill!;
-  const stage = currentMethod()!.stages[ref.stage];
-  const group = stage.caseGroups![ref.group];
-  const c = group.cases[ref.index];
+  const { stage, group, c } = caseIn(ref);
   el.innerHTML = `
     <div class="lesson-head"><span class="eyebrow">${stage.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
     <div class="lesson-title">${caseName(c)}</div>
