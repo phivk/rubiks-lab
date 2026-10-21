@@ -102,21 +102,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .logo i:nth-child(5) { background: #ff7b1c; }
 .top-actions { display: flex; align-items: center; gap: 4px; }
 .topbar { gap: 12px; }
-.puzzle-switch {
-  display: flex; padding: 3px; gap: 2px; border-radius: 12px;
-  background: rgba(20, 23, 31, 0.72); border: 1px solid var(--line);
-  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-  position: absolute; left: 50%; transform: translateX(-50%);
-}
-.puzzle-switch button {
-  display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px;
-  border: 0; border-radius: 9px; background: transparent; color: var(--text-2);
-  font-weight: 600; font-size: 13px; cursor: pointer; transition: background 0.2s, color 0.2s;
-}
-.puzzle-switch button svg { width: 16px; height: 16px; }
-.puzzle-switch button:hover { color: var(--text); }
-.puzzle-switch button.active { background: rgba(255, 255, 255, 0.1); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
-.puzzle-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.puzzle-switch { position: absolute; left: 50%; transform: translateX(-50%); }
 .puzzle-select { display: none; }
 .topbar-start { display: flex; align-items: center; gap: 16px; }
 /* the two places: a bigger, separate switch from the controls inside them */
@@ -148,7 +134,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .btn:hover { background: var(--chip-hover); border-color: var(--line-2); }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { opacity: 0.35; cursor: default; transform: none; }
-.btn:focus-visible, .seg button:focus-visible, .move:focus-visible, .chip:focus-visible, .swatch:focus-visible, .net .cell:focus-visible {
+.btn:focus-visible, .move:focus-visible, .chip:focus-visible, .swatch:focus-visible, .net .cell:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
@@ -167,14 +153,23 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .row { display: flex; gap: 8px; }
 
 /* ---------- segmented control ---------- */
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid var(--line); }
+/* every either/or choice: Turn | Paint, the puzzles, the methods, Net | Rings, Typical | Bright */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 4px; background: rgba(0, 0, 0, 0.3); border-radius: 12px; border: 1px solid var(--line); }
 .seg button {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  height: 34px; border: 0; background: transparent; border-radius: 9px; color: var(--text-2);
-  font-weight: 600; cursor: pointer; transition: background 0.2s, color 0.2s;
+  height: 34px; padding: 0 10px; border: 0; background: transparent; border-radius: 9px; color: var(--text-2);
+  font: inherit; font-weight: 600; cursor: pointer; transition: background 0.2s, color 0.2s;
 }
 .seg button svg { width: 16px; height: 16px; }
+.seg button:hover { color: var(--text); }
 .seg button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* smaller, for a choice inside a panel or popover */
+.seg--sm { padding: 3px; border-radius: 10px; }
+.seg--sm button { height: 28px; padding: 0 8px; border-radius: 7px; font-size: 12.5px; }
+/* in the top bar, over the 3D view: sized to its labels, on glass */
+.seg--bar { display: flex; padding: 3px; border-radius: 12px; background: rgba(20, 23, 31, 0.72); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.seg--bar button { height: 32px; padding: 0 14px; gap: 7px; font-size: 13px; }
 
 .mode-row { display: flex; gap: 8px; }
 .mode-row .seg { flex: 1; }
@@ -268,13 +263,20 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .net .dim { opacity: 0.4; }
 /* set from any view, so the 3D cube and the maps show the same sticker */
 .net .cell.hover { stroke: rgba(255, 255, 255, 0.7); }
-.label-row:has(.map-switch) { align-items: center; }
-.map-tools { display: flex; align-items: center; gap: 10px; }
-.map-switch { display: inline-flex; gap: 2px; padding: 2px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: 8px; }
-.map-switch button { background: none; border: 0; border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 11px; font-weight: 600; color: var(--text-3); cursor: pointer; }
-.map-switch button:hover { color: var(--text); }
-.map-switch button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); }
-.map-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.map-tools { display: flex; align-items: baseline; gap: 10px; }
+/* the map folds away on a phone, where it costs a lot of scrolling */
+.map-toggle { display: none; color: var(--accent-2); font-weight: 600; }
+
+/* ---------- display popover ---------- */
+.popover {
+  position: fixed; inset: auto; margin: 0; padding: 12px; width: min(260px, calc(100vw - 32px));
+  border-radius: 14px; border: 1px solid var(--line-2); background: var(--panel-solid); color: var(--text); box-shadow: var(--shadow);
+}
+.popover:popover-open { display: flex; flex-direction: column; gap: 12px; }
+.popover-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.popover-row .eyebrow { white-space: nowrap; }
+/* the map is Cube's */
+body.learn #map-row { display: none; }
 .rings .ring { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 5; transition: stroke 0.15s; }
 .rings .ring.grabbed { stroke: rgba(255, 255, 255, 0.32); }
 .rings .ring.turning { stroke: rgba(255, 255, 255, 0.55); }
@@ -481,14 +483,6 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .use-mine, .learn-mine { align-self: flex-start; color: var(--accent-2); font-size: 13px; font-weight: 600; }
 .use-mine:hover, .learn-mine:hover { color: var(--text); }
 .learn-mine { align-self: center; }
-.methods { display: flex; gap: 4px; padding: 3px; background: rgba(0, 0, 0, 0.3); border-radius: 10px; border: 1px solid var(--line); }
-.methods button {
-  flex: 1; padding: 5px 4px; border: 0; background: transparent; border-radius: 7px; cursor: pointer;
-  font-size: 12.5px; font-weight: 600; color: var(--text-2); transition: background 0.2s, color 0.2s;
-}
-.methods button:hover { color: var(--text); }
-.methods button.active { background: rgba(255, 255, 255, 0.09); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
-.methods button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .lesson-intro p { margin: 0 0 10px; color: var(--text-2); }
 .lesson-intro p:last-child { margin-bottom: 0; }
 .lesson-intro b { color: var(--text); font-weight: 600; }
@@ -497,7 +491,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   background: var(--chip-hover); color: var(--text); white-space: nowrap;
 }
 .lesson { display: flex; flex-direction: column; gap: 10px; }
-.lesson-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.lesson-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; }
+.lesson-head .eyebrow { white-space: nowrap; }
 .lesson-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; }
 .lesson-text { color: var(--text-2); font-size: 13px; }
 .lesson-text p { margin: 0 0 8px; }
@@ -526,7 +521,7 @@ body.learn .app { grid-template-columns: minmax(400px, 1.3fr) minmax(240px, 1fr)
 body.learn .stage { grid-column: 2; }
 body.learn .panel.left { display: none; }
 body.learn .panel.tutorial { display: flex; }
-.methods.single { background: none; border: 0; padding: 0; }
+.methods.single { display: block; background: none; border: 0; padding: 0; }
 .method-name { font-size: 15px; font-weight: 700; }
 .no-cases { margin: 0; padding: 12px; border-radius: 12px; border: 1px dashed var(--line-2); }
 /* the stages read as a sequence, ‹ one › after another, not as a second set of tabs */
@@ -743,6 +738,10 @@ kbd {
   .tut-intro .collapsible:not(.open) > :not(:first-child) { display: none; }
   .tut-intro .collapsible:not(.open) > :first-child { margin-bottom: 0; }
   .tut-intro .more { display: inline; }
+  .map-toggle { display: inline; }
+  /* folded unless opened, but always there to paint on */
+  .panel.left.map-closed .net:not(.editable), .panel.left.map-closed:not(:has(.net.editable)) #net-hint { display: none; }
+  .panel.left:has(.net.editable) .map-toggle { display: none; }
   /* the puzzles are a dropdown rather than tabs that don't fit */
   .puzzle-switch { display: none; }
   .puzzle-select {
@@ -755,6 +754,8 @@ kbd {
   .brand-name { display: none; }
   .toasts { top: 60px; }
 }
+/* the smallest phones: the logo makes room for the puzzle picker */
+@media (max-width: 400px) { .brand { display: none; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
