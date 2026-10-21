@@ -372,8 +372,10 @@ async function restoreCheckpoint() {
   if (!s.checkpoints.length) return;
   queue.length = 0;
   await idle();
+  // the cube changed meanwhile: keep the checkpoint for when it's back
+  if (s !== session) return;
   const c = s.checkpoints.pop();
-  if (!c || s !== session) return;
+  if (!c) return;
   s.state = c.state.slice();
   s.moveHistory = c.moveHistory.slice();
   s.base = c.base;
@@ -420,7 +422,8 @@ function setStateDirect(s: State, undoable = true) {
 function scramble(undoable = true) {
   if (mode === 'paint') setMode('play');
   const moves = puzzle.scramble();
-  checkpoint();
+  // a practice cube's scramble isn't undoable: undo then stops at it, the guided solve intact
+  if (undoable) checkpoint();
   resetHistory(moves.length);
   for (const m of moves) {
     session.moveHistory.push(m);
@@ -435,8 +438,9 @@ function scramble(undoable = true) {
 
 async function switchPuzzle(p: Puzzle) {
   if (p === puzzle) return;
-  queue.length = 0;
-  await idle();
+  // the queued turns are in the history already: land them before swapping cubes
+  playing = false;
+  await finishTurns();
   park();
   puzzle.cancelSolve();
   puzzle = p;
@@ -747,6 +751,8 @@ function unpark() {
   }
   solution = s;
   lessonStep = -1;
+  // the course may have moved on meanwhile: follow the guided solve back to its stage
+  followedStage = -1;
 }
 function runSolver(budgetMs: number) {
   const start = session.state.slice();

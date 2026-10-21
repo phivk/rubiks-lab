@@ -43,7 +43,8 @@ export const stepMoves = (step: GuideStep) => step.phrases.flatMap((p) => p.move
  */
 export const caseMaker = (undo: (s: State, moves: string[]) => State, home: State, unset: number) =>
   (id: string, name: string, moves: string[], shown?: (s: State) => number[], note?: string, from = home): Case => {
-    const setup = undo(from, moves);
+    // a copy: with no moves to undo, undo hands back `from` itself
+    const setup = undo(from, moves).slice();
     if (shown) {
       const keep = new Set(shown(setup));
       setup.forEach((_, i) => { if (!keep.has(i)) setup[i] = unset; });
@@ -426,11 +427,6 @@ export function lessonKit(M: CubeModel) {
   };
 }
 
-/**
- * A big cube seen as a 3×3, as it is once its centers and edges are built: each 3×3 sticker
- * stands for the big cube's stickers in its place (one for a corner, a row for an edge, a
- * block for a center). Outer turns and whole-cube turns do the same on both.
- */
 /** `build`, run once per model and kept */
 export function perModel<T>(build: (M: CubeModel) => T): (M: CubeModel) => T {
   const built = new WeakMap<CubeModel, T>();
@@ -441,6 +437,11 @@ export function perModel<T>(build: (M: CubeModel) => T): (M: CubeModel) => T {
 }
 
 export type AsThree = ReturnType<typeof buildAsThree>;
+/**
+ * A big cube seen as a 3×3, as it is once its centers and edges are built: each 3×3 sticker
+ * stands for the big cube's stickers in its place (one for a corner, a row for an edge, a
+ * block for a center). Outer turns and whole-cube turns do the same on both.
+ */
 export const asThree = perModel(buildAsThree);
 function buildAsThree(M: CubeModel) {
   const cube3 = CUBE3;

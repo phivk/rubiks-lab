@@ -3,6 +3,7 @@
 // Each returns HTML; main.ts puts it on screen and handles the clicks (data-act, data-ctl).
 
 import type { Method, Stage } from '../core/types';
+import { alg } from '../cube/lessonKit';
 
 type Triggers = Method['triggers'];
 
@@ -38,7 +39,7 @@ export function movesHtml(moves: string[], triggers: Triggers, breakAfter?: numb
 
 /** HTML with the moves inside each <code> marked where they hold a trigger. */
 export const markCode = (html: string, triggers: Triggers) =>
-  html.replace(/<code>([^<]*)<\/code>/g, (_, text: string) => `<code>${movesHtml(text.split(' ').filter(Boolean), triggers)}</code>`);
+  html.replace(/<code>([^<]*)<\/code>/g, (_, text: string) => `<code>${movesHtml(alg(text), triggers)}</code>`);
 
 /** The method's stages, one after another, with the one on screen (`active`) marked. */
 export function stepperHtml(stages: Stage[], active: number) {
