@@ -146,6 +146,9 @@ function makeCube(M: CubeModel, { wide }: { wide: boolean }): Shared {
 
     encode: (s) => M.encode(s),
     decode: (text) => M.decode(text),
+    simplify: (moves) => M.simplify(moves),
+    // solved, every sticker of a face is its color: the top's first and the front's first say how it's held
+    holdHtml: (s) => `<b>${COLOR_NAMES[s[0]].toLowerCase()}</b> on top and <b>${COLOR_NAMES[s[2 * n * n]].toLowerCase()}</b> in front`,
   };
 }
 
@@ -223,6 +226,7 @@ export const cube2: Puzzle = {
   movePadExtra: rows(['x', 'y', 'z']),
   movePadExtraLabel: 'Rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",
+  shortSolutions: true,
   methods: [beginner2Method(model2)],
   scan: scanFaces(model2),
 };
@@ -240,6 +244,7 @@ export const cube3: Puzzle = {
   scramble: () => faceScramble(22),
   solve: (state, budgetMs, h) => void solver3.solve(state, budgetMs, h),
   cancelSolve: () => solver3.cancel(),
+  shortSolutions: true,
   movePadExtra: rows(['M', 'E', 'S', 'x', 'y', 'z']),
   movePadExtraLabel: 'Slices & rotations',
   algPlaceholder: "Type an algorithm… R U R' U'",

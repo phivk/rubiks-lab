@@ -515,6 +515,10 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .phrase-moves .chip { min-width: 40px; padding: 4px 6px; font-size: 13px; animation: none; }
 .lesson-nav { display: flex; justify-content: space-between; gap: 8px; }
 .lesson-nav .btn.ghost { padding: 0 6px; }
+/* step 0: skipping it is the quieter choice */
+.setup-nav { align-items: center; }
+.setup-nav .link { font-size: 12.5px; text-align: left; }
+.link.inline { color: var(--accent-2); font-size: inherit; font-weight: 600; }
 .lesson-stale { padding: 8px 10px; border-radius: 10px; background: rgba(255, 200, 87, 0.1); color: var(--warn); font-size: 12.5px; }
 .lesson-stale .link { color: var(--text); font-size: 12.5px; font-weight: 600; text-decoration: underline; }
 .solution.stale .lesson > :not(.lesson-stale, .lesson-foot) { opacity: 0.4; pointer-events: none; }

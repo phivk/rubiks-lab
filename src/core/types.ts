@@ -229,6 +229,14 @@ export interface Puzzle {
   encode: (s: State) => string;
   decode: (text: string) => State | null;
 
+  /** what it's called in a sentence ("your real Pyraminx"), if not "cube" */
+  noun?: string;
+  /** the same turns with those that cancel or combine merged (R R → R2), if the puzzle can */
+  simplify?: (moves: string[]) => string[];
+  /** how to hold this solved state, as HTML ("<b>white</b> on top and <b>green</b> in front"), to copy it onto a real puzzle */
+  holdHtml?: (solved: State) => string | undefined;
+  /** whether the solver's solutions are short (a few dozen moves at most), so it can also find a short way to set a state up */
+  shortSolutions?: boolean;
   /** subtitle of the solve button, if not "Finds the shortest route home" */
   solveHint?: string;
   solve: (state: State, budgetMs: number, handlers: SolveHandlers) => void;
