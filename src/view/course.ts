@@ -63,10 +63,12 @@ export const drillControlsHtml = () =>
   '<button class="case-back" data-ctl="back" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>' +
   '<button class="case-play" data-ctl="play" aria-label="Play the moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg class="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button></span>';
 
-/** What the open case's drill controls say: turned off plan, or how to step through it. */
-export function drillStatus(d: { stale: boolean; undo: string | null; playing: boolean; atStart: boolean; tapLearned: boolean }) {
+/** What the open case's drill controls say: turned off plan, at its end, or how to step through it. */
+export function drillStatus(d: { stale: boolean; undo: string | null; playing: boolean; atStart: boolean; atEnd: boolean; tapLearned: boolean }) {
   if (d.stale) return `<b>Cube turned</b>${d.undo ? `<button class="case-undo" data-ctl="undo">${d.undo}</button>` : ''}tap to set up`;
   if (d.playing) return '';
+  // past the last move a tap sets the case up again: say so, or it looks like a lost tap
+  if (d.atEnd) return '<b>Last move played</b>tap to start again';
   // until you've stepped through a case once, the first open says how
   if (d.atStart && !d.tapLearned) return '<b>Tap the card</b>for each move';
   return '';

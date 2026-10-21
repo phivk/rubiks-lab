@@ -1160,7 +1160,7 @@ function caseStatus(open: boolean) {
   if (!open) return '';
   return drillStatus({
     stale: s.stale, undo: s.drift ? undoLabel() : null, playing,
-    atStart: s.index === 0, tapLearned,
+    atStart: s.index === 0, atEnd: s.index >= s.moves.length, tapLearned,
   });
 }
 
@@ -1232,7 +1232,7 @@ function renderLearn(fresh: boolean) {
   // only when it changes: an opened "How to read the moves" stays open as the cube turns
   setHtml($('#lesson-intro'), `
     <p><b>${method.name}</b> <span class="level">${method.level}</span> ${method.intro}</p>
-    ${method.stages.some((st) => st.caseGroups) ? '<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube.</p>' : ''}
+    ${method.stages.some((st) => st.caseGroups?.some((g) => g.cases.length)) ? '<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube.</p>' : ''}
     <p class="muted small">Make the moves yourself, here or on a real cube, and the guided solve follows along.</p>
     ${useMine ? '<button class="link use-mine" data-act="mine">Use my cube instead ›</button>' : ''}
     ${notationHelp(method.notation)}`);
@@ -1270,7 +1270,6 @@ function renderLesson() {
       <div class="lesson-title">Solved!</div>
       <div class="lesson-text"><p>That’s the whole method: ${steps.length} steps and ${s.moves.length} moves. Every lesson starts from your own scramble, so practise until the algorithms stick.</p></div>
       <div class="lesson-nav">${prevBtn}<button class="btn small primary-soft" data-act="again">New scramble</button></div>`);
-    renderStepper();
     return;
   }
   const step = steps[k];
@@ -1279,7 +1278,6 @@ function renderLesson() {
     followedStage = step.stage;
     if (stageIdx !== step.stage) setStage(step.stage, false);
   }
-  renderStepper();
   let i = starts[k];
   const phrases = step.phrases.map((p) => {
     // a phrase's triggers (the sexy move) are marked, as on a case
@@ -1437,7 +1435,7 @@ function renderCourse() {
         <div class="label-row"><span class="eyebrow">${g.name}</span><span class="muted small">${plural(g.cases.length, 'case')}</span></div>
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
-          <div class="case" data-group="${gi}" data-index="${i}" data-id="${c.id}">
+          <div class="case" data-group="${gi}" data-index="${i}">
             <button class="case-hit" title="Set up ${c.name}" aria-label="Set up ${c.name}"></button>
             ${diagram(stage, c)}<span class="case-name">${caseName(c)}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, method.triggers, c.breakAfter)}</code>${drillControlsHtml()}
           </div>`).join('')}</div>
@@ -1494,6 +1492,8 @@ let lastCardTap = -1e9;
 /** whether you've stepped a case by tapping its card, so the how-to hint has done its job */
 let tapLearned = false;
 try { tapLearned = localStorage.getItem('tapLearned') === '1'; } catch { /* storage unavailable */ }
+// practised-case ticks are gone: forget the ones earlier versions kept
+try { for (const p of PUZZLES) localStorage.removeItem(`practised:${p.id}`); } catch { /* storage unavailable */ }
 function onCourseClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
   if (!b) return;
