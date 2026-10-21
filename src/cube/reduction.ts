@@ -16,23 +16,25 @@
 // holding the color (pieces of one color are interchangeable), so it's tiny. An edge
 // search follows one sticker per piece of the edge; moves that would break a finished
 // edge are refused, by tracking which edge slots hold finished edges.
+//
+// The course is the same stages, with cases (cases.ts, bigCubeCases): examples for the
+// centers and edges, the 3×3 beginner's cases on the big cube, and the parities. The 3×3
+// steps name their cases as on a 3×3, and each parity step names its own.
 
 import { parity } from '../core/perm';
-import type { Guide, GuideStep, Phrase, State, Vec3 } from '../core/types';
-import { beginnerStages, STAGES as BEGINNER_STAGES } from './beginner';
+import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
+import { beginnerCourse, beginnerStages, STAGES as BEGINNER_STAGES } from './beginner';
+import { bigCubeCases, REDUCTION, SEXY } from './cases';
 import {
-  alg, allRotations, stepMoves, EDGES, lessonKit, lessonNotes, macroMoves, onceOnly, sameSlot, TOP_CORNERS, TOP_EDGES, U_TURNS, type Macro,
+  allRotations, asThree, stepMoves, EDGES, lessonKit, lessonNotes, macroMoves, onceOnly, sameSlot, TOP_CORNERS, TOP_EDGES, U_TURNS, type Macro,
 } from './lessonKit';
-import { CubeModel, FACES, invertMove, type LayerTurn } from './model';
+import { CUBE3, CubeModel, FACES, invertMove, type LayerTurn } from './model';
 
 const FACE_AXIS: Record<string, 0 | 1 | 2> = { R: 0, L: 0, U: 1, D: 1, F: 2, B: 2 };
 
-const OLL_PARITY = alg("Rw U2 x Rw U2 Rw U2 Rw' U2 Lw U2 Rw' U2 Rw U2 Rw' U2 Rw'");
-const PLL_PARITY = alg("2R2 U2 2R2 Uw2 2R2 Uw2");
-const FLIP = alg("R U R' F R' F' R");
-const EDGE_PARITY_5 = alg("Rw U2 x Rw U2 Rw U2 Rw' U2 Lw U2 3Rw' U2 Rw U2 Rw' U2 Rw'");
+const { ollParity: OLL_PARITY, pllParity: PLL_PARITY, flip: FLIP, edgeParity: EDGE_PARITY_5 } = REDUCTION;
 
-const cube3 = new CubeModel(3);
+const cube3 = CUBE3;
 const K3 = lessonKit(cube3);
 /** the stages of the 3×3 beginner's method this lesson finishes with, and where they start in its own list */
 const B = beginnerStages(cube3);
@@ -41,7 +43,11 @@ const stageOf = (name: string) => BASE + BEGINNER_STAGES.findIndex((st) => st.na
 
 type CenterMacro = Macro & { to: readonly number[] };
 
-export function reductionGuide(M: CubeModel): Guide {
+/**
+ * The method's stages: each takes a state, adds its steps and returns the state after them.
+ * The 3×3 ones are the beginner's, on the cube seen as a 3×3; the parities come between them.
+ */
+export function reductionStages(M: CubeModel) {
   const n = M.n;
   if (n !== 4 && n !== 5) throw new Error('The reduction lesson is for the 4×4 and 5×5');
   const odd = n % 2 === 1;
@@ -526,6 +532,7 @@ export function reductionGuide(M: CubeModel): Guide {
             (usesParity ? `<p>On a 5×5 the last edge can end up with its two outer pieces swapped, which no pairing move fixes. That’s <b>edge parity</b>; ${code(EDGE_PARITY_5)} swaps them back, at the front of the top.</p>` : ''),
           phrases: edgePhrases(path),
           focus: edgeFocus(todo),
+          ...(usesParity && { caseId: 'edge-parity' }),
         });
         s = apply(s, moves);
         continue;
@@ -580,19 +587,8 @@ export function reductionGuide(M: CubeModel): Guide {
 
   // ---------- the 3×3 stage ----------
 
-  // a 3×3 coordinate (-2, 0, 2) stands for the big cube's outer layer, or every inner one
-  const span = (x: number) => (x === 2 ? [m] : x === -2 ? [-m] : M.coords.filter((c) => Math.abs(c) < m));
-  const bigOf = cube3.facelets.map((f) => {
-    const out: number[] = [];
-    for (const x of span(f.pos[0])) for (const y of span(f.pos[1])) for (const z of span(f.pos[2])) {
-      const i = M.faceletAt([x, y, z] as Vec3, f.normal);
-      if (i !== undefined) out.push(i);
-    }
-    return out;
-  });
-  /** the reduced cube as a 3×3 */
-  const reduce = (s: State) => bigOf.map((is) => s[is[0]]);
-  const expand = (focus: number[]) => focus.flatMap((i) => bigOf[i]);
+  /** the reduced cube as a 3×3, and back */
+  const { reduce, expand } = asThree(M);
 
   /** run a 3×3 stage on the reduced cube, then move its steps over to the big cube */
   function run3(s: State, stage: (s3: State, steps: GuideStep[]) => State, steps: GuideStep[]) {
@@ -637,6 +633,7 @@ export function reductionGuide(M: CubeModel): Guide {
         `<p>${u ? 'Turn the top so an edge without yellow on top is at the front, then do' : 'An edge without yellow on top is at the front. Do'} ${code(OLL_PARITY)}. It flips that edge and keeps the first two layers; the rest of the top may move, which is fine.</p>`,
       phrases: [...K3.topPhrase(u), { label: 'OLL parity', moves: OLL_PARITY }],
       focus: topFocus,
+      caseId: up.length === 3 ? 'oll-parity-three-up' : 'oll-parity-one-up',
     });
     return apply(s, [u, ...OLL_PARITY]);
   }
@@ -659,18 +656,63 @@ export function reductionGuide(M: CubeModel): Guide {
         `<p>Do ${code(PLL_PARITY)} — <code>2R</code> is the second layer from the right on its own. It swaps the front and back edges of the top. Then line up the edges again.</p>`,
       phrases: [{ label: 'PLL parity', moves: PLL_PARITY }],
       focus: topFocus,
+      caseId: 'pll-parity',
     });
     return apply(s, PLL_PARITY);
   }
 
-  // ---------- the lesson ----------
+  const three = (stage: (s3: State, steps: GuideStep[]) => State) => (s: State, steps: GuideStep[]) => run3(s, stage, steps);
+  return {
+    centersStage, edgesStage, ollParity, pllParity,
+    crossStage: three(B.crossStage), cornersStage: three(B.cornersStage), middleStage: three(B.middleStage),
+    yellowCross: three(B.yellowCross), yellowEdges: three(B.yellowEdges), cornerSpots: three(B.cornerSpots), cornerTwists: three(B.cornerTwists),
+    /** start a new solve: forget the notes from the last */
+    reset: () => void (notes = lessonNotes()),
+    /** put the notes on the solve's steps */
+    place: (steps: GuideStep[]) => notes.place(steps),
+  };
+}
 
-  const STAGES = [
-    { name: 'Centers', goal: odd ? 'Build each 3×3 center around its fixed center.' : 'Group the four center pieces of each color, in the right color order.' },
-    { name: 'Edges', goal: odd ? 'Join each edge’s three pieces into one long edge.' : 'Pair up the two pieces of each edge.' },
-    ...BEGINNER_STAGES.map((st) => {
-      const extra = n === 4 && { 'Yellow cross': ' Fix OLL parity first if it shows up.', 'Yellow edges': ' Then check for PLL parity.' }[st.name];
-      return extra ? { ...st, goal: st.goal + extra } : st;
+export function reductionMethod(M: CubeModel): Method {
+  const n = M.n;
+  const odd = n % 2 === 1;
+  const R = reductionStages(M);
+  const C = bigCubeCases(M);
+  const three = beginnerCourse(C);
+  const STAGES: Stage[] = [
+    {
+      id: 'centers',
+      name: 'Centers',
+      goal: odd ? 'Build each 3×3 center around its fixed center.' : 'Group the four center pieces of each color, in the right color order.',
+      html: (odd
+        ? `<p>A 5×5 has a <b>fixed center</b> on each face, which says its color; the eight pieces around it move. Build each face’s center around it.</p>`
+        : `<p>A 4×4 has no fixed centers: each center is four loose pieces. Group them, one color at a time: yellow goes opposite white, and the sides go round in the same order as a 3×3’s centers.</p>`) +
+        `<p>Start with white on top, then yellow opposite it, then the four sides. There’s no algorithm: a piece comes in with a slice turn, a turn of the face moves it out of that slice, and the slice turns back. Before turning a slice back, check it won’t carry a finished piece away.</p>
+`,
+      caseGroups: C.centers,
+      view: 'corner',
+    },
+    {
+      id: 'edges',
+      name: 'Edges',
+      goal: odd ? 'Join each edge’s three pieces into one long edge.' : 'Pair up the two pieces of each edge.',
+      html: `<p>Each edge of the big 3×3 is ${odd ? 'three pieces: a middle one and two outer ones' : 'two pieces'}. Pair them up while keeping the centers: bring the pieces of one edge into the middle layer at different heights, so that turning a slice (<code>Uw</code> or <code>Dw</code>) lines them up. The centers move too, for a moment.</p>
+        <p>Then swap the joined edge out of the middle layer with <code>R U R'</code>, which brings an unfinished edge in, and turn the slice back. Turns of the outer faces never split an edge, so the set-up moves are safe.</p>` +
+        (odd ? `<p>On a 5×5 the very last edge can come out with its outer pieces swapped round the middle one: that’s <b>edge parity</b>, with an algorithm of its own.</p>` : ''),
+      caseGroups: C.edges,
+      view: 'corner',
+    },
+    ...three.map((st): Stage => {
+      if (odd || (st.id !== 'yellow-cross' && st.id !== 'yellow-edges')) return st;
+      const oll = st.id === 'yellow-cross';
+      return {
+        ...st,
+        goal: st.goal + (oll ? ' Fix OLL parity first if it shows up.' : ' Then check for PLL parity.'),
+        html: oll
+          ? `<p>First count the yellow edges on top. One or three means <b>OLL parity</b> (OLL: Orient the Last Layer), which a 3×3 never has: fix it with its algorithm, then carry on.</p>` + st.html
+          : st.html + `<p>Then, before the corners, check them. If two would have to swap, or all four go round, that’s <b>PLL parity</b> (PLL: Permute the Last Layer): do its algorithm and line the edges up again.</p>`,
+        caseGroups: oll ? [...C.parity.oll, ...st.caseGroups!] : [...st.caseGroups!, ...C.parity.pll],
+      };
     }),
   ];
 
@@ -678,29 +720,31 @@ export function reductionGuide(M: CubeModel): Guide {
     id: 'reduction',
     name: 'Reduction method',
     short: 'Beginner',
+    level: 'Beginner',
+    triggers: [{ name: 'sexy move', moves: SEXY }],
     notation: '<code>Rw</code> turns the right two layers together and <code>2R</code> just the second layer; <code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.',
     intro: `Turn the ${n}×${n} into a big 3×3: build the centers, pair up the edges, then solve it with the 3×3 beginner’s method${n === 4 ? ', plus two parity algorithms a 3×3 never needs' : ''}.`,
     stages: STAGES,
-    steps: (state) => {
+    solve: (state) => {
       const steps: GuideStep[] = [];
-      notes = lessonNotes();
-      let s = centersStage(state, steps);
-      s = edgesStage(s, steps);
-      s = run3(s, B.crossStage, steps);
-      s = run3(s, B.cornersStage, steps);
-      s = run3(s, B.middleStage, steps);
-      if (n === 4) s = ollParity(s, steps);
-      s = run3(s, B.yellowCross, steps);
-      s = run3(s, B.yellowEdges, steps);
+      R.reset();
+      let s = R.centersStage(state, steps);
+      s = R.edgesStage(s, steps);
+      s = R.crossStage(s, steps);
+      s = R.cornersStage(s, steps);
+      s = R.middleStage(s, steps);
+      if (n === 4) s = R.ollParity(s, steps);
+      s = R.yellowCross(s, steps);
+      s = R.yellowEdges(s, steps);
       if (n === 4) {
         // after a PLL parity fix the edges need lining up again; otherwise this adds nothing
-        s = pllParity(s, steps);
-        s = run3(s, B.yellowEdges, steps);
+        s = R.pllParity(s, steps);
+        s = R.yellowEdges(s, steps);
       }
-      s = run3(s, B.cornerSpots, steps);
-      s = run3(s, B.cornerTwists, steps);
+      s = R.cornerSpots(s, steps);
+      s = R.cornerTwists(s, steps);
       if (!M.isSolved(s)) throw new Error('reduction guide: not solved');
-      return notes.place(steps);
+      return R.place(steps);
     },
   };
 }

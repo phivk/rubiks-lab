@@ -36,16 +36,28 @@ export function bestAlg<A extends { alg: string }>(K: Kit, s: State, set: (A | n
   return best;
 }
 
-/** What the top looks like, in the words cubers use to recognise OLL cases. */
-function topShape(K: Kit, s: State) {
+/** The shape the top's yellow edges make: none (a dot), a line, an L or a cross. */
+export function edgeShape(K: Kit, s: State): 'dot' | 'line' | 'L' | 'cross' {
   const yellow = K.center(s, 'U');
   const up = TOP_EDGES.filter((e) => s[K.at(e, 'U')] === yellow);
-  const corners = TOP_CORNERS.filter((c) => s[K.at(c, 'U')] === yellow).length;
-  const edges = up.length === 0 ? 'no edge shows yellow on top (a dot)'
-    : up.length === 4 ? 'all four edges show yellow (a cross)'
-    : K.at(up[0], 'U') + K.at(up[1], 'U') === 2 * K.at('U', 'U') ? 'two opposite edges show yellow (a line)'
-    : 'two neighbouring edges show yellow (an L)';
-  return `${edges}, and ${corners === 0 ? 'no corner does' : corners === 4 ? 'so do all four corners' : `${corners} corner${corners === 1 ? '' : 's'} ${corners === 1 ? 'does' : 'do'}`}`;
+  return up.length === 0 ? 'dot' : up.length === 4 ? 'cross'
+    : K.at(up[0], 'U') + K.at(up[1], 'U') === 2 * K.at('U', 'U') ? 'line' : 'L';
+}
+
+/** how many top corners show yellow on top */
+export const yellowCorners = (K: Kit, s: State) => TOP_CORNERS.filter((c) => s[K.at(c, 'U')] === K.center(s, 'U')).length;
+
+const EDGE_SHAPE = {
+  dot: 'no edge shows yellow on top (a dot)',
+  line: 'two opposite edges show yellow (a line)',
+  L: 'two neighbouring edges show yellow (an L)',
+  cross: 'all four edges show yellow (a cross)',
+};
+
+/** What the top looks like, in the words cubers use to recognise OLL cases. */
+function topShape(K: Kit, s: State) {
+  const corners = yellowCorners(K, s);
+  return `${EDGE_SHAPE[edgeShape(K, s)]}, and ${corners === 0 ? 'no corner does' : corners === 4 ? 'so do all four corners' : `${corners} corner${corners === 1 ? '' : 's'} ${corners === 1 ? 'does' : 'do'}`}`;
 }
 
 /** Orient the top with one algorithm from `set`; `about` introduces the step (what the acronym stands for). */
@@ -65,6 +77,7 @@ export function ollStep(K: Kit, s: State, stage: number, set: OllAlg[], prefix: 
         `<p>${u ? 'Turn the top to the angle the algorithm starts from, then do' : 'It’s already at the right angle. Do'} ${K.code(moves)}. Afterwards the whole top is yellow.</p>`,
       phrases: [...K.topPhrase(u), { label: `${prefix} ${o.n}`, moves }],
       focus: focusTop(K),
+      caseId: o.id,
     },
   };
 }
@@ -113,6 +126,7 @@ export function pllStep(K: Kit, s: State, stage: number, solved: (t: State) => b
         (v ? ', then turn the top to line it up.' : '.') + '</p>',
       phrases: [...K.topPhrase(u), { label: `${p.name} perm`, moves }, ...K.topPhrase(v, 'Line up the top')],
       focus: focusTop(K),
+      caseId: p.id,
     },
   };
 }

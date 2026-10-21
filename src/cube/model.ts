@@ -462,3 +462,6 @@ export class CubeModel {
     return { ok: true };
   }
 }
+
+/** the one 3×3 model: the case sets are cached per model, so sharing it builds them once */
+export const CUBE3 = new CubeModel(3);

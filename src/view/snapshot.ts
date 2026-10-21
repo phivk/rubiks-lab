@@ -28,13 +28,15 @@ function rounded(pts: V2[], radius: number) {
 
 /**
  * A still picture of the puzzle as the 3D view draws it: the same stickers, colors, rounding
- * and light, seen from the view's home angle ('corner') or straight from above ('top').
+ * and light, seen from the view's home angle ('corner'), its mirror image from the left ('left')
+ * or straight from above ('top').
  * Stickers on the top layer's hidden sides are folded out flat around the top, so every
  * sticker of the top layer shows, unless it's blank. `arrows` join sticker pairs, from the first to the second;
  * a pair listed both ways is one arrow with two heads.
  */
-export function snapshot(puzzle: Puzzle, state: State, view: 'corner' | 'top', arrows: [number, number][] = []) {
-  const toCam: Vec3 = view === 'top' ? [0, 1, 0] : normalize(sub(puzzle.cameraHome, puzzle.cameraTarget));
+export function snapshot(puzzle: Puzzle, state: State, view: 'corner' | 'left' | 'top', arrows: [number, number][] = []) {
+  const home = sub(puzzle.cameraHome, puzzle.cameraTarget);
+  const toCam: Vec3 = view === 'top' ? [0, 1, 0] : normalize(view === 'left' ? [-home[0], home[1], home[2]] : home);
   const right = normalize(cross(view === 'top' ? [0, 0, -1] : [0, 1, 0], toCam));
   const up = cross(toCam, right);
   const project = (p: Vec3): V2 => [dot(p, right), -dot(p, up)];

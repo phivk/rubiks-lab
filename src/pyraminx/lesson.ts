@@ -11,9 +11,13 @@
 // place; the edges are the only pieces that travel. The bottom edges come from a small
 // search over moves that put the bottom centers back (X U X'), so they always read as
 // "lift the slot, turn the top, put it back".
+//
+// The course is the same four stages, with cases (cases.ts), and a step that is one of them
+// names it (GuideStep.caseId).
 
-import type { Guide, GuideStep, Phrase, State } from '../core/types';
-import { alg, lessonNotes } from '../cube/lessonKit';
+import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
+import { lessonNotes } from '../cube/lessonKit';
+import { LL, pyraminxCases, rename, SIDES } from './cases';
 import { CENTER, COLORS, COLOR_NAMES, EDGE_PAIRS, TIP, VERTEX_NAMES, apply, applyAll, invertMove, piecesOf, solved, stickers } from './model';
 
 const SOLVED = solved();
@@ -34,31 +38,21 @@ const BOTTOM_EDGES = [3, 4, 5].map((k) => 8 + k); // L–R, L–B, R–B
 const TOP_EDGES = [0, 1, 2].map((k) => 8 + k); // U–L, U–R, U–B
 const TOP = [TIP(0), CENTER(0), ...TOP_EDGES];
 
-// The last layer. Each is written as seen with the green side toward you; the flips are
-// also done from the other two sides, which renames the corners.
-const LL = [
-  { id: 'cw', name: 'Three edges clockwise', moves: alg("R' U' R U' R' U' R") },
-  { id: 'ccw', name: 'Three edges counter-clockwise', moves: alg("R' U R U R' U R") },
-  { id: 'flip', name: 'Flip two edges', moves: alg("R' L R L' U L' U' L") },
-  { id: 'flipcw', name: 'Flip two and cycle', moves: alg("L U R U' R' L'") },
-  { id: 'flipccw', name: 'Flip two and cycle', moves: alg("R' U' L' U L R") },
-];
-/** holding another side toward you renames the bottom corners */
-const SIDES = [
-  { name: 'front', map: {} as Record<string, string> },
-  { name: 'right', map: { L: 'R', R: 'B', B: 'L' } as Record<string, string> },
-  { name: 'left', map: { L: 'B', B: 'R', R: 'L' } as Record<string, string> },
-];
-const rename = (moves: string[], map: Record<string, string>) => moves.map((m) => (map[m[0]] ?? m[0]) + m.slice(1));
 const U_TURNS = ['', 'U', "U'"];
 
 const focusPieces = (pieces: number[]) => () => pieces.flatMap(piecesOf);
 
 export const STAGES = [
-  { name: 'Tips', goal: 'Turn each tip to match the center beside it.' },
-  { name: 'Bottom centers', goal: 'Turn the bottom corners until their centers show yellow below.' },
-  { name: 'Bottom edges', goal: 'Bring the three yellow edges home to finish the bottom.' },
-  { name: 'Top layer', goal: 'Solve the last three edges with one algorithm.' },
+  { id: 'tips', name: 'Tips', goal: 'Turn each tip to match the center beside it.' },
+  { id: 'bottom-centers', name: 'Bottom centers', goal: 'Turn the bottom corners until their centers show yellow below.' },
+  { id: 'bottom-edges', name: 'Bottom edges', goal: 'Bring the three yellow edges home to finish the bottom.' },
+  { id: 'top-layer', name: 'Top layer', goal: 'Solve the last three edges with one algorithm.' },
+];
+
+/** U turns, and lifting a bottom slot with a corner turn, turning the top and putting it back */
+const MACROS = [
+  ...['U', "U'"].map((m) => ({ moves: [m], cost: 4 })),
+  ...['L', "L'", 'R', "R'", 'B', "B'"].flatMap((x) => ['U', "U'"].map((y) => ({ moves: [x, y, invertMove(x)], cost: 12 }))),
 ];
 
 /** The cheapest run of macros putting the edges `pieces` home, by uniform-cost search. */
@@ -105,7 +99,11 @@ function partner(i: number) {
   return piecesOf(stickers[i].piece).find((j) => j !== i)!;
 }
 
-export function pyraminxGuide(): Guide {
+/**
+ * The method's stages, in order: each takes a state, adds its steps (numbered as in STAGES)
+ * and returns the state after them.
+ */
+export function pyraminxStages() {
   let notes = lessonNotes();
 
   // ---------- 1. tips ----------
@@ -135,6 +133,8 @@ export function pyraminxGuide(): Guide {
           `<p>From now on the tips turn along with their centers, so they stay matched.</p>`,
         phrases,
         focus: focusPieces([0, 1, 2, 3].flatMap((v) => [TIP(v), CENTER(v)])),
+        // one tip to turn is a case, whichever tip it is
+        caseId: phrases.length === 1 ? (phrases[0].moves[0].endsWith("'") ? 'pyra-tip-cw' : 'pyra-tip-ccw') : undefined,
       });
     } else notes.add(steps, hold);
     return s;
@@ -160,6 +160,7 @@ export function pyraminxGuide(): Guide {
           `<p>Each center has three colors, so it takes at most one turn either way. The edges get mixed up on the way, but they aren’t solved yet anyway.</p>`,
         phrases,
         focus: focusPieces([1, 2, 3].flatMap((v) => [TIP(v), CENTER(v)])),
+        caseId: phrases.length === 1 ? (phrases[0].moves[0].endsWith("'") ? 'pyra-center-left' : 'pyra-center-right') : undefined,
       });
     }
     return s;
@@ -167,17 +168,16 @@ export function pyraminxGuide(): Guide {
 
   // ---------- 3. bottom edges ----------
 
-  // U turns, and lifting a bottom slot with a corner turn, turning the top and putting it back
-  const macros = [
-    ...['U', "U'"].map((m) => ({ moves: [m], cost: 4 })),
-    ...['L', "L'", 'R', "R'", 'B', "B'"].flatMap((x) => ['U', "U'"].map((y) => ({ moves: [x, y, invertMove(x)], cost: 12 }))),
-  ];
+  /** the bottom-edge case these moves are, seen from whichever side they go in from */
+  const edgeCases = pyraminxCases().bottomEdges.flatMap((g) => g.cases);
+  const edgeCase = (moves: string[]) => edgeCases.find((c) =>
+    SIDES.some(({ map }) => rename(c.moves, map).join(' ') === moves.join(' ')))?.id;
 
   function bottomEdges(s: State, steps: GuideStep[]) {
     let done = BOTTOM_EDGES.filter((p) => isHome(s, p));
     let first = true;
     while (done.length < 3) {
-      const plans = BOTTOM_EDGES.filter((p) => !done.includes(p)).map((p) => ({ p, path: route(s, [...done, p], macros) }));
+      const plans = BOTTOM_EDGES.filter((p) => !done.includes(p)).map((p) => ({ p, path: route(s, [...done, p], MACROS) }));
       const { p, path } = plans.reduce((a, b) => (b.path.flat().length < a.path.flat().length ? b : a));
       // where is it now?
       const [i, j] = piecesOf(p);
@@ -208,6 +208,7 @@ export function pyraminxGuide(): Guide {
           (done.length ? ' The moves put the edges you’ve already placed back where they were.' : '') + '</p>',
         phrases,
         focus: focusPieces([p, ...done, CENTER(1), CENTER(2), CENTER(3)]),
+        caseId: edgeCase(path.flat()),
       });
       s = applyAll(s, path.flat());
       done = BOTTOM_EDGES.filter((q) => isHome(s, q));
@@ -262,25 +263,77 @@ export function pyraminxGuide(): Guide {
         (best.v ? '<p>Finish by turning the top to line it up.</p>' : ''),
       phrases: [...top(best.u), { label: a.name, moves }, ...top(best.v, 'Line up the top')],
       focus: focusPieces(TOP),
+      caseId: `pyra-ll-${a.id}`,
     });
     return applyAll(s, [best.u, ...moves, best.v].filter(Boolean));
   }
 
   return {
+    tips, centers, bottomEdges, topLayer,
+    /** start a guided solve afresh: notes from an earlier one don't carry over */
+    reset: () => { notes = lessonNotes(); },
+    /** put the notes kept for steps that hadn't happened yet in their place */
+    place: (steps: GuideStep[]) => notes.place(steps),
+  };
+}
+
+/** The course: each stage explained, with its cases. */
+function pyraminxCourse(): Stage[] {
+  const C = pyraminxCases();
+  const [tips, centers, edges, top] = STAGES;
+  return [
+    {
+      ...tips,
+      html: `<p>Hold the Pyraminx with the ${name(YELLOW)} side down and the ${name(0)} side toward you, and keep holding it that way.</p>
+        <p>The four tips turn on their own and never disturb anything else, so start with them. Turn each one until its colors match the center piece right below it: lowercase moves turn just a tip, <code>u</code>, <code>l</code>, <code>r</code> and <code>b</code>. Each takes one turn, one way or the other.</p>`,
+      caseGroups: C.tips,
+      view: 'corner',
+    },
+    {
+      ...centers,
+      html: `<p>The three bottom corners each have a center with ${name(YELLOW)} on it. Turn each corner, its tip and all, until the center shows yellow on the bottom: capitals turn a whole corner, <code>L</code>, <code>R</code> and <code>B</code>.</p>
+        <p>Each center has three colors, so it takes one turn at most. The edges get mixed up on the way, but they aren’t solved yet anyway.</p>`,
+      caseGroups: C.centers,
+      view: 'corner',
+    },
+    {
+      ...edges,
+      html: `<p>Now bring the three edges with yellow on them home, one at a time. Each one’s home is the bottom edge between the two corners whose centers match its colors.</p>
+        <p>To move an edge without undoing the centers, turn a bottom corner to lift its slot into the top layer, turn the top (<code>U</code>), and turn the corner back, like <code>R U R'</code>. Done in the right order, that drops the edge in with its colors matching.</p>
+        <p>The cases show the last edge going into the slot at the front. Any other slot takes the same moves seen from its side: keep holding the puzzle as it is, and turn the corner that plays the same part.</p>`,
+      caseGroups: C.bottomEdges,
+      view: 'top',
+    },
+    {
+      ...top,
+      html: `<p>Only the top layer is left: its three edges, and the top center with its tip. There are just five cases, each with its own short algorithm.</p>
+        <p>Look at the top edges: whether any are flipped, and whether they need to go round one place. Do the algorithm, then turn the top to line it up with the bottom. A case that’s seen from another side is done from that side: turn the puzzle in your hands so it faces you.</p>`,
+      caseGroups: C.topLayer,
+      view: 'top',
+      arrows: C.arrows,
+      focus: C.focusTop,
+    },
+  ];
+}
+
+export function pyraminxMethod(): Method {
+  const P = pyraminxStages();
+  return {
     id: 'lbl',
     name: 'Layer by layer',
     short: 'Beginner',
+    level: 'Beginner',
     intro: 'The beginner’s way to solve a Pyraminx: the tips, then the bottom layer, then the last three edges with one short algorithm.',
-    stages: STAGES,
-    steps: (state) => {
+    stages: pyraminxCourse(),
+    solve: (state) => {
       const steps: GuideStep[] = [];
-      notes = lessonNotes();
-      let s = tips(state, steps);
-      s = centers(s, steps);
-      s = bottomEdges(s, steps);
-      s = topLayer(s, steps);
+      P.reset();
+      let s = P.tips(state, steps);
+      s = P.centers(s, steps);
+      s = P.bottomEdges(s, steps);
+      s = P.topLayer(s, steps);
       if (!allHome(s)) throw new Error('pyraminx guide: not solved');
-      return notes.place(steps);
+      return P.place(steps);
     },
   };
 }

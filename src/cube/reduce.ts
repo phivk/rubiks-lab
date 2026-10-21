@@ -19,7 +19,7 @@
 import { parity } from '../core/perm';
 import type { State, Vec3 } from '../core/types';
 import { cross, dot } from '../core/vec';
-import { CubeModel, type Orbit, type Slot } from './model';
+import { CUBE3, CubeModel, type Orbit, type Slot } from './model';
 
 interface Cycles {
   orbit: Orbit;
@@ -37,7 +37,7 @@ const cycleKey = (a: number, b: number, c: number) => {
   return (a * 64 + b) * 64 + c;
 };
 
-const cube3Model = new CubeModel(3);
+const cube3Model = CUBE3;
 
 
 export class Reducer {

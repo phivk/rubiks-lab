@@ -12,29 +12,29 @@
 // Every step works on the actual state: it finds the piece, decides the case and simulates
 // the moves, so the text always describes what's on screen. Pieces are named by colors and
 // found relative to the centers, so whole-cube turns (x, y, z) need no bookkeeping.
+//
+// The course is the same seven stages, each with example cases (cases.ts), and every step
+// from the white corners on names the case it is (GuideStep.caseId).
 
-import type { Guide, GuideStep, Phrase, State } from '../core/types';
+import type { GuideStep, Method, Phrase, Stage, State } from '../core/types';
+import { BEGINNER, cubeCases, SEXY, type CubeCases } from './cases';
 import {
-  alg, countMoves, FACE_MOVES, lessonKit, list, repeat, ROTATIONS, rounds, sameSet, SIDE_NAME, TOP_CORNERS, TOP_EDGES, U_TURNS,
+  countMoves, FACE_MOVES, lessonKit, list, repeat, ROTATIONS, rounds, sameSet, SIDE_NAME, TOP_CORNERS, TOP_EDGES, U_TURNS,
 } from './lessonKit';
 import type { CubeModel } from './model';
 
-const SEXY = alg("R U R' U'");
-const RIGHT = alg("U R U' R' U' F' U F");
-const LEFT = alg("U' L' U L U F U' F'");
-const CROSS = alg("F R U R' U' F'");
-const SUNE = alg("R U R' U R U2 R' U");
-const NIKLAS = alg("U R U' L' U R' U' L");
-const TWIST = alg("R' D' R D");
+const { right: RIGHT, left: LEFT, cross: CROSS, sune: SUNE, niklas: NIKLAS, twist: TWIST } = BEGINNER;
+/** the white-corner case that takes this many rounds of R U R' U' */
+const CORNER_CASES = ['', 'white-facing-right', 'in-its-spot-white-facing-right', 'white-facing-up', 'in-its-spot-white-facing-front', 'white-facing-front'].map((id) => `white-corner-${id}`);
 
 export const STAGES = [
-  { name: 'White cross', goal: 'A white plus on top, each edge matching the center beside it.' },
-  { name: 'White corners', goal: 'Flip the cube and drop in the corners to finish the first layer.' },
-  { name: 'Middle layer', goal: 'Slot in the four edges between the centers.' },
-  { name: 'Yellow cross', goal: 'Make a yellow plus on top.' },
-  { name: 'Yellow edges', goal: 'Line the plus up with the side centers.' },
-  { name: 'Corner spots', goal: 'Move each top corner to its spot.' },
-  { name: 'Corner twists', goal: 'Twist the corners until yellow faces up.' },
+  { id: 'white-cross', name: 'White cross', goal: 'A white plus on top, each edge matching the center beside it.' },
+  { id: 'white-corners', name: 'White corners', goal: 'Flip the cube and drop in the corners to finish the first layer.' },
+  { id: 'middle-layer', name: 'Middle layer', goal: 'Slot in the four edges between the centers.' },
+  { id: 'yellow-cross', name: 'Yellow cross', goal: 'Make a yellow plus on top.' },
+  { id: 'yellow-edges', name: 'Yellow edges', goal: 'Line the plus up with the side centers.' },
+  { id: 'corner-spots', name: 'Corner spots', goal: 'Move each top corner to its spot.' },
+  { id: 'corner-twists', name: 'Corner twists', goal: 'Twist the corners until yellow faces up.' },
 ];
 
 /**
@@ -135,10 +135,11 @@ export function beginnerStages(M: CubeModel) {
     const plan = (s: State, cols: number[]) => {
       const phrases: Phrase[] = [];
       let text = '';
+      let twisted = false;
       if (find(s, cols).includes('D')) {
         // in the bottom layer, but in the wrong spot or twisted: lift it out first
         const r = first(s, ROTATIONS, (t) => find(t, cols) === 'DRF');
-        const twisted = inSpot(apply(s, [r]), 'DRF');
+        twisted = inSpot(apply(s, [r]), 'DRF');
         phrases.push(...rotatePhrase(r), { label: 'Lift it out', moves: SEXY });
         text += `<p>It’s stuck in the bottom layer ${twisted ? 'in its spot, but twisted' : 'in the wrong spot'}. ` +
           `Hold it at the front-right and do ${code(SEXY)} once to lift it to the top.</p>`;
@@ -158,7 +159,8 @@ export function beginnerStages(M: CubeModel) {
       text += `<p>Turn the cube so its spot, between the ${name(a)} and ${name(b)} centers, is at the front-right of the bottom${r ? '' : ' (it already is)'}` +
         (u ? ', then turn the top until the corner sits right above it' : '') + '.</p>' +
         `<p>Now repeat ${code(SEXY)} until it drops in with white facing down. This one takes ${rounds(n)}.</p>`;
-      return { s, phrases, text, length: countMoves(phrases) };
+      // twisted in its spot, the lifting round counts too: that case is the rounds in all; from another spot it's the rounds from the top
+      return { s, phrases, text, length: countMoves(phrases), caseId: CORNER_CASES[twisted ? n + 1 : n] };
     };
 
     let todo = corners.filter((cols) => !placed(s, find(s, cols)));
@@ -171,6 +173,7 @@ export function beginnerStages(M: CubeModel) {
         html: `<p>Find the ${piece(best.cols)} corner.</p>` + best.text,
         phrases: best.phrases,
         focus: focusOn([best.cols]),
+        caseId: best.caseId,
       });
       s = best.s;
       todo = todo.filter((cols) => !placed(s, find(s, cols)));
@@ -185,7 +188,9 @@ export function beginnerStages(M: CubeModel) {
     const plan = (s: State, cols: number[]) => {
       const phrases: Phrase[] = [];
       let text = '';
+      let stuck = false;
       if (!find(s, cols).includes('U')) {
+        stuck = true;
         // in the middle layer, but in the wrong spot or flipped
         const r = first(s, ROTATIONS, (t) => find(t, cols) === 'FR');
         phrases.push(...rotatePhrase(r), { label: 'Pop it out', moves: RIGHT });
@@ -209,7 +214,7 @@ export function beginnerStages(M: CubeModel) {
         (u ? ', then turn the top until the edge’s front sticker sits above it' : '; the edge’s front sticker is already above it') +
         ` — together they make an upside-down T.</p>` +
         `<p>Its top color, ${name(top)}, belongs on the ${right ? 'right' : 'left'}, so move it down that way with ${code(moves)}.</p>`;
-      return { s, phrases, text, length: countMoves(phrases) };
+      return { s, phrases, text, length: countMoves(phrases), caseId: stuck ? 'middle-in-its-spot-flipped' : right ? 'middle-goes-to-the-right' : 'middle-goes-to-the-left' };
     };
 
     const yellow = center(s, 'U');
@@ -225,6 +230,7 @@ export function beginnerStages(M: CubeModel) {
         html: `<p>Find the ${piece(best.cols)} edge${firstEdge ? ` — an edge with no ${name(yellow)} on it` : ''}.</p>` + best.text,
         phrases: best.phrases,
         focus: focusOn([best.cols]),
+        caseId: best.caseId,
       });
       firstEdge = false;
       s = best.s;
@@ -266,6 +272,7 @@ export function beginnerStages(M: CubeModel) {
           `<p>Ignore the corners for now — ${after === 4 ? 'this finishes the plus' : `this gives ${after === 2 ? (shape === 'dot' ? 'an L' : 'a line') : 'more yellow edges'}`}.</p>`,
         phrases: [...topPhrase(best.u), { label: 'Yellow cross', moves: CROSS }],
         focus: focusTop,
+        caseId: `yellow-cross-${shape.toLowerCase()}`,
       });
       s = best.t;
     }
@@ -315,6 +322,7 @@ export function beginnerStages(M: CubeModel) {
           (best.v ? '<p>Then turn the top to line them up again.</p>' : ''),
         phrases: [...topPhrase(u), ...rotatePhrase(best.r), { label: 'Swap edges', moves: SUNE }, ...topPhrase(best.v, 'Line up')],
         focus: focusTop,
+        caseId: adjacent ? 'yellow-edges-two-side-by-side' : 'yellow-edges-two-opposite',
       });
       s = best.t;
     }
@@ -344,7 +352,9 @@ export function beginnerStages(M: CubeModel) {
           : `<p>The ${piece(cols)} corner is in its spot — it has the colors of the three centers around it. Twists don’t matter yet.</p>` +
             `<p>Hold it at the front-right of the top and do ${code(NIKLAS)}. It cycles the other three corners.</p>`;
       }
-      steps.push({ stage: 5, title: 'Cycle the corners', html, phrases: [...rotatePhrase(r), { label: 'Cycle corners', moves: NIKLAS }], focus: focusTop });
+      // one go finishes the corners, or they need two (they go round the other way), or none was in its spot
+      const caseId = !good.length ? 'corner-spots-none-in-its-spot' : spots(apply(s, [r, ...NIKLAS])).length === 4 ? 'corner-spots-one-in-its-spot' : 'corner-spots-one-in-its-spot-the-other-way';
+      steps.push({ stage: 5, title: 'Cycle the corners', html, phrases: [...rotatePhrase(r), { label: 'Cycle corners', moves: NIKLAS }], focus: focusTop, caseId });
       s = apply(s, [r, ...NIKLAS]);
     }
 
@@ -377,6 +387,7 @@ export function beginnerStages(M: CubeModel) {
           `<p>This one takes ${rounds(n)}.</p>`,
         phrases: [...(count === 1 ? rotatePhrase(pre) : topPhrase(pre)), { label: `${TWIST.join(' ')} ×${n}`, moves: repeat(TWIST, n) }],
         focus: focusOn([cols]),
+        caseId: n === 2 ? 'corner-twist-yellow-facing-right' : 'corner-twist-yellow-facing-front',
       });
     }
     const u = first(s, U_TURNS, (t) => M.isSolved(t));
@@ -396,17 +407,85 @@ export function beginnerStages(M: CubeModel) {
   return { crossStage, cornersStage, middleStage, yellowCross, yellowEdges, cornerSpots, cornerTwists };
 }
 
-export function beginnerGuide(M: CubeModel): Guide {
+/** The course: each stage explained, with its cases (the 3×3's, or the same on a big cube). */
+export function beginnerCourse(cases: Pick<CubeCases, 'beginner' | 'focusTop' | 'pllArrows'>): Stage[] {
+  const { beginner: C, focusTop, pllArrows } = cases;
+  const [cross, corners, middle, yCross, yEdges, spots, twists] = STAGES;
+  return [
+    {
+      ...cross,
+      html: `<p>Hold the cube with the <b>white center on top</b>. The cross is the four white edges around it, each one also matching the center on its side.</p>
+        <p>There’s no algorithm here: find each white edge and bring it up, one at a time, without knocking out the ones already in place. These examples show the usual ways for one edge, the white–green one, with green in front.</p>
+        <p class="muted">Tip: check the side color, not just the white. An edge with white on top but beside the wrong center isn’t done.</p>`,
+      caseGroups: C.whiteCross,
+      view: 'corner',
+    },
+    {
+      ...corners,
+      html: `<p>Turn the cube upside down, so the <b>white cross is on the bottom</b>. It stays there for the rest of the solve.</p>
+        <p>Each white corner goes in between the two centers of its other colors. Turn the cube so that spot is at the <b>front right</b> of the bottom, turn the top until the corner sits right above it, then repeat <code>R U R' U'</code> until it drops in with white facing down. It takes one, three or five rounds, depending on which way white faces.</p>
+        <p>A corner already in the bottom layer, in the wrong spot or twisted, comes out with one round first.</p>`,
+      caseGroups: C.whiteCorners,
+      view: 'corner',
+    },
+    {
+      ...middle,
+      html: `<p>Now the four edges of the middle layer: the ones without yellow. Find one on top and turn the top until its front sticker sits above the center of the same color.</p>
+        <p>Its top color says where it goes: down to the right with <code>U R U' R' U' F' U F</code>, or down to the left with the mirror image, <code>U' L' U L U F U' F'</code>. Each first moves the corner out of the way, then puts it back with the edge.</p>
+        <p>If an edge is stuck in the middle layer, flipped or in the wrong slot, do the right-hand one from that slot to swap it out to the top.</p>`,
+      caseGroups: C.middleLayer,
+      view: 'corner',
+    },
+    {
+      ...yCross,
+      html: `<p>Yellow is on top now. Make a yellow plus first, ignoring the corners: one algorithm, <code>F R U R' U' F'</code>, done until the plus is there.</p>
+        <p>Look at the yellow edges on top. A line, held left to right, needs one go; an L, held at the back left, needs two; just the center dot needs three.</p>`,
+      caseGroups: C.yellowCross,
+      view: 'top',
+      focus: focusTop,
+    },
+    {
+      ...yEdges,
+      html: `<p>The plus is there, but its edges may not match the centers below them. Turn the top until at least two do.</p>
+        <p>If they’re side by side, hold them at the back and the right and do <code>R U R' U R U2 R' U</code>: it swaps the other two. If they’re opposite, do it once from any side first.</p>`,
+      caseGroups: C.yellowEdges,
+      view: 'top',
+      arrows: pllArrows,
+      focus: focusTop,
+    },
+    {
+      ...spots,
+      html: `<p>Next, move each corner to its spot, the one between the three centers of its colors. Don’t worry about which way it’s twisted yet.</p>
+        <p>Find a corner that’s already in its spot, hold it at the front right and do <code>U R U' L' U R' U' L</code>. It moves the other three round, one place. Do it again if they aren’t home yet. If no corner is in its spot, do it once from any side and one will be.</p>`,
+      caseGroups: C.cornerSpots,
+      view: 'top',
+      arrows: pllArrows,
+      focus: focusTop,
+    },
+    {
+      ...twists,
+      html: `<p>Last, twist the corners so yellow faces up. Hold the cube with a corner that doesn’t show yellow on top at the front right, and repeat <code>R' D' R D</code> until it does: two or four rounds.</p>
+        <p>The lower layers get scrambled while you do this. Don’t worry, and <b>don’t turn the whole cube</b>: turn only the top to bring the next corner to the front right, and keep going. When the last corner is done, the lower layers come back. Turn the top to finish.</p>`,
+      caseGroups: C.cornerTwists,
+      view: 'top',
+      focus: focusTop,
+    },
+  ];
+}
+
+export function beginnerMethod(M: CubeModel): Method {
   const B = beginnerStages(M);
   const STAGE_FNS = [B.crossStage, B.cornersStage, B.middleStage, B.yellowCross, B.yellowEdges, B.cornerSpots, B.cornerTwists];
   return {
     id: 'beginner',
     name: 'Beginner method',
     short: 'Beginner',
+    level: 'Beginner',
     notation: '<code>x</code> and <code>z</code> turn the whole cube like <code>R</code> and <code>F</code>.',
     intro: 'Solve the cube layer by layer, the way most people first learn it: seven stages and a handful of short algorithms.',
-    stages: STAGES,
-    steps: (state) => {
+    triggers: [{ name: 'sexy move', moves: SEXY }],
+    stages: beginnerCourse(cubeCases(M)),
+    solve: (state) => {
       const steps: GuideStep[] = [];
       let s = state;
       for (const stage of STAGE_FNS) s = stage(s, steps);
