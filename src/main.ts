@@ -8,7 +8,7 @@ import { Mode, PuzzleView } from './view/PuzzleView';
 import { NetView } from './view/net';
 import { RingView } from './view/rings';
 import { Scanner } from './view/scanner';
-import { countHtml, courseProgress, drillControlsHtml, drillStatus, markCode, movesHtml, offPlanHtml, stepperHtml, trigClass, triggerRuns } from './view/course';
+import { drillControlsHtml, drillStatus, markCode, movesHtml, offPlanHtml, stepperHtml, trigClass, triggerRuns } from './view/course';
 import { snapshot } from './view/snapshot';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -1105,21 +1105,12 @@ function renderDrilling() {
     const k = s!.index;
     if (k > 0 && k < s!.moves.length) caseProgress.set(caseKey(s!.drill!), k);
     else caseProgress.delete(caseKey(s!.drill!));
-    // played through to the end: practised, on the cards, the stepper and the method picker
-    const id = caseAt(s!.drill!).id;
-    if (k >= s!.moves.length && !playing && !practisedIds().has(id)) {
-      practisedIds().add(id);
-      savePractised();
-      renderMethods();
-      renderStepper();
-    }
   }
   keepAwake(on);
   document.querySelectorAll<HTMLElement>('#tut-groups .case').forEach((card) => {
     const open = on && sameCase(s!.drill!, cardRef(card));
     const here = open && !s!.stale;
     card.classList.toggle('active', open);
-    card.classList.toggle('practised', practisedIds().has(card.dataset.id!));
     card.querySelectorAll<HTMLElement>('.mv').forEach((m) => {
       const i = Number(m.dataset.mv);
       m.classList.toggle('done', here && i < s!.index);
@@ -1144,7 +1135,6 @@ function renderDrilling() {
     hit.setAttribute('aria-label', label);
     hit.setAttribute('title', label);
   });
-  setHtml(document.querySelector<HTMLElement>('#case-card .case-done'), on ? caseDone() : '');
 }
 
 /** Replace an element's HTML, only if it changed: a focused button inside stays put. */
@@ -1155,29 +1145,12 @@ function setHtml(el: HTMLElement | null, html: string) {
   }
 }
 
-/** Once the open case is done: repeat it, or go on to the next. */
-function caseDone() {
-  const s = solution!;
-  if (s.stale || playing || s.index < s.moves.length) return '';
-  const next = nextCase(s.drill!);
-  return '<b>Done ✓</b><button class="btn small ghost" data-act="repeat">Repeat</button>' +
-    (next ? `<button class="btn small primary-soft" data-act="next">Next: ${caseName(caseAt(next))}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : '');
-}
-
-/** the case after this one in its stage, if any */
-function nextCase(r: CaseRef): CaseRef | null {
-  const groups = currentMethod()!.stages[r.stage].caseGroups!;
-  if (r.index + 1 < groups[r.group].cases.length) return { ...r, index: r.index + 1 };
-  if (r.group + 1 < groups.length) return { stage: r.stage, group: r.group + 1, index: 0 };
-  return null;
-}
 /** where a case is in the course: its stage and group, and the case */
 function caseIn(r: CaseRef) {
   const stage = currentMethod()!.stages[r.stage];
   const group = stage.caseGroups![r.group];
   return { stage, group, c: group.cases[r.index] };
 }
-const caseAt = (r: CaseRef) => caseIn(r).c;
 /** a case's name, with its number in the full list: Sune (OLL 27) */
 const caseName = (c: Case) => c.name + (c.alias ? ` <span class="alias">(${c.alias})</span>` : '');
 
@@ -1187,7 +1160,6 @@ function caseStatus(open: boolean) {
   if (!open) return '';
   return drillStatus({
     stale: s.stale, undo: s.drift ? undoLabel() : null, playing,
-    done: s.index >= s.moves.length, hasNext: !!nextCase(s.drill!),
     atStart: s.index === 0, tapLearned,
   });
 }
@@ -1257,12 +1229,10 @@ function renderLearn(fresh: boolean) {
   $('#solve-sub').textContent = 'On a new scramble, step by step';
   const mine = sessions.get(puzzle.id)!.state;
   const useMine = !puzzle.isSolved(mine) && puzzle.validate(mine).ok;
-  const { all } = progressOf(method);
   // only when it changes: an opened "How to read the moves" stays open as the cube turns
   setHtml($('#lesson-intro'), `
     <p><b>${method.name}</b> <span class="level">${method.level}</span> ${method.intro}</p>
-    ${all.total ? `<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube. ` +
-      (all.done ? `You’ve practised ${all.done} of ${all.total}. <button class="link" data-act="clear-progress">Start counting again</button>` : 'Each one you play through to the end gets a tick.') + '</p>' : ''}
+    ${method.stages.some((st) => st.caseGroups) ? '<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube.</p>' : ''}
     <p class="muted small">Make the moves yourself, here or on a real cube, and the guided solve follows along.</p>
     ${useMine ? '<button class="link use-mine" data-act="mine">Use my cube instead ›</button>' : ''}
     ${notationHelp(method.notation)}`);
@@ -1331,14 +1301,6 @@ function renderLesson() {
       <button class="btn small ghost" data-act="next">Next step<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
     </div>
     <div class="lesson-foot"><button class="link" data-act="again">New scramble</button><button class="link" data-act="end">End guided solve</button></div>`;
-}
-
-/** the stage a guided solve is in (once it's done, the stage after the last it covers), or -1 */
-function lessonStage(s: Solution | null) {
-  if (!s?.lesson) return -1;
-  const k = currentStep(s);
-  const { steps, stage, method } = s.lesson;
-  return k < steps.length ? steps[k].stage : stage !== undefined ? stage + 1 : method.stages.length;
 }
 
 /** the stage the course was last moved to by the guided solve */
@@ -1417,26 +1379,6 @@ function setStage(k: number, scroll = true) {
   }
 }
 
-/**
- * The cases you've played through to the end, per puzzle, by id: a case counts in every
- * course that has it (Sune in CFOP's OLL and in ZZ's OCLL). Kept across visits.
- */
-const practised = new Map<string, Set<string>>();
-const practisedKey = () => `practised:${puzzle.id}`;
-function practisedIds() {
-  let ids = practised.get(puzzle.id);
-  if (!ids) {
-    try { ids = new Set(JSON.parse(localStorage.getItem(practisedKey()) ?? '[]') as string[]); } catch { ids = new Set(); }
-    practised.set(puzzle.id, ids);
-  }
-  return ids;
-}
-function savePractised() {
-  try { localStorage.setItem(practisedKey(), JSON.stringify([...practisedIds()])); } catch { /* storage unavailable */ }
-}
-/** how many of a method's cases you've practised, stage by stage and in all */
-const progressOf = (m: Method) => courseProgress(m.stages, (id) => practisedIds().has(id));
-
 /** how far into each case you got this session, so coming back to one resumes it */
 const caseProgress = new Map<string, number>();
 const caseKey = (r: CaseRef) => `${puzzle.id}:${currentMethod()?.id}:${r.stage}:${r.group}:${r.index}`;
@@ -1496,7 +1438,6 @@ function renderCourse() {
         ${g.about ? `<p class="muted small">${g.about}</p>` : ''}
         <div class="cases">${g.cases.map((c, i) => `
           <div class="case" data-group="${gi}" data-index="${i}" data-id="${c.id}">
-            <span class="case-tick" title="Practised" aria-label="Practised">✓</span>
             <button class="case-hit" title="Set up ${c.name}" aria-label="Set up ${c.name}"></button>
             ${diagram(stage, c)}<span class="case-name">${caseName(c)}</span>${c.note ? `<span class="case-note">${c.note}</span>` : ''}<code class="case-alg">${movesHtml(c.moves, method.triggers, c.breakAfter)}</code>${drillControlsHtml()}
           </div>`).join('')}</div>
@@ -1509,38 +1450,21 @@ function renderCourse() {
   renderDrilling();
 }
 
-/** The method's stages, ‹ one › after another: the one on screen, how far a guided solve has got, and how many cases you've practised. */
+/** The method's stages, ‹ one › after another, with the one on screen marked. */
 function renderStepper() {
-  const method = currentMethod()!;
-  setHtml($('#tut-steps'), stepperHtml(method.stages, stageIdx, lessonStage(guidedLesson()), progressOf(method).stages));
+  setHtml($('#tut-steps'), stepperHtml(currentMethod()!.stages, stageIdx));
 }
 
-/** The method picker, or the method's name when there's no choice, each with how many of its cases you've practised. */
+/** The method picker, or the method's name when there's no choice. */
 function renderMethods() {
   const method = currentMethod()!;
   const methods = puzzle.methods!;
   $('#methods').classList.toggle('single', methods.length < 2);
-  setHtml($('#methods'), methods.length < 2 ? `<span class="method-name">${method.name}</span>${countHtml(progressOf(method).all)}` : methods.map((m) => {
-    const { all } = progressOf(m);
-    const title = `${m.name} · ${m.level}${all.total ? ` · ${all.done} of ${all.total} cases practised` : ''}`;
-    return `<button role="tab" data-method="${m.id}" class="${m === method ? 'active' : ''}" aria-selected="${m === method}" title="${title}">${m.short}${all.done ? countHtml(all) : ''}</button>`;
-  }).join(''));
+  setHtml($('#methods'), methods.length < 2 ? `<span class="method-name">${method.name}</span>` : methods.map((m) =>
+    `<button role="tab" data-method="${m.id}" class="${m === method ? 'active' : ''}" aria-selected="${m === method}" title="${m.name} · ${m.level}">${m.short}</button>`).join(''));
 }
 
-/** Forget which of this puzzle's cases you've practised, with an undo. */
-function clearProgress() {
-  const before = [...practisedIds()];
-  const restore = (ids: string[]) => {
-    practised.set(puzzle.id, new Set(ids));
-    savePractised();
-    renderSolution();
-    renderDrilling();
-  };
-  restore([]);
-  toast(`Ticks cleared for the ${puzzle.name}`, '', { label: 'Undo', run: () => restore(before) });
-}
-
-/** The open case, big, with what's next once it's done. */
+/** The open case, big. */
 function renderCaseCard() {
   const el = $('#case-card');
   const ref = solution!.drill!;
@@ -1550,7 +1474,6 @@ function renderCaseCard() {
     <div class="lesson-title">${caseName(c)}</div>
     <div class="case-big">${diagram(stage, c)}</div>
     ${solution!.stale ? offPlanHtml('it no longer shows this case', solution!.drift ? undoLabel() : null, { act: 'reset', label: 'set it up again' }) : ''}
-    <div class="case-done"></div>
     <div class="lesson-foot"><button class="link" data-act="close">Close the case</button></div>`;
   renderDrilling();
 }
@@ -1560,11 +1483,7 @@ function onCaseCardClick(e: Event) {
   const ref = solution?.drill;
   if (b?.dataset.act === 'undo') undoStray();
   else if (b?.dataset.act === 'reset' && ref) void openCase(ref, true);
-  else if (b?.dataset.act === 'repeat' && ref) void openCase(ref);
-  else if (b?.dataset.act === 'next' && ref) {
-    const next = nextCase(ref);
-    if (next) void openCase(next);
-  } else if (b?.dataset.act === 'close') {
+  else if (b?.dataset.act === 'close') {
     solution = null;
     playing = false;
     renderSolution();
@@ -1591,11 +1510,6 @@ function onCourseClick(e: Event) {
     const s = solution;
     const ctl = b.dataset.ctl;
     if (ctl === 'undo') return undoStray();
-    if (ctl === 'next') {
-      const next = nextCase(ref);
-      if (next) void openCase(next);
-      return;
-    }
     // on a phone the open case's card is the controller: tap it for the next move, tap a move to go back to it
     if (phone() && s?.drill && sameCase(s.drill, ref) && !s.stale) {
       // a second tap within a moment is a bounce, not a wish for two moves
@@ -1743,7 +1657,6 @@ function bind() {
   $('#btn-about').addEventListener('click', showAbout);
   $('#lesson-intro').addEventListener('click', (e) => {
     if ((e.target as HTMLElement).closest('[data-about]')) showAbout();
-    if ((e.target as HTMLElement).closest('[data-act="clear-progress"]')) clearProgress();
   });
   $('#btn-share').addEventListener('click', async () => {
     saveToUrl();

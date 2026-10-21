@@ -1,6 +1,5 @@
 // The pieces Learn builds its pages from, for any method: the stage stepper, a move sequence
-// with its triggers marked, a case's drill controls, the banner for a cube turned off plan, and
-// how many of a course's cases you've practised.
+// with its triggers marked, a case's drill controls, and the banner for a cube turned off plan.
 // Each returns HTML; main.ts puts it on screen and handles the clicks (data-act, data-ctl).
 
 import type { Method, Stage } from '../core/types';
@@ -41,35 +40,10 @@ export function movesHtml(moves: string[], triggers: Triggers, breakAfter?: numb
 export const markCode = (html: string, triggers: Triggers) =>
   html.replace(/<code>([^<]*)<\/code>/g, (_, text: string) => `<code>${movesHtml(text.split(' ').filter(Boolean), triggers)}</code>`);
 
-export interface Progress {
-  done: number;
-  total: number;
-}
-
-/**
- * How many of a course's cases are `practised`, stage by stage and in all. A case counts once
- * however many stages have it.
- */
-export function courseProgress(stages: Stage[], practised: (id: string) => boolean) {
-  const count = (ids: Set<string>): Progress => ({ done: [...ids].filter(practised).length, total: ids.size });
-  const idsOf = (st: Stage) => new Set((st.caseGroups ?? []).flatMap((g) => g.cases.map((c) => c.id)));
-  return { stages: stages.map((st) => count(idsOf(st))), all: count(new Set(stages.flatMap((st) => [...idsOf(st)]))) };
-}
-
-/** "3/7", for a count shown beside a stage or method name; nothing without cases */
-export const countHtml = (p: Progress) =>
-  p.total ? `<span class="count${p.done === p.total ? ' full' : ''}" title="${p.done} of ${p.total} cases practised">${p.done}/${p.total}</span>` : '';
-
-/**
- * The method's stages, one after another: the one on screen, how far a guided solve has got
- * (`reached`, the stage it's in, the number of stages once it's done, or -1 without one), and
- * how many of each stage's cases you've practised.
- */
-export function stepperHtml(stages: Stage[], active: number, reached: number, progress: Progress[] = []) {
-  return stages.map((st, i) => {
-    const state = reached < 0 ? '' : i < reached ? ' done' : i === reached ? ' current' : '';
-    return `<button role="tab" data-step="${i}" class="${i === active ? 'active' : ''}${state}" aria-selected="${i === active}"><span class="num">${state === ' done' ? '✓' : i + 1}</span>${st.name}${progress[i] ? countHtml(progress[i]) : ''}</button>`;
-  }).join('');
+/** The method's stages, one after another, with the one on screen (`active`) marked. */
+export function stepperHtml(stages: Stage[], active: number) {
+  return stages.map((st, i) =>
+    `<button role="tab" data-step="${i}" class="${i === active ? 'active' : ''}" aria-selected="${i === active}"><span class="num">${i + 1}</span>${st.name}</button>`).join('');
 }
 
 /**
@@ -89,11 +63,10 @@ export const drillControlsHtml = () =>
   '<button class="case-back" data-ctl="back" aria-label="Previous move"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg></button>' +
   '<button class="case-play" data-ctl="play" aria-label="Play the moves"><svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg class="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button></span>';
 
-/** What the open case's drill controls say: turned off plan, done, or how to step through it. */
-export function drillStatus(d: { stale: boolean; undo: string | null; playing: boolean; done: boolean; hasNext: boolean; atStart: boolean; tapLearned: boolean }) {
+/** What the open case's drill controls say: turned off plan, or how to step through it. */
+export function drillStatus(d: { stale: boolean; undo: string | null; playing: boolean; atStart: boolean; tapLearned: boolean }) {
   if (d.stale) return `<b>Cube turned</b>${d.undo ? `<button class="case-undo" data-ctl="undo">${d.undo}</button>` : ''}tap to set up`;
   if (d.playing) return '';
-  if (d.done) return `<b>Done ✓</b>${d.hasNext ? '<button class="case-undo" data-ctl="next">Next case ›</button>' : ''}tap to repeat`;
   // until you've stepped through a case once, the first open says how
   if (d.atStart && !d.tapLearned) return '<b>Tap the card</b>for each move';
   return '';
