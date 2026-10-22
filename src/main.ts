@@ -985,11 +985,26 @@ function setMapKind(k: MapKind) {
   renderMapKind();
 }
 
+/** whether the map is showing on a phone, where it's folded away unless you open it */
+let mapOpen = false;
+try { mapOpen = localStorage.getItem('mapOpen') === '1'; } catch { /* storage unavailable */ }
+function setMapOpen(open: boolean) {
+  mapOpen = open;
+  try { localStorage.setItem('mapOpen', open ? '1' : '0'); } catch { /* storage unavailable */ }
+  renderMapOpen();
+}
+function renderMapOpen() {
+  $('.panel.left').classList.toggle('map-closed', !mapOpen);
+  const b = $('#btn-map-toggle');
+  b.textContent = mapOpen ? 'Hide' : 'Show';
+  b.setAttribute('aria-expanded', String(mapOpen));
+}
+
 /** Puzzles without a ring map always show the net. */
 function renderMapKind() {
   const hasRings = !!puzzle.rings;
   const k = hasRings ? mapKind : 'net';
-  $('#map-switch').classList.toggle('hidden', !hasRings);
+  $('#map-row').classList.toggle('hidden', !hasRings);
   selectTab('#map-switch button', 'map', k);
   $('#net').classList.toggle('hidden', k !== 'net');
   $('#rings').classList.toggle('hidden', k !== 'rings');
@@ -1142,17 +1157,17 @@ function renderSolution(fresh = false) {
   $('.solve-label').textContent = 'Solve';
   const sub = $('#solve-sub');
   if (!solution) {
-    sub.textContent = puzzle.solveHint ?? 'Finds the shortest route home';
+    sub.textContent = puzzle.solveHint ?? 'Fewest moves to solved';
     return;
   }
   const s = solution;
   $('#sol-count').textContent = s.moves.length ? String(s.moves.length) : '…';
   const secs = (s.elapsed / 1000).toFixed(s.elapsed < 1000 ? 2 : 1);
   let meta = '';
-  if (s.stale) meta = `<span class="badge stale">Puzzle changed</span><span>Solve again for a new route</span>`;
+  if (s.stale) meta = `<span class="badge stale">Puzzle changed</span><span>Recompute for a new route</span>`;
   else if (s.searching) meta = `<span class="badge searching">Searching for shorter</span>`;
   else if (s.optimal) meta = `<span class="badge optimal">✓ Optimal</span><span>proven in ${secs}s</span>`;
-  else meta = `<span>Best found in ${secs}s ·</span><button class="link" id="btn-deeper">Search deeper</button>`;
+  else meta = `<span>Best found in ${secs}s ·</span><button class="link" id="btn-deeper" title="Search for longer, up to 12 seconds">Find a shorter solution</button>`;
   $('#sol-meta').innerHTML = meta;
   $('#btn-deeper')?.addEventListener('click', () => {
     if (!solution) return;
@@ -1163,10 +1178,10 @@ function renderSolution(fresh = false) {
     void idle().then(() => {
       if (puzzle.encode(session.state) !== target) return;
       runSolver(12000);
-      if (rewound) toast('Rewound to the start to search deeper');
+      if (rewound) toast('Rewound to the start to find a shorter solution');
     });
   });
-  sub.textContent = s.searching ? 'Searching…' : 'Solve again';
+  sub.textContent = s.searching ? 'Searching…' : 'Recompute';
   renderChips(fresh);
   renderPlayback();
   // on a phone the solution is below your cube's setup: bring a new one into view
@@ -1211,7 +1226,12 @@ function renderPlayback() {
   ($('#btn-next') as HTMLButtonElement).disabled = s.index >= n;
   ($('#btn-last') as HTMLButtonElement).disabled = s.index >= n;
   if (s.lesson) {
-    const step = s.lesson.steps[currentStep(s)];
+    const k = currentStep(s);
+    // where you are in this step, counted as its chips are: the next move to make
+    const at = $('#lesson-move');
+    const { starts } = s.lesson;
+    if (at && k < starts.length) at.textContent = `move ${s.index - starts[k] + 1} of ${(starts[k + 1] ?? n) - starts[k]}`;
+    const step = s.lesson.steps[k];
     view.setFocus(step && !s.stale ? step.focus(session.state) : null);
   } else {
     const focus = s.drill && currentMethod()?.stages[s.drill.stage].focus;
@@ -1440,7 +1460,7 @@ function renderLesson() {
     return;
   }
   $('#lesson').innerHTML = stale + `
-    <div class="lesson-head"><span class="eyebrow">${method.stages[step.stage].name}${stage !== undefined ? ' practice' : ''}</span><span class="step">Step ${k + 1 - off} of ${steps.length - off}</span></div>
+    <div class="lesson-head"><span class="eyebrow">${method.stages[step.stage].name}${stage !== undefined ? ' practice' : ''}</span><span class="step">Step ${k + 1 - off} of ${steps.length - off} · <span id="lesson-move"></span></span></div>
     <div class="lesson-title">${step.title}</div>
     <div class="lesson-text">${step.html}</div>
     <div class="phrases">${phrases}</div>
@@ -1680,7 +1700,7 @@ function renderCaseCard() {
   const ref = solution!.drill!;
   const { stage, group, c } = caseIn(ref);
   el.innerHTML = `
-    <div class="lesson-head"><span class="eyebrow">${stage.name} · ${group.name}</span><span class="step">${ref.index + 1} of ${group.cases.length}</span></div>
+    <div class="lesson-head"><span class="eyebrow">${stage.name}</span><span class="step">Case ${ref.index + 1} of ${group.cases.length} in ${group.name}</span></div>
     <div class="lesson-title">${caseName(c)}</div>
     <div class="case-big">${diagram(stage, c)}</div>
     ${solution!.stale ? offPlanHtml('it no longer shows this case', solution!.drift ? undoLabel() : null, { act: 'reset', label: 'set it up again' }) : ''}
@@ -1912,6 +1932,24 @@ function bind() {
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-redo').addEventListener('click', redo);
   $('#btn-camera').addEventListener('click', () => view.resetCamera());
+  // the display settings open under their button, kept on screen
+  const display = $('#display');
+  display.addEventListener('beforetoggle', (e) => {
+    const open = (e as ToggleEvent).newState === 'open';
+    $('#btn-display').setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    const r = $('#btn-display').getBoundingClientRect();
+    display.style.top = `${r.bottom + 8}px`;
+    // it isn't laid out yet: its width is the stylesheet's, min(260px, 100vw - 32px)
+    const w = Math.min(260, innerWidth - 32);
+    display.style.right = `${Math.min(Math.max(16, innerWidth - r.right), innerWidth - w - 16)}px`;
+  });
+  // it's placed under its button, which a phone's page scrolls away
+  const closeDisplay = () => { if (display.matches(':popover-open')) display.hidePopover(); };
+  addEventListener('scroll', closeDisplay, { passive: true });
+  addEventListener('resize', closeDisplay);
+  $('#btn-map-toggle').addEventListener('click', () => setMapOpen(!mapOpen));
+  renderMapOpen();
   // turning the whole cube by dragging isn't possible, and lessons ask for a flip
   $('#btn-flip').addEventListener('click', () => commitUserMove('z2'));
   $('#btn-help').addEventListener('click', () => ($('#help') as HTMLDialogElement).showModal());

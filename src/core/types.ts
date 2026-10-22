@@ -239,7 +239,7 @@ export interface Puzzle {
   holdHtml?: (solved: State) => string | undefined;
   /** whether the solver's solutions are short (a few dozen moves at most), so it can also find a short way to set a state up */
   shortSolutions?: boolean;
-  /** subtitle of the solve button, if not "Finds the shortest route home" */
+  /** subtitle of the solve button, if not "Fewest moves to solved" */
   solveHint?: string;
   solve: (state: State, budgetMs: number, handlers: SolveHandlers) => void;
   cancelSolve: () => void;

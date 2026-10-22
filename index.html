@@ -27,13 +27,14 @@
             </button>
           </nav>
         </div>
-        <div class="puzzle-switch" role="tablist" aria-label="Puzzle"></div>
+        <div class="seg seg--bar puzzle-switch" role="tablist" aria-label="Puzzle"></div>
         <select class="puzzle-select" id="puzzle-select" aria-label="Puzzle"></select>
         <div class="top-actions">
           <button class="btn ghost" id="btn-undo" title="Undo (⌘Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
           <button class="btn ghost" id="btn-redo" title="Redo (⇧⌘Z)" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
           <span class="divider"></span>
-          <button class="btn ghost" id="btn-flip" title="Flip the cube upside down (z2)" aria-label="Flip the cube upside down"><svg viewBox="0 0 24 24"><path d="M7 4v16M3 8l4-4 4 4"/><path d="M17 20V4M13 16l4 4 4-4"/></svg><span class="label">Flip</span></button>
+          <button class="btn ghost" id="btn-flip" title="Turn the whole cube upside down (z2)" aria-label="Turn the cube upside down"><svg viewBox="0 0 24 24"><path d="M7 4v16M3 8l4-4 4 4"/><path d="M17 20V4M13 16l4 4 4-4"/></svg><span class="label">Upside down</span></button>
+          <button class="btn ghost" id="btn-display" title="Display: map style and cube colors" aria-label="Display settings" aria-haspopup="dialog" aria-expanded="false" popovertarget="display"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18c1.4 0 2-1 2-2 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1 .8-1.7 1.8-1.7H17a4 4 0 0 0 4-4c0-4.2-4-7.5-9-7.5z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></svg></button>
           <button class="btn ghost" id="btn-camera" title="Reset view (V)" aria-label="Reset view"><svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></svg></button>
           <button class="btn ghost" id="btn-share" title="Copy link to this cube" aria-label="Share"><svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg><span class="label">Share</span></button>
           <button class="btn ghost" id="btn-about" title="About and sources" aria-label="About and sources"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></button>
@@ -89,26 +90,16 @@
           <span class="eyebrow">Map</span>
           <span class="map-tools">
             <span class="muted small" id="net-hint"></span>
-            <span class="map-switch" id="map-switch" role="tablist" aria-label="Map style">
-              <button role="tab" data-map="net" title="Unfolded faces">Net</button>
-              <button role="tab" data-map="rings" title="Each layer a ring, each sticker a dot where two rings cross">Rings</button>
-            </span>
+            <button class="link map-toggle" id="btn-map-toggle" aria-controls="net rings" aria-expanded="false">Show</button>
           </span>
         </div>
         <div class="net" id="net"></div>
         <div class="net rings hidden" id="rings"></div>
-        <div class="label-row">
-          <span class="eyebrow">Cube colors</span>
-          <span class="map-switch" id="cube-kind" role="tablist" aria-label="Cube colors">
-            <button role="tab" data-kind="typical" title="Navy blue and deep green">Typical</button>
-            <button role="tab" data-kind="bright" title="Sky blue and lime green, like many stickerless cubes">Bright</button>
-          </span>
-        </div>
         <div class="status" id="status"></div>
       </aside>
 
       <aside class="panel tutorial" id="tutorial" aria-label="Learn">
-        <div class="methods" id="methods" role="tablist" aria-label="Method"></div>
+        <div class="seg seg--sm methods" id="methods" role="tablist" aria-label="Method"></div>
         <button class="link back-lesson hidden" id="btn-back-lesson"></button>
         <div class="tut-steps" id="tut-steps" role="tablist" aria-label="Stage"></div>
         <div class="tut-intro" id="tut-intro"></div>
@@ -124,7 +115,7 @@
       <aside class="panel right">
         <button class="btn solve" id="btn-solve">
           <span class="solve-label">Solve</span>
-          <span class="solve-sub" id="solve-sub">Finds the shortest route home</span>
+          <span class="solve-sub" id="solve-sub">Fewest moves to solved</span>
         </button>
         <button class="link learn-mine hidden" id="btn-learn-mine">Learn to solve it yourself ›</button>
 
@@ -171,6 +162,23 @@
     </div>
 
     <div class="toasts" id="toasts"></div>
+
+    <div class="popover" id="display" popover role="dialog" aria-label="Display">
+      <div class="popover-row" id="map-row">
+        <span class="eyebrow">Map</span>
+        <span class="seg seg--sm" id="map-switch" role="tablist" aria-label="Map style">
+          <button role="tab" data-map="net" title="Unfolded faces">Net</button>
+          <button role="tab" data-map="rings" title="Each layer a ring, each sticker a dot where two rings cross">Rings</button>
+        </span>
+      </div>
+      <div class="popover-row">
+        <span class="eyebrow">Cube colors</span>
+        <span class="seg seg--sm" id="cube-kind" role="tablist" aria-label="Cube colors">
+          <button role="tab" data-kind="typical" title="Navy blue and deep green">Typical</button>
+          <button role="tab" data-kind="bright" title="Sky blue and lime green, like many stickerless cubes">Bright</button>
+        </span>
+      </div>
+    </div>
 
     <dialog id="help">
       <h2>Shortcuts</h2>
