@@ -19,10 +19,10 @@
             <span class="brand-name">Rubik's Lab</span>
           </div>
           <nav class="places" id="places" role="tablist" aria-label="Section">
-            <button role="tab" data-place="cube" class="active" aria-selected="true">
+            <button role="tab" data-place="cube" class="active" aria-selected="true" title="Cube: your own puzzle (C switches)">
               <svg viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9z"/><path d="M12 12 20 7.5M12 12v9M12 12 4 7.5"/></svg>Cube
             </button>
-            <button role="tab" data-place="learn" aria-selected="false">
+            <button role="tab" data-place="learn" aria-selected="false" title="Learn: a method stage by stage (C switches)">
               <svg viewBox="0 0 24 24"><path d="M2 8.5 12 4l10 4.5-10 4.5z"/><path d="M6 10.5V16c3 2.5 9 2.5 12 0v-5.5"/></svg>Learn
             </button>
           </nav>
@@ -52,15 +52,15 @@
               <svg viewBox="0 0 24 24"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L12 14.8 9 15l.2-3z"/><path d="M9 15c-3 0-4 2-4 4s-1.5 2-3 2c4 1 9 0 9-4"/></svg>Paint
             </button>
           </div>
-          <button class="btn hidden" id="btn-scan" title="Scan your cube with the camera">
+          <button class="btn hidden" id="btn-scan" title="Scan your cube with the camera (K)">
             <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>Scan
           </button>
         </div>
 
         <section class="mode-play">
           <div class="row">
-            <button class="btn primary-soft grow" id="btn-scramble"><svg viewBox="0 0 24 24"><path d="M2 18h3.5a4 4 0 0 0 3.3-1.8l6.4-9.4A4 4 0 0 1 18.5 5H22"/><path d="m19 2 3 3-3 3"/><path d="M2 6h3.5a4 4 0 0 1 3 1.4"/><path d="M22 19h-3.5a4 4 0 0 1-3-1.4"/><path d="m19 16 3 3-3 3"/></svg>Scramble</button>
-            <button class="btn grow" id="btn-reset"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>
+            <button class="btn primary-soft grow" id="btn-scramble" title="Scramble (⌥S)"><svg viewBox="0 0 24 24"><path d="M2 18h3.5a4 4 0 0 0 3.3-1.8l6.4-9.4A4 4 0 0 1 18.5 5H22"/><path d="m19 2 3 3-3 3"/><path d="M2 6h3.5a4 4 0 0 1 3 1.4"/><path d="M22 19h-3.5a4 4 0 0 1-3-1.4"/><path d="m19 16 3 3-3 3"/></svg>Scramble</button>
+            <button class="btn grow" id="btn-reset" title="Reset to solved (⌫)"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Reset</button>
           </div>
 
           <div class="label-row"><span class="eyebrow">Moves</span><button class="link" id="btn-more-moves"></button></div>
@@ -182,16 +182,34 @@
 
     <dialog id="help">
       <h2>Shortcuts</h2>
-      <div class="help-grid">
-        <div class="help-sub" id="puzzle-shortcuts"></div>
-        <div><kbd>Space</kbd></div><span>Play / pause solution</span>
-        <div><kbd>←</kbd><kbd>→</kbd></div><span>Step through solution</span>
-        <div><kbd>Enter</kbd></div><span>Solve (in Learn, start a guided solve)</span>
-        <div><kbd>⌘</kbd><kbd>Z</kbd></div><span>Undo (add ⇧ to redo)</span>
-        <div><kbd>P</kbd></div><span>Toggle paint mode</span>
-        <div><kbd>1</kbd>–<kbd>7</kbd></div><span>Pick a paint color</span>
-        <div><kbd>V</kbd></div><span>Reset camera</span>
+      <div class="help-cols">
+        <div class="help-grid">
+          <div class="help-head">Turning</div>
+          <div class="help-sub" id="puzzle-shortcuts"></div>
+          <div><kbd>⌘</kbd><kbd>Z</kbd></div><span>Undo (add ⇧ to redo)</span>
+          <div><kbd>V</kbd></div><span>Reset the camera</span>
+          <div class="help-head">Both places</div>
+          <div><kbd>C</kbd></div><span>Switch between Cube and Learn</span>
+          <div><kbd>Space</kbd></div><span>Play / pause</span>
+          <div><kbd>←</kbd><kbd>→</kbd></div><span>Step one move</span>
+          <div><kbd>Home</kbd><kbd>End</kbd></div><span>To the start (repeat a case) / the end</span>
+        </div>
+        <div class="help-grid">
+          <div class="help-head">Cube</div>
+          <div><kbd>Enter</kbd></div><span>Solve</span>
+          <div><kbd>⌥</kbd><kbd>S</kbd></div><span>Scramble</span>
+          <div><kbd>⌫</kbd></div><span>Reset to solved (undoable; not while painting)</span>
+          <div><kbd>K</kbd></div><span>Scan</span>
+          <div><kbd>P</kbd></div><span>Toggle paint mode</span>
+          <div><kbd>1</kbd>–<kbd>7</kbd></div><span>Pick a paint color</span>
+          <div class="help-head">Learn</div>
+          <div><kbd>Enter</kbd></div><span>Start a guided solve</span>
+          <div><kbd>⇧</kbd><kbd>←</kbd><kbd>→</kbd></div><span>Previous / next step of a guided solve, or case with one open; else stage</span>
+          <div><kbd>N</kbd></div><span>Next case (the stage’s first with none open); after a stage’s practice, next stage</span>
+          <div><kbd>Esc</kbd></div><span>From a case, back to the guided solve, or close it</span>
+        </div>
       </div>
+      <p class="muted small">Letters that turn the puzzle always do: shortcuts use the others, or <kbd>⌥</kbd> where the letter is a move (<kbd>S</kbd> is a slice), so <kbd>L</kbd> and <kbd>R</kbd> stay turns.</p>
       <p class="muted small">Drag any sticker to turn its layer. On the 3×3 and 4×4, grab an inner row to turn a slice; on the Pyraminx, grab a tip to turn just the tip. Drag empty space to look around; scroll or pinch to zoom.</p>
       <form method="dialog"><button class="btn grow">Got it</button></form>
     </dialog>

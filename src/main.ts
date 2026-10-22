@@ -1,5 +1,6 @@
 import './style.css';
 import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
+import type { AlgError } from './core/alg';
 import type { Case, GuideStep, Method, Puzzle, Stage, State, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { countMoves, list, plural, stepMoves } from './cube/lessonKit';
@@ -10,6 +11,7 @@ import { RingView } from './view/rings';
 import { Scanner } from './view/scanner';
 import { drillControlsHtml, drillStatus, markCode, movesHtml, offPlanHtml, stepperHtml, trigClass, triggerRuns } from './view/course';
 import { snapshot } from './view/snapshot';
+import { holdHtml, setups, type Setup } from './core/setup';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -65,9 +67,10 @@ interface Solution {
   drift?: { moves: string[]; from: State; now: State };
   /**
    * a guided solve (a lesson): the method, its moves explained step by step, and the move each
-   * step starts at; practising one stage on a scramble, which stage
+   * step starts at; practising one stage on a scramble, which stage; and whether its first step
+   * is step 0, the moves that set a real puzzle up like this one, played from solved
    */
-  lesson?: { method: Method; steps: GuideStep[]; starts: number[]; stage?: number };
+  lesson?: { method: Method; steps: GuideStep[]; starts: number[]; stage?: number; setup?: boolean };
   /** a case being practised: which one */
   drill?: CaseRef;
 }
@@ -419,7 +422,8 @@ function setStateDirect(s: State, undoable = true) {
   return undoable && changed ? undoAction() : undefined;
 }
 
-function scramble(undoable = true) {
+/** Scramble the cube on screen; its moves are in the history, not the toast. */
+function scramble(undoable = true, message = 'Scrambled') {
   if (mode === 'paint') setMode('play');
   const moves = puzzle.scramble();
   // a practice cube's scramble isn't undoable: undo then stops at it, the guided solve intact
@@ -430,7 +434,7 @@ function scramble(undoable = true) {
     enqueue({ move: m, duration: 110, kind: 'user' });
   }
   renderHistory();
-  toast(`Scrambled: ${moves.join(' ')}`, '', undoable ? undoAction() : undefined);
+  toast(message, '', undoable ? undoAction() : undefined);
   fadeHint();
 }
 
@@ -456,7 +460,7 @@ async function switchPuzzle(p: Puzzle) {
   renderMapKind();
   buildMovepad();
   ($('#alg-input') as HTMLInputElement).placeholder = p.algPlaceholder;
-  $('#alg-error').textContent = '';
+  clearAlgError();
   $('.mode-paint .intro').innerHTML = p.paintIntroHtml;
   $('#puzzle-shortcuts').innerHTML = p.shortcutsHtml;
   $('#btn-scan').classList.toggle('hidden', !p.scan);
@@ -475,7 +479,9 @@ async function switchPuzzle(p: Puzzle) {
 function paintSticker(i: number) {
   const locked = puzzle.lockedSticker?.(i);
   if (locked) {
-    toast(locked, 'bad');
+    // until you stop painting, or paint another cube
+    const s = session;
+    toast(locked, 'bad', undefined, () => mode !== 'paint' || s !== session);
     return;
   }
   if (session.state[i] === paintColor) return;
@@ -510,6 +516,7 @@ function setMode(m: Mode) {
     ? 'Tap a sticker to paint it · Drag to look around'
     : 'Drag a face to turn it · Drag the background to turn the view';
   $('#stage-hint').classList.remove('fade');
+  updateToasts();
   if (m === 'paint') {
     playing = false;
     if (!session.state.includes(puzzle.unset)) {
@@ -560,7 +567,9 @@ function showInvalid(v: Validation & { ok: false }, prefix = '', action?: ToastA
     view.flashHighlight();
     maps.forEach((m) => m.flash(bad));
   }
-  toast(prefix + (v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message), 'bad', action);
+  // once the cube is fixed (or another one is on screen), the error has done its job
+  const s = session;
+  toast(prefix + (v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message), 'bad', action, () => s !== session || puzzle.validate(s.state).ok);
   if (mode !== 'paint') setMode('paint');
 }
 
@@ -619,6 +628,7 @@ function loadScan(state: State, kind: CubeKind) {
  * the end of that stage: "here" carries on practising it, and "scramble" starts on a scramble
  * with the stages before it already done.
  */
+let lessonStarts = 0;
 async function startLesson(from: 'scramble' | 'mine' | 'here', stage?: number) {
   const method = currentMethod()!;
   if (!method.solve) return;
@@ -626,23 +636,47 @@ async function startLesson(from: 'scramble' | 'mine' | 'here', stage?: number) {
   if (from === 'mine') {
     const mine = sessions.get(puzzle.id)!.state;
     const v = puzzle.validate(mine);
-    if (!v.ok) return toast(`Your cube isn’t complete yet: ${v.message}`, 'bad');
+    if (!v.ok) {
+      const mineFixed = () => puzzle !== forPuzzle || puzzle.validate(sessions.get(puzzle.id)!.state).ok;
+      return toast(`Your cube isn’t complete yet: ${v.message}`, 'bad', { label: 'Fix in Paint', run: () => void fixInPaint() }, mineFixed);
+    }
     if (puzzle.isSolved(mine)) return toast('Your cube is solved — scramble it first', 'good');
   }
+  // a newer start (a second click while this one works) wins
+  const start = ++lessonStarts;
   await go('learn', 'guided');
-  const moved = () => puzzle !== forPuzzle || place !== 'learn' || practiceKind !== 'guided' || currentMethod() !== method;
+  const moved = () => start !== lessonStarts || puzzle !== forPuzzle || place !== 'learn' || practiceKind !== 'guided' || currentMethod() !== method;
   if (moved()) return;
   let steps: GuideStep[] | null = null;
+  /** on a new scramble, how to set a real puzzle up like it: step 0 */
+  let setup: Setup | null = null;
   try {
     if (from === 'mine') setStateDirect(sessions.get(puzzle.id)!.state, false);
     else if (from === 'scramble' && stage !== undefined) {
       const at = stageStart(method, stage);
-      setStateDirect(at.state, false);
       steps = at.steps;
+      if (showScramble) {
+        setup = setups(puzzle, at.state, at.scramble, at.before, at.steps.flatMap(stepMoves))[0] ?? null;
+        // the solver's way there, undone, is often shorter still: it takes step 0's place once it comes
+        if (setup) void quickSolve(at.state).then((sol) => {
+          const better = sol && setups(puzzle, at.state, at.scramble, at.before, at.steps.flatMap(stepMoves), sol)[0];
+          if (better && better.moves.length < setup!.moves.length && start === lessonStarts) betterSetup(better);
+        });
+      }
+      setStateDirect(setup ? setup.from : at.state, false);
       const before = method.stages.slice(0, stage).map((st) => st.name);
-      toast(before.length ? `Here’s a cube with ${list(before)} done. Now do ${method.stages[stage].name}.` : `Here’s a scramble. Now do ${method.stages[stage].name}.`);
+      const now = `Now do ${method.stages[stage].name}.`;
+      if (setup) toast(before.length ? `Step 0 sets your cube up with ${list(before)} done. Then do ${method.stages[stage].name}.` : `Step 0 scrambles your cube. Then do ${method.stages[stage].name}.`);
+      else toast(before.length ? `Here’s a cube with ${list(before)} done. ${now}` : `Here’s a scramble. ${now}`);
+    } else if (from === 'scramble' && showScramble) {
+      // the screen starts solved, as your cube does, and step 0 scrambles both
+      const moves = puzzle.scramble();
+      setup = { from: puzzle.solved(), moves };
+      setStateDirect(setup.from, false);
+      steps = method.solve(moves.reduce(applyMove, setup.from));
+      toast('Guided solve ready: step 0 is the scramble');
     } else if (from === 'scramble') {
-      scramble(false);
+      scramble(false, 'Scrambled. Guided solve ready');
       await idle();
       // the puzzle, place or method may have changed while it scrambled
       if (moved()) return;
@@ -659,13 +693,14 @@ async function startLesson(from: 'scramble' | 'mine' | 'here', stage?: number) {
       return;
     }
   }
+  if (setup) steps = [setupStep(setup, method, stage, steps[0].stage), ...steps];
   const { moves, starts } = flattenLesson(steps);
   playing = false;
   solution = {
     start: session.state.slice(),
     moves,
     index: 0, optimal: false, searching: false, elapsed: 0, stale: false,
-    lesson: { method, steps, starts, stage },
+    lesson: { method, steps, starts, stage, setup: !!setup },
   };
   followedStage = -1;
   renderSolution(true);
@@ -673,18 +708,108 @@ async function startLesson(from: 'scramble' | 'mine' | 'here', stage?: number) {
 
 /**
  * A cube to practise a stage on: a scramble, with the guided solve played silently up to the
- * start of the stage. Its steps for that stage, and for any after it, come with it. A scramble
- * that skips the stage (it's done by the stages before) is passed over for another.
+ * start of the stage. Its steps for that stage, and for any after it, come with it, and so do
+ * the scramble and the moves played. A scramble that skips the stage (it's done by the stages
+ * before) is passed over for another.
  */
 function stageStart(method: Method, stage: number) {
   for (let tries = 0; ; tries++) {
-    const scrambled = puzzle.scramble().reduce(applyMove, puzzle.solved());
+    const scramble = puzzle.scramble();
+    const scrambled = scramble.reduce(applyMove, puzzle.solved());
     const steps = method.solve!(scrambled);
     const first = steps.findIndex((st) => st.stage >= stage);
     if (tries < 20 && (first < 0 || steps[first].stage !== stage)) continue;
     const skip = first < 0 ? steps.length : first;
-    return { state: steps.slice(0, skip).flatMap(stepMoves).reduce(applyMove, scrambled), steps: steps.slice(skip) };
+    const before = steps.slice(0, skip).flatMap(stepMoves);
+    return { state: before.reduce(applyMove, scrambled), steps: steps.slice(skip), scramble, before };
   }
+}
+
+/** Your cube in Paint, to fix what's wrong with it. */
+async function fixInPaint() {
+  await go('cube');
+  if (place !== 'cube') return;
+  setMode('paint');
+  checkValid();
+}
+
+/** whether a guided solve on a new scramble starts with step 0, the scramble to copy onto a real puzzle */
+let showScramble = true;
+try { showScramble = localStorage.getItem('scrambleStep') !== 'off'; } catch { /* storage unavailable */ }
+function setShowScramble(on: boolean) {
+  showScramble = on;
+  try { localStorage.setItem('scrambleStep', on ? 'on' : 'off'); } catch { /* storage unavailable */ }
+}
+
+/** what the puzzle is called in a sentence: "cube", or "Pyraminx" */
+const puzzleNoun = () => puzzle.noun ?? 'cube';
+
+/** Step 0: the moves that take a solved puzzle to the one on screen, to make on a real one too. */
+function setupStep(setup: Setup, method: Method, stage: number | undefined, firstStage: number): GuideStep {
+  const all = puzzle.stickers.map((st) => st.index);
+  const n = setup.moves.length;
+  const before = stage === undefined ? [] : method.stages.slice(0, stage).map((st) => st.name);
+  const why = stage === undefined ? 'scrambled like the one on screen'
+    : before.length ? `with ${list(before)} done, ready for ${method.stages[stage].name}` : `scrambled, ready for ${method.stages[stage].name}`;
+  return {
+    stage: firstStage,
+    title: `${stage === undefined ? "Scramble" : "Set up"} your ${puzzleNoun()}`,
+    html: `<p>Using a real ${puzzleNoun()}? Hold it solved with ${holdHtml(puzzle, setup.from)}, and make these ${plural(n, 'move')} on it: it’s then ${why}. Play them here to watch each one, or step through them.</p>`,
+    phrases: [{ label: stage === undefined ? 'Scramble' : 'Set up', moves: setup.moves.slice() }],
+    focus: () => all,
+  };
+}
+
+/**
+ * The solver's moves for a state, if its solutions are short; within a moment, or not at all.
+ * Learn has the solver to itself: whatever Cube was searching stopped when it was left.
+ */
+function quickSolve(s: State, budgetMs = 400): Promise<string[] | null> {
+  const P = puzzle;
+  if (!P.shortSolutions) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let best: string[] | null = null;
+    let over = false;
+    const done = () => { over = true; clearTimeout(timer); resolve(best); };
+    // a solver that never answers (a worker still starting) is waited for only so long, then stopped
+    const timer = setTimeout(() => { if (!over) P.cancelSolve(); done(); }, budgetMs + 2000);
+    P.solve(s, budgetMs, { onSolution: (moves) => { if (!over) best = moves; }, onDone: done, onError: done });
+  });
+}
+
+/** A shorter step 0 for the guided solve on screen, as long as it hasn't been started. */
+function betterSetup(setup: Setup) {
+  const s = solution;
+  if (!s?.lesson?.setup || s.index !== 0 || s.stale || playing || running || queue.length) return;
+  const { method, steps, stage } = s.lesson;
+  setStateDirect(setup.from, false);
+  const all = [setupStep(setup, method, stage, steps[0].stage), ...steps.slice(1)];
+  const flat = flattenLesson(all);
+  solution = { ...s, start: setup.from.slice(), moves: flat.moves, index: 0, lesson: { ...s.lesson, steps: all, starts: flat.starts } };
+  lessonStep = -1;
+  renderSolution();
+}
+
+/** Skip step 0, now and from now on: the guided solve starts from the scramble, on screen only. */
+function skipSetup() {
+  const s = solution;
+  if (!s?.lesson?.setup) return;
+  setShowScramble(false);
+  const { method, steps, starts, stage } = s.lesson;
+  const at = s.moves.slice(0, starts[1]).reduce(applyMove, s.start);
+  // this takes the solution away, so it's put back after
+  setStateDirect(at, false);
+  playing = false;
+  followedStage = -1;
+  const rest = steps.slice(1);
+  const flat = flattenLesson(rest);
+  solution = {
+    start: at.slice(), moves: flat.moves, index: 0, optimal: false, searching: false, elapsed: 0, stale: false,
+    lesson: { method, steps: rest, starts: flat.starts, stage },
+  };
+  lessonStep = -1;
+  renderSolution(true);
+  toast('No step 0 from now on. Learn’s start card can bring it back');
 }
 
 /** Go to a place and, in Learn, one of its cubes; whatever was open where you left waits for you to come back. */
@@ -900,6 +1025,7 @@ function onStateChanged() {
   else if (!solution && (place === 'learn' || offerMine() !== mineOffered)) renderSolution();
   view.setHighlight([]);
   renderUndo();
+  updateToasts();
   saveToUrl();
 }
 
@@ -1016,6 +1142,7 @@ function renderSolution(fresh = false) {
   document.body.classList.toggle('learn', learn);
   // in Learn the big button starts a guided solve, so it goes once one is open
   $('#btn-solve').classList.toggle('hidden', learn && !!solution);
+  $('#btn-solve').title = learn ? 'Start a guided solve (Enter)' : 'Solve (Enter)';
   el.classList.toggle('empty', !solution);
   el.classList.toggle('stale', !!solution?.stale);
   renderPlaces();
@@ -1261,6 +1388,7 @@ function renderLearn(fresh: boolean) {
     ${method.stages.some((st) => st.caseGroups?.some((g) => g.cases.length)) ? '<p class="muted small">Every case of each stage is on the left, with its algorithm: pick one to practise it on the cube.</p>' : ''}
     <p class="muted small">Make the moves yourself, here or on a real cube, and the guided solve follows along.</p>
     ${useMine ? '<button class="link use-mine" data-act="mine">Use my cube instead ›</button>' : ''}
+    ${showScramble ? '' : `<p class="muted small">Using a real ${puzzleNoun()}? <button class="link inline" data-act="scramble-step">Start with the scramble to copy onto it</button></p>`}
     ${notationHelp(method.notation)}`);
   if (solution?.lesson) {
     $('#case-card').innerHTML = '';
@@ -1281,20 +1409,23 @@ function renderLearn(fresh: boolean) {
 
 function renderLesson() {
   const s = solution!;
-  const { method, steps, starts, stage } = s.lesson!;
+  const { method, steps, starts, stage, setup } = s.lesson!;
   const k = currentStep(s);
   lessonStep = k;
+  // step 0 isn't counted among the solve's steps and moves
+  const off = setup ? 1 : 0;
+  const solveMoves = s.moves.length - (setup ? starts[1] : 0);
   const stale = s.stale ? offPlanHtml('this guided solve no longer fits it', s.drift ? undoLabel() : null, { act: 'resume', label: 'start again from here' }) : '';
-  const prevBtn = '<button class="btn small ghost" data-act="prev"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button>';
+  const prevBtn = '<button class="btn small ghost" data-act="prev" title="Previous step (⇧←)"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button>';
   if (k >= steps.length) {
     // practising one stage: again on another scramble, or on to the next stage
     const next = stage !== undefined ? method.stages[stage + 1] : undefined;
     $('#lesson').innerHTML = stale + (stage !== undefined ? `
       <div class="lesson-title">${method.stages[stage].name} done ✓</div>
-      <div class="lesson-text"><p>That’s the stage: ${plural(steps.length, 'step')} and ${plural(s.moves.length, 'move')}. Practise it on a few more scrambles until it comes without thinking.</p></div>
-      <div class="lesson-nav">${prevBtn}<button class="btn small ghost" data-act="again">Again</button>${next ? `<button class="btn small primary-soft" data-act="next-stage">Next: ${next.name}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : ''}</div>` : `
+      <div class="lesson-text"><p>That’s the stage: ${plural(steps.length - off, 'step')} and ${plural(solveMoves, 'move')}. Practise it on a few more scrambles until it comes without thinking.</p></div>
+      <div class="lesson-nav">${prevBtn}<button class="btn small ghost" data-act="again">Again</button>${next ? `<button class="btn small primary-soft" data-act="next-stage" title="Next stage (N)">Next: ${next.name}<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>` : ''}</div>` : `
       <div class="lesson-title">Solved!</div>
-      <div class="lesson-text"><p>That’s the whole method: ${steps.length} steps and ${s.moves.length} moves. Every lesson starts from your own scramble, so practise until the algorithms stick.</p></div>
+      <div class="lesson-text"><p>That’s the whole method: ${steps.length - off} steps and ${solveMoves} moves. Every lesson starts from your own scramble, so practise until the algorithms stick.</p></div>
       <div class="lesson-nav">${prevBtn}<button class="btn small primary-soft" data-act="again">New scramble</button></div>`);
     return;
   }
@@ -1314,17 +1445,31 @@ function renderLesson() {
       <div class="phrase-moves">${p.moves.map((m, j) => `<button class="chip${trigClass(runs[j])}" data-i="${i}" title="Jump to after this move">${m}<sub>${++i - starts[k]}</sub></button>`).join('')}</div>
     </div>`;
   }).join('');
+  const foot = '<div class="lesson-foot"><button class="link" data-act="again">New scramble</button><button class="link" data-act="end">End guided solve</button></div>';
+  if (setup && k === 0) {
+    $('#lesson').innerHTML = stale + `
+      <div class="lesson-head"><span class="eyebrow">Before you start</span><span class="step">Step 0 of ${steps.length - 1}</span></div>
+      <div class="lesson-title">${step.title}</div>
+      <div class="lesson-text">${step.html}</div>
+      <div class="phrases">${phrases}</div>
+      <div class="lesson-nav setup-nav">
+        <button class="link" data-act="skip-setup">Skip, I’m only using the screen</button>
+        <button class="btn small primary-soft" data-act="setup-done" title="Start the solve (⇧→)">Done, start the solve<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+      </div>
+      ${foot}`;
+    return;
+  }
   $('#lesson').innerHTML = stale + `
-    <div class="lesson-head"><span class="eyebrow">${method.stages[step.stage].name}${stage !== undefined ? ' practice' : ''}</span><span class="step">Step ${k + 1} of ${steps.length} · <span id="lesson-move"></span></span></div>
+    <div class="lesson-head"><span class="eyebrow">${method.stages[step.stage].name}${stage !== undefined ? ' practice' : ''}</span><span class="step">Step ${k + 1 - off} of ${steps.length - off} · <span id="lesson-move"></span></span></div>
     <div class="lesson-title">${step.title}</div>
     <div class="lesson-text">${step.html}</div>
     <div class="phrases">${phrases}</div>
     ${caseLink(step.caseId)}
     <div class="lesson-nav">
-      <button class="btn small ghost" data-act="prev"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button>
-      <button class="btn small ghost" data-act="next">Next step<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+      <button class="btn small ghost" data-act="prev" title="Previous step (⇧←)"><svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></svg>Previous step</button>
+      <button class="btn small ghost" data-act="next" title="Next step (⇧→)">Next step<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
     </div>
-    <div class="lesson-foot"><button class="link" data-act="again">New scramble</button><button class="link" data-act="end">End guided solve</button></div>`;
+    ${foot}`;
 }
 
 /** the stage the course was last moved to by the guided solve */
@@ -1334,11 +1479,9 @@ function onLessonClick(e: Event) {
   const b = (e.target as HTMLElement).closest<HTMLElement>('button');
   const s = solution;
   if (!b || !s?.lesson) return;
-  const { starts } = s.lesson;
-  const k = currentStep(s);
   if (b.dataset.i) jumpTo(Number(b.dataset.i) + 1);
-  else if (b.dataset.act === 'prev') jumpTo(starts[s.index > (starts[k] ?? s.moves.length) ? k : k - 1] ?? 0);
-  else if (b.dataset.act === 'next') jumpTo(starts[k + 1] ?? s.moves.length);
+  else if (b.dataset.act === 'prev') prevStep();
+  else if (b.dataset.act === 'next') nextStep();
   else if (b.dataset.act === 'again') void startLesson('scramble', s.lesson.stage);
   else if (b.dataset.act === 'next-stage') void startLesson('scramble', s.lesson.stage! + 1);
   else if (b.dataset.act === 'resume') void startLesson('here', s.lesson.stage);
@@ -1349,6 +1492,67 @@ function onLessonClick(e: Event) {
   }
   else if (b.dataset.act === 'undo') undoStray();
   else if (b.dataset.act === 'case') void practiseCase(b.dataset.case!);
+  else if (b.dataset.act === 'setup-done') jumpTo(s.lesson.starts[1]);
+  else if (b.dataset.act === 'skip-setup') skipSetup();
+}
+
+/** Back to the start of this step, or if that's where it is, of the one before. */
+function prevStep() {
+  const s = solution;
+  if (!s?.lesson) return;
+  const { starts } = s.lesson;
+  const k = currentStep(s);
+  jumpTo(starts[s.index > (starts[k] ?? s.moves.length) ? k : k - 1] ?? 0);
+}
+/** On to the start of the next step: this one's moves made. */
+function nextStep() {
+  const s = solution;
+  if (!s?.lesson) return;
+  jumpTo(s.lesson.starts[currentStep(s) + 1] ?? s.moves.length);
+}
+
+/** Every case of the method's course, in order. */
+function allCases(): CaseRef[] {
+  return (currentMethod()?.stages ?? []).flatMap((st, stage) =>
+    (st.caseGroups ?? []).flatMap((g, group) => g.cases.map((_, index) => ({ stage, group, index }))));
+}
+/** The case `by` places after (or before) this one in the course, across groups and stages. */
+function caseFrom(r: CaseRef, by: number): CaseRef | null {
+  const all = allCases();
+  return all[all.findIndex((c) => sameCase(c, r)) + by] ?? null;
+}
+
+/** N: the next case, with one open (or the stage's first); the next stage, once practising one is done. */
+function next() {
+  const s = solution;
+  if (place !== 'learn') return;
+  // nothing open: the stage's first case, if it has any
+  if (!s) {
+    if (currentMethod()?.stages[stageIdx].caseGroups?.[0]?.cases.length) void openCase({ stage: stageIdx, group: 0, index: 0 });
+    return;
+  }
+  if (s.drill) {
+    const r = caseFrom(s.drill, 1);
+    if (r) void openCase(r);
+    else toast('That’s the last case of the course', 'good');
+    return;
+  }
+  const stage = s.lesson?.stage;
+  if (stage !== undefined && !s.stale && currentStep(s) >= s.lesson!.steps.length && currentMethod()!.stages[stage + 1]) void startLesson('scramble', stage + 1);
+}
+
+/** Esc: from a case, back to the guided solve it was opened from, or else close the case. */
+function escape() {
+  if (place !== 'learn' || !solution?.drill) return false;
+  if (guidedLesson()?.lesson) void go('learn', 'guided');
+  else closeCase();
+  return true;
+}
+
+function closeCase() {
+  solution = null;
+  playing = false;
+  renderSolution();
 }
 
 /** A guided solve step's case, if the method's course has it: its picture, and a way to practise it. */
@@ -1440,7 +1644,9 @@ function renderCourse() {
   back.classList.toggle('hidden', !g?.lesson);
   if (g?.lesson) {
     const k = currentStep(g);
-    back.textContent = k < g.lesson.steps.length ? `‹ Back to your guided solve, step ${k + 1} of ${g.lesson.steps.length}` : '‹ Back to your guided solve';
+    back.title = 'Esc';
+    const off = g.lesson.setup ? 1 : 0;
+    back.textContent = k < g.lesson.steps.length && k >= off ? `‹ Back to your guided solve, step ${k + 1 - off} of ${g.lesson.steps.length - off}` : '‹ Back to your guided solve';
   }
   renderStepper();
   const key = `${puzzle.id}:${method.id}:${stageIdx}:${cubeKind()}`;
@@ -1498,7 +1704,7 @@ function renderCaseCard() {
     <div class="lesson-title">${caseName(c)}</div>
     <div class="case-big">${diagram(stage, c)}</div>
     ${solution!.stale ? offPlanHtml('it no longer shows this case', solution!.drift ? undoLabel() : null, { act: 'reset', label: 'set it up again' }) : ''}
-    <div class="lesson-foot"><button class="link" data-act="close">Close the case</button></div>`;
+    <div class="lesson-foot"><button class="link" data-act="close" title="Esc">Close the case</button></div>`;
   renderDrilling();
 }
 
@@ -1507,11 +1713,7 @@ function onCaseCardClick(e: Event) {
   const ref = solution?.drill;
   if (b?.dataset.act === 'undo') undoStray();
   else if (b?.dataset.act === 'reset' && ref) void openCase(ref, true);
-  else if (b?.dataset.act === 'close') {
-    solution = null;
-    playing = false;
-    renderSolution();
-  }
+  else if (b?.dataset.act === 'close') closeCase();
 }
 
 let lastCardTap = -1e9;
@@ -1575,33 +1777,87 @@ function followCurrentChip() {
 
 // ---------- chrome ----------
 
+/** Say what in the algorithm box isn't a move, select the first such word, and offer a fix if there's an obvious one. */
+function showAlgError(invalid: AlgError[]) {
+  const input = $('#alg-input') as HTMLInputElement;
+  const first = invalid[0];
+  const words = invalid.map((e) => `<code>${escapeHtml(e.token)}</code>${/^[()[\]]$/.test(e.token) ? ' (no matching bracket)' : e.token === ':' ? ' (only inside [A: B])' : ''}`);
+  const fix = first.suggestion
+    ? ` <button class="link" type="button" data-fix="${escapeHtml(first.suggestion)}" data-start="${first.start}" data-end="${first.end}">Did you mean ${escapeHtml(first.suggestion)}?</button>`
+    : '';
+  $('#alg-error').innerHTML = `Didn't understand ${list(words)}.${fix}`;
+  input.setAttribute('aria-invalid', 'true');
+  input.focus();
+  input.setSelectionRange(first.start, first.end);
+}
+
+function clearAlgError() {
+  $('#alg-error').textContent = '';
+  $('#alg-input').removeAttribute('aria-invalid');
+}
+
+const escapeHtml = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
 type ToastAction = { label: string; run: () => void };
 
-/** A short message; with an action (Undo), a button for it, and a little longer to reach it. */
-function toast(message: string, kind: '' | 'good' | 'bad' = '', action?: ToastAction) {
+/**
+ * A short message; with an action (Undo), a button for it, and a little longer to reach it.
+ * An error stays until it's closed, or until `over` says it no longer applies.
+ */
+function toast(message: string, kind: '' | 'good' | 'bad' = '', action?: ToastAction, over?: () => boolean) {
+  const box = $('#toasts');
+  // the same error again: once is enough
+  if (kind === 'bad') box.querySelectorAll<HTMLElement>('.toast.bad').forEach((t) => { if (t.dataset.message === message) dismiss(t); });
   const el = document.createElement('div');
   el.className = `toast ${kind}`;
-  el.textContent = message;
+  el.dataset.message = message;
+  el.append(Object.assign(document.createElement('span'), { textContent: message }));
   if (action) {
     // only the newest change can be undone from a toast
-    $('#toasts').querySelectorAll('.has-action').forEach((t) => t.remove());
+    box.querySelectorAll<HTMLElement>('.has-action').forEach(drop);
     const b = document.createElement('button');
     b.className = 'toast-action';
     b.textContent = action.label;
     b.addEventListener('click', () => {
       action.run();
-      el.remove();
+      drop(el);
     });
     el.classList.add('has-action');
     el.append(b);
   }
-  const box = $('#toasts');
+  if (kind === 'bad') {
+    const close = document.createElement('button');
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Dismiss');
+    close.title = 'Dismiss';
+    close.textContent = '×';
+    close.addEventListener('click', () => dismiss(el));
+    el.append(close);
+    if (over) toastsOver.set(el, over);
+  }
   box.append(el);
-  while (box.children.length > 3) box.firstElementChild!.remove();
-  setTimeout(() => {
-    el.classList.add('out');
-    setTimeout(() => el.remove(), 300);
-  }, action ? 5000 : 2600);
+  while (box.children.length > 3) drop(box.firstElementChild as HTMLElement);
+  if (kind !== 'bad') setTimeout(() => dismiss(el), action ? 5000 : 2600);
+}
+
+/** errors that go away by themselves once they no longer apply, and the test for that */
+const toastsOver = new Map<HTMLElement, () => boolean>();
+
+/** Fade a toast out. */
+function dismiss(el: HTMLElement) {
+  toastsOver.delete(el);
+  el.classList.add('out');
+  setTimeout(() => el.remove(), 300);
+}
+/** Take a toast away at once. */
+function drop(el: HTMLElement) {
+  toastsOver.delete(el);
+  el.remove();
+}
+
+/** Close the errors that no longer apply, as the cube changes. */
+function updateToasts() {
+  for (const [el, over] of toastsOver) if (!el.isConnected || over()) dismiss(el);
 }
 
 let hintFaded = false;
@@ -1733,16 +1989,30 @@ function bind() {
     e.preventDefault();
     const { moves, invalid } = puzzle.parseAlg(algInput.value);
     if (invalid.length) {
-      $('#alg-error').textContent = `Didn't understand: ${invalid.join(', ')}`;
+      showAlgError(invalid);
       return;
     }
-    $('#alg-error').textContent = '';
+    clearAlgError();
     if (!moves.length) return;
     doMoves(moves);
     algInput.value = '';
     algInput.blur();
   });
-  algInput.addEventListener('input', () => ($('#alg-error').textContent = ''));
+  algInput.addEventListener('input', clearAlgError);
+  $('#alg-error').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-fix]');
+    if (!b) return;
+    // put the suggestion in place of the mistake, and carry on typing after it
+    const start = Number(b.dataset.start), end = Number(b.dataset.end);
+    algInput.setRangeText(b.dataset.fix!, start, end, 'end');
+    // and point at the next mistake, if there is one
+    const { invalid } = puzzle.parseAlg(algInput.value);
+    if (invalid.length) showAlgError(invalid);
+    else {
+      clearAlgError();
+      algInput.focus();
+    }
+  });
 
   $('#btn-solve').addEventListener('click', () => {
     if (mode === 'paint' && puzzle.validate(session.state).ok) setMode('play');
@@ -1753,7 +2023,13 @@ function bind() {
   );
   $('#btn-learn-mine').addEventListener('click', () => void startLesson('mine'));
   $('#lesson-intro').addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).closest('[data-act="mine"]')) void startLesson('mine');
+    const t = e.target as HTMLElement;
+    if (t.closest('[data-act="mine"]')) void startLesson('mine');
+    else if (t.closest('[data-act="scramble-step"]')) {
+      setShowScramble(true);
+      renderSolution();
+      toast('Guided solves on a new scramble start with step 0 again', 'good');
+    }
   });
   $('#lesson').addEventListener('click', onLessonClick);
   $('#tutorial').addEventListener('click', onCourseClick);
@@ -1791,6 +2067,23 @@ function bind() {
       return;
     }
     if (e.metaKey || e.ctrlKey) return;
+    // the shortcuts that do a whole thing once, not again for as long as the key is held
+    const once = !e.repeat;
+    if (k === 'Escape') { if (once && escape()) e.preventDefault(); return; }
+    // in Learn, with ⇧, the arrows go a step of a guided solve at a time, a case with one open, or else a stage
+    if (place === 'learn' && e.shiftKey && (k === 'ArrowLeft' || k === 'ArrowRight')) {
+      e.preventDefault();
+      const by = k === 'ArrowLeft' ? -1 : 1;
+      if (solution?.lesson) by < 0 ? prevStep() : nextStep();
+      else if (solution?.drill) {
+        const r = caseFrom(solution.drill, by);
+        if (r && once) void openCase(r);
+      } else {
+        const to = stageIdx + by;
+        if (to >= 0 && to < currentMethod()!.stages.length) setStage(to);
+      }
+      return;
+    }
     if (k === ' ' && target.tagName !== 'BUTTON') { e.preventDefault(); togglePlay(); return; }
     if (k === 'ArrowRight') { e.preventDefault(); playing = false; stepForward(); renderPlayback(); return; }
     if (k === 'ArrowLeft') { e.preventDefault(); stepBack(); return; }
@@ -1798,6 +2091,16 @@ function bind() {
     if (k === 'End') { if (solution) jumpTo(solution.moves.length); return; }
     if (k === 'Enter' && target.tagName !== 'BUTTON') { void startSolve(); return; }
     if (k === '?') { ($('#help') as HTMLDialogElement).showModal(); return; }
+    // the places and Learn's way on: letters no puzzle turns with
+    if (e.code === 'KeyC' && !e.altKey) { if (once) void go(place === 'cube' ? 'learn' : 'cube'); return; }
+    if (e.code === 'KeyN' && !e.altKey) { if (once) next(); return; }
+    // your cube's setup, in Cube; S is a slice on the 3×3 and 5×5, so scramble takes ⌥
+    if (place === 'cube') {
+      if (e.code === 'KeyS' && e.altKey && !e.shiftKey) { e.preventDefault(); if (once) scramble(); return; }
+      // not while painting, where it would read as rubbing out a sticker
+      if (k === 'Backspace' && mode === 'play') { e.preventDefault(); if (once) $('#btn-reset').click(); return; }
+      if (e.code === 'KeyK' && !e.altKey) { if (once && puzzle.scan) void startScan(); return; }
+    }
     // painting is for your own cube, in Cube
     if (e.code === 'KeyP' && !e.altKey) { if (place === 'cube') setMode(mode === 'paint' ? 'play' : 'paint'); return; }
     if (e.code === 'KeyV' && !e.altKey) { view.resetCamera(); return; }

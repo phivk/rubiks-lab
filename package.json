@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "verify": "tsx scripts/verify-solver.ts && tsx scripts/verify-pyraminx.ts && tsx scripts/verify-nxn.ts && tsx scripts/verify-lessons.ts && tsx scripts/verify-scan.ts && tsx scripts/verify-tutorial.ts"
+    "verify": "tsx scripts/verify-alg.ts && tsx scripts/verify-solver.ts && tsx scripts/verify-pyraminx.ts && tsx scripts/verify-nxn.ts && tsx scripts/verify-lessons.ts && tsx scripts/verify-scan.ts && tsx scripts/verify-tutorial.ts && tsx scripts/verify-setup.ts"
   },
   "dependencies": {
     "three": "^0.186.1"

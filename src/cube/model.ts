@@ -20,6 +20,7 @@
 // those coordinates; telling them apart needs a chirality check, which isn't built yet,
 // so they're treated as one orbit.
 
+import { parseAlg, type ParsedAlg } from '../core/alg';
 import { COLOR_NAMES } from '../core/colors';
 import { parity } from '../core/perm';
 import type { State, Validation, Vec3 } from '../core/types';
@@ -285,19 +286,13 @@ export class CubeModel {
     return moves.reduce((acc, m) => this.apply(acc, m), s);
   }
 
-  parseAlg(text: string): { moves: string[]; invalid: string[] } {
-    const moves: string[] = [];
-    const invalid: string[] = [];
-    for (const tok of text.replace(/[()[\],]/g, ' ').split(/\s+/).filter(Boolean)) {
+  parseAlg(text: string): ParsedAlg {
+    return parseAlg(text, (word) => {
       // allow compact input like "RUR'U'"
-      const parts = tok.match(/(?:[1-9]\d*)?[URFDLBMESurfdlbxyz]w?(?:2'|2|'|’)?/g);
-      if (!parts || parts.join('') !== tok || parts.some((p) => !this.parseMove(p))) {
-        invalid.push(tok);
-        continue;
-      }
-      for (const p of parts) moves.push(p.replace(/’/g, "'").replace("2'", '2'));
-    }
-    return { moves, invalid };
+      const parts = word.match(/(?:[1-9]\d*)?[URFDLBMESurfdlbxyz]w?(?:2'|2|')?/g);
+      if (!parts || parts.join('') !== word || parts.some((p) => !this.parseMove(p))) return null;
+      return parts.map((p) => p.replace("2'", '2'));
+    }, invertMove);
   }
 
   /** Merge turns of the same layers, including across other turns on the same axis (R L R' → L). */
