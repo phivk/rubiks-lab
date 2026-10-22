@@ -210,6 +210,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .alg input:focus { border-color: rgba(143, 123, 255, 0.6); }
 .alg input::placeholder { color: var(--text-3); font-family: Inter, sans-serif; }
 .alg-error { color: var(--bad); font-size: 12px; margin-top: -8px; min-height: 0; }
+.alg-error .link { color: var(--text); font-weight: 600; text-decoration: underline; font-size: inherit; }
+.alg input[aria-invalid="true"] { border-color: rgba(255, 93, 115, 0.6); }
 .alg-error:empty { display: none; }
 
 .history {
@@ -660,7 +662,10 @@ body.learn .panel.tutorial { display: flex; }
 }
 .toast.bad { border-color: rgba(255, 93, 115, 0.4); }
 .toast.good { border-color: rgba(61, 220, 151, 0.4); }
-.toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; text-align: left; }
+.toast.has-action, .toast.bad { pointer-events: auto; display: flex; align-items: center; gap: 12px; text-align: left; }
+.toast.bad:not(.has-action) { padding-right: 8px; }
+.toast-close { flex: none; width: 24px; height: 24px; margin: -4px -2px -4px 0; border-radius: 6px; border: 0; background: none; color: var(--text-3); font-size: 18px; line-height: 1; cursor: pointer; }
+.toast-close:hover { background: var(--chip-hover); color: var(--text); }
 .toast-action { flex: none; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--chip-hover); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; }
 .toast-action:hover { background: rgba(255, 255, 255, 0.14); }
 .toast.out { opacity: 0; transform: translateY(-6px); transition: all 0.25s; }

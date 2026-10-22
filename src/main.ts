@@ -1,5 +1,6 @@
 import './style.css';
 import { cubeKind, useCubeColors, type CubeKind } from './core/colors';
+import type { AlgError } from './core/alg';
 import type { Case, GuideStep, Method, Puzzle, Stage, State, Validation } from './core/types';
 import { cube2, cube3, cube4, cube5 } from './cube/puzzles';
 import { countMoves, list, plural, stepMoves } from './cube/lessonKit';
@@ -459,7 +460,7 @@ async function switchPuzzle(p: Puzzle) {
   renderMapKind();
   buildMovepad();
   ($('#alg-input') as HTMLInputElement).placeholder = p.algPlaceholder;
-  $('#alg-error').textContent = '';
+  clearAlgError();
   $('.mode-paint .intro').innerHTML = p.paintIntroHtml;
   $('#puzzle-shortcuts').innerHTML = p.shortcutsHtml;
   $('#btn-scan').classList.toggle('hidden', !p.scan);
@@ -478,7 +479,9 @@ async function switchPuzzle(p: Puzzle) {
 function paintSticker(i: number) {
   const locked = puzzle.lockedSticker?.(i);
   if (locked) {
-    toast(locked, 'bad');
+    // until you stop painting, or paint another cube
+    const s = session;
+    toast(locked, 'bad', undefined, () => mode !== 'paint' || s !== session);
     return;
   }
   if (session.state[i] === paintColor) return;
@@ -513,6 +516,7 @@ function setMode(m: Mode) {
     ? 'Tap a sticker to paint it · Drag to look around'
     : 'Drag a face to turn it · Drag the background to turn the view';
   $('#stage-hint').classList.remove('fade');
+  updateToasts();
   if (m === 'paint') {
     playing = false;
     if (!session.state.includes(puzzle.unset)) {
@@ -563,7 +567,9 @@ function showInvalid(v: Validation & { ok: false }, prefix = '', action?: ToastA
     view.flashHighlight();
     maps.forEach((m) => m.flash(bad));
   }
-  toast(prefix + (v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message), 'bad', action);
+  // once the cube is fixed (or another one is on screen), the error has done its job
+  const s = session;
+  toast(prefix + (v.kind === 'incomplete' ? `Almost there — ${v.message}` : v.message), 'bad', action, () => s !== session || puzzle.validate(s.state).ok);
   if (mode !== 'paint') setMode('paint');
 }
 
@@ -630,7 +636,10 @@ async function startLesson(from: 'scramble' | 'mine' | 'here', stage?: number) {
   if (from === 'mine') {
     const mine = sessions.get(puzzle.id)!.state;
     const v = puzzle.validate(mine);
-    if (!v.ok) return toast(`Your cube isn’t complete yet: ${v.message}`, 'bad');
+    if (!v.ok) {
+      const mineFixed = () => puzzle !== forPuzzle || puzzle.validate(sessions.get(puzzle.id)!.state).ok;
+      return toast(`Your cube isn’t complete yet: ${v.message}`, 'bad', { label: 'Fix in Paint', run: () => void fixInPaint() }, mineFixed);
+    }
     if (puzzle.isSolved(mine)) return toast('Your cube is solved — scramble it first', 'good');
   }
   // a newer start (a second click while this one works) wins
@@ -714,6 +723,14 @@ function stageStart(method: Method, stage: number) {
     const before = steps.slice(0, skip).flatMap(stepMoves);
     return { state: before.reduce(applyMove, scrambled), steps: steps.slice(skip), scramble, before };
   }
+}
+
+/** Your cube in Paint, to fix what's wrong with it. */
+async function fixInPaint() {
+  await go('cube');
+  if (place !== 'cube') return;
+  setMode('paint');
+  checkValid();
 }
 
 /** whether a guided solve on a new scramble starts with step 0, the scramble to copy onto a real puzzle */
@@ -993,6 +1010,7 @@ function onStateChanged() {
   else if (!solution && (place === 'learn' || offerMine() !== mineOffered)) renderSolution();
   view.setHighlight([]);
   renderUndo();
+  updateToasts();
   saveToUrl();
 }
 
@@ -1739,33 +1757,87 @@ function followCurrentChip() {
 
 // ---------- chrome ----------
 
+/** Say what in the algorithm box isn't a move, select the first such word, and offer a fix if there's an obvious one. */
+function showAlgError(invalid: AlgError[]) {
+  const input = $('#alg-input') as HTMLInputElement;
+  const first = invalid[0];
+  const words = invalid.map((e) => `<code>${escapeHtml(e.token)}</code>${/^[()[\]]$/.test(e.token) ? ' (no matching bracket)' : e.token === ':' ? ' (only inside [A: B])' : ''}`);
+  const fix = first.suggestion
+    ? ` <button class="link" type="button" data-fix="${escapeHtml(first.suggestion)}" data-start="${first.start}" data-end="${first.end}">Did you mean ${escapeHtml(first.suggestion)}?</button>`
+    : '';
+  $('#alg-error').innerHTML = `Didn't understand ${list(words)}.${fix}`;
+  input.setAttribute('aria-invalid', 'true');
+  input.focus();
+  input.setSelectionRange(first.start, first.end);
+}
+
+function clearAlgError() {
+  $('#alg-error').textContent = '';
+  $('#alg-input').removeAttribute('aria-invalid');
+}
+
+const escapeHtml = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
 type ToastAction = { label: string; run: () => void };
 
-/** A short message; with an action (Undo), a button for it, and a little longer to reach it. */
-function toast(message: string, kind: '' | 'good' | 'bad' = '', action?: ToastAction) {
+/**
+ * A short message; with an action (Undo), a button for it, and a little longer to reach it.
+ * An error stays until it's closed, or until `over` says it no longer applies.
+ */
+function toast(message: string, kind: '' | 'good' | 'bad' = '', action?: ToastAction, over?: () => boolean) {
+  const box = $('#toasts');
+  // the same error again: once is enough
+  if (kind === 'bad') box.querySelectorAll<HTMLElement>('.toast.bad').forEach((t) => { if (t.dataset.message === message) dismiss(t); });
   const el = document.createElement('div');
   el.className = `toast ${kind}`;
-  el.textContent = message;
+  el.dataset.message = message;
+  el.append(Object.assign(document.createElement('span'), { textContent: message }));
   if (action) {
     // only the newest change can be undone from a toast
-    $('#toasts').querySelectorAll('.has-action').forEach((t) => t.remove());
+    box.querySelectorAll<HTMLElement>('.has-action').forEach(drop);
     const b = document.createElement('button');
     b.className = 'toast-action';
     b.textContent = action.label;
     b.addEventListener('click', () => {
       action.run();
-      el.remove();
+      drop(el);
     });
     el.classList.add('has-action');
     el.append(b);
   }
-  const box = $('#toasts');
+  if (kind === 'bad') {
+    const close = document.createElement('button');
+    close.className = 'toast-close';
+    close.setAttribute('aria-label', 'Dismiss');
+    close.title = 'Dismiss';
+    close.textContent = '×';
+    close.addEventListener('click', () => dismiss(el));
+    el.append(close);
+    if (over) toastsOver.set(el, over);
+  }
   box.append(el);
-  while (box.children.length > 3) box.firstElementChild!.remove();
-  setTimeout(() => {
-    el.classList.add('out');
-    setTimeout(() => el.remove(), 300);
-  }, action ? 5000 : 2600);
+  while (box.children.length > 3) drop(box.firstElementChild as HTMLElement);
+  if (kind !== 'bad') setTimeout(() => dismiss(el), action ? 5000 : 2600);
+}
+
+/** errors that go away by themselves once they no longer apply, and the test for that */
+const toastsOver = new Map<HTMLElement, () => boolean>();
+
+/** Fade a toast out. */
+function dismiss(el: HTMLElement) {
+  toastsOver.delete(el);
+  el.classList.add('out');
+  setTimeout(() => el.remove(), 300);
+}
+/** Take a toast away at once. */
+function drop(el: HTMLElement) {
+  toastsOver.delete(el);
+  el.remove();
+}
+
+/** Close the errors that no longer apply, as the cube changes. */
+function updateToasts() {
+  for (const [el, over] of toastsOver) if (!el.isConnected || over()) dismiss(el);
 }
 
 let hintFaded = false;
@@ -1879,16 +1951,30 @@ function bind() {
     e.preventDefault();
     const { moves, invalid } = puzzle.parseAlg(algInput.value);
     if (invalid.length) {
-      $('#alg-error').textContent = `Didn't understand: ${invalid.join(', ')}`;
+      showAlgError(invalid);
       return;
     }
-    $('#alg-error').textContent = '';
+    clearAlgError();
     if (!moves.length) return;
     doMoves(moves);
     algInput.value = '';
     algInput.blur();
   });
-  algInput.addEventListener('input', () => ($('#alg-error').textContent = ''));
+  algInput.addEventListener('input', clearAlgError);
+  $('#alg-error').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-fix]');
+    if (!b) return;
+    // put the suggestion in place of the mistake, and carry on typing after it
+    const start = Number(b.dataset.start), end = Number(b.dataset.end);
+    algInput.setRangeText(b.dataset.fix!, start, end, 'end');
+    // and point at the next mistake, if there is one
+    const { invalid } = puzzle.parseAlg(algInput.value);
+    if (invalid.length) showAlgError(invalid);
+    else {
+      clearAlgError();
+      algInput.focus();
+    }
+  });
 
   $('#btn-solve').addEventListener('click', () => {
     if (mode === 'paint' && puzzle.validate(session.state).ok) setMode('play');

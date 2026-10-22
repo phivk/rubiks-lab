@@ -9,6 +9,7 @@
 // Stickers, pieces and move permutations are all derived from that description.
 
 import * as THREE from 'three';
+import { parseAlg as parseAlg_, type ParsedAlg } from '../core/alg';
 import { pickColors } from '../core/colors';
 import type { State, StickerDef, Turn, Vec3 } from '../core/types';
 
@@ -223,21 +224,13 @@ export const apply = (s: State, move: string) => parseMove(move)!.perm.map((src)
 export const applyAll = (s: State, moves: string[]) => moves.reduce(apply, s);
 export const invertMove = (m: string) => (m.endsWith("'") ? m.slice(0, -1) : m + "'");
 
-export function parseAlg(text: string) {
-  const moves: string[] = [];
-  const invalid: string[] = [];
-  for (const tok of text.replace(/[()[\],]/g, ' ').split(/\s+/).filter(Boolean)) {
-    const parts = tok.match(/[ULRBulrb](?:2'|2|'|’)?/g);
-    if (!parts || parts.join('') !== tok) { invalid.push(tok); continue; }
-    for (const p of parts) {
-      const base = p[0];
-      const suffix = p.slice(1).replace('’', "'");
-      // a double turn on a 3-fold axis is the inverse turn
-      if (suffix.startsWith('2')) moves.push(suffix === '2' ? base + "'" : base);
-      else moves.push(base + suffix);
-    }
-  }
-  return { moves, invalid };
+export function parseAlg(text: string): ParsedAlg {
+  return parseAlg_(text, (word) => {
+    const parts = word.match(/[ULRBulrb](?:2'|2|')?/g);
+    if (!parts || parts.join('') !== word) return null;
+    // a double turn on a 3-fold axis is the inverse turn
+    return parts.map((p) => (p.endsWith("2'") ? p[0] : p.endsWith('2') ? p[0] + "'" : p));
+  }, invertMove);
 }
 
 export const solved = () => stickers.map((s) => s.color);
