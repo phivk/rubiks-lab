@@ -199,5 +199,12 @@ export const pyraminx: Puzzle = {
   },
 
   ...syncSolver(solveOptimal, (s, moves) => isSolved(applyAll(s, moves))),
+  shortSolutions: true,
+  // its moves can't turn the whole puzzle round, so solved is held the one way
+  holdHtml: (s) => {
+    const home = solved();
+    return s.every((c, i) => c === home[i]) ? '<b>yellow</b> on the bottom and <b>green</b> facing you' : undefined;
+  },
+  noun: 'Pyraminx',
   methods: [pyraminxMethod()],
 };
